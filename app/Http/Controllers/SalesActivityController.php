@@ -19,7 +19,7 @@ class SalesActivityController extends Controller
 
         $search = trim((string) $request->query('search', ''));
 
-        $activities = SalesActivity::with(['brand', 'agent', 'leadMiner', 'verifier', 'service'])
+        $activities = SalesActivity::with(['brand', 'agent', 'frankieAgent', 'leadMiner', 'verifier', 'service'])
             ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($query) use ($search) {
@@ -30,6 +30,10 @@ class SalesActivityController extends Controller
                         ->orWhere('payment_status', 'like', "%{$search}%")
                         ->orWhereHas('brand', fn ($query) => $query->where('imprint_name', 'like', "%{$search}%"))
                         ->orWhereHas('agent', function ($query) use ($search) {
+                            $query->where('first_name', 'like', "%{$search}%")
+                                ->orWhere('last_name', 'like', "%{$search}%");
+                        })
+                        ->orWhereHas('frankieAgent', function ($query) use ($search) {
                             $query->where('first_name', 'like', "%{$search}%")
                                 ->orWhere('last_name', 'like', "%{$search}%");
                         })

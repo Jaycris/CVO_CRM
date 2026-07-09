@@ -133,7 +133,7 @@
 </head>
 
 <body class="bg-slate-50 font-sans text-slate-900 dark:bg-zinc-950 dark:text-zinc-100"
-      style="--brand-primary: {{ $headBrand?->primary_color ?? '#d97706' }}; --brand-accent: {{ $headBrand?->accent_color ?? '#fef3c7' }};">
+      style="--brand-primary: {{ $headBrand?->primary_color ?? '#00563f' }}; --brand-accent: {{ $headBrand?->accent_color ?? '#d1fae5' }};">
     <div x-data="{ pageLoading: false }"
          x-init="
             document.addEventListener('submit', (event) => {
@@ -311,9 +311,13 @@
                     || auth()->user()->hasPermission('view_all_sales_endorsements');
                 $canViewPaymentRecords = $isAdmin || auth()->user()->hasPermission('view_payment_records');
                 $canViewSalesActivity = $isAdmin || auth()->user()->hasPermission('view_sales_activity');
+                $canViewSalesPerformance = $isAdmin
+                    || $departmentName === 'Sales'
+                    || auth()->user()->hasPermission('view_sales_performance_mtd')
+                    || auth()->user()->hasPermission('manage_sales_targets');
                 $canViewProductionReports = $isAdmin || auth()->user()->hasPermission('view_production_reports') || auth()->user()->hasPermission('view_reports');
-                $canViewReportOverview = $isAdmin || auth()->user()->hasPermission('view_reports') || $canViewSoldMinedLeads || $canViewVerifiedSoldLeads || $canViewSalesActivity || $canViewProductionReports;
-                $canViewAnyReportPage = $canViewReportOverview || $canViewSoldMinedLeads || $canViewVerifiedSoldLeads || $canViewSalesActivity || $canViewProductionReports;
+                $canViewReportOverview = $isAdmin || auth()->user()->hasPermission('view_reports') || $canViewSoldMinedLeads || $canViewVerifiedSoldLeads || $canViewSalesActivity || $canViewSalesPerformance || $canViewProductionReports;
+                $canViewAnyReportPage = $canViewReportOverview || $canViewSoldMinedLeads || $canViewVerifiedSoldLeads || $canViewSalesActivity || $canViewSalesPerformance || $canViewProductionReports;
                 $canViewFinanceClients = $isAdmin || auth()->user()->hasPermission('view_finance_clients');
                 $canViewContractRecords = $isAdmin || auth()->user()->hasPermission('view_contract_records');
                 $canViewProductionTaskTracker = $isAdmin
@@ -328,10 +332,12 @@
                 $canManageUsers = $isAdmin || auth()->user()->hasPermission('manage_users');
                 $canManageRolesPermissions = $isAdmin || auth()->user()->hasPermission('manage_roles_permissions');
                 $canManageServices = $isAdmin || auth()->user()->hasPermission('manage_services');
+                $canViewServicesCatalog = $isAdmin || auth()->user()->hasPermission('view_services_catalog') || $canManageServices;
                 $canViewTeams = $isAdmin || auth()->user()->hasPermission('view_all_teams') || auth()->user()->hasPermission('manage_teams');
                 $canManageTeams = $isAdmin || auth()->user()->hasPermission('manage_teams');
                 $canManageAnnouncements = $isAdmin || auth()->user()->hasPermission('manage_announcements');
                 $canManageDashboardBanners = $isAdmin || auth()->user()->hasPermission('manage_dashboard_banners');
+                $canManageCommissionSettings = $isAdmin;
                 $notifications = auth()->user()
                     ->notifications()
                     ->latest()
@@ -428,6 +434,16 @@
                         </svg>
                         Announcements
                     </a>
+
+                    @if ($canViewServicesCatalog)
+                        <a href="{{ route('services.index') }}" class="{{ $sidebarLink(request()->routeIs('services.*')) }}">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ $sidebarIcon(request()->routeIs('services.*')) }}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 7.5h15M6 7.5V18a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 18V7.5" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 7.5V5.25A2.25 2.25 0 0 1 10.5 3h3A2.25 2.25 0 0 1 15.75 5.25V7.5M9 12h6M9 15h6" />
+                            </svg>
+                            Services
+                        </a>
+                    @endif
 
                     @if ($canViewLeadsDropdown)
                     <div x-data="{ open: {{ request()->routeIs('leads.*') ? 'true' : 'false' }} }" class="space-y-1">
@@ -772,6 +788,17 @@
                             </a>
                         @endif
 
+                        @if ($canViewSalesPerformance)
+                            <a href="{{ route('reports.sales-performance.index') }}" class="{{ $sidebarLink(request()->routeIs('reports.sales-performance.*')) }} mt-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ $sidebarIcon(request()->routeIs('reports.sales-performance.*')) }}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 19.5h16.5" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 15.75 10.5 12l3 2.25 3.75-6" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 19.5v-3.75m4.5 3.75V12m4.5 7.5V8.25" />
+                                </svg>
+                                Sales Performance MTD
+                            </a>
+                        @endif
+
                         @if ($canViewSoldMinedLeads)
                             <a href="{{ route('reports.sold-mined') }}" class="{{ $sidebarLink(request()->routeIs('reports.sold-mined')) }} mt-1">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ $sidebarIcon(request()->routeIs('reports.sold-mined')) }}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -911,7 +938,7 @@
                     </div>
                 @endif
 
-                @if ($canManageUsers || $canManageRolesPermissions || $canManageServices || $canViewTeams || $canManageAnnouncements || $canManageDashboardBanners)
+                @if ($canManageUsers || $canManageRolesPermissions || $canManageServices || $canViewTeams || $canManageAnnouncements || $canManageDashboardBanners || $canManageCommissionSettings)
                     <div class="py-4">
                         <p class="px-3 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">
                             Admin
@@ -956,6 +983,16 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M14.25 8.25h.01" />
                                 </svg>
                                 Dashboard Banners
+                            </a>
+                        @endif
+
+                        @if ($canManageCommissionSettings)
+                            <a href="{{ route('admin.commission-settings.edit') }}" class="{{ $sidebarLink(request()->routeIs('admin.commission-settings.*')) }} mt-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ $sidebarIcon(request()->routeIs('admin.commission-settings.*')) }}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m4.5-8.25c0-1.243-2.015-2.25-4.5-2.25s-4.5 1.007-4.5 2.25S9.515 12 12 12s4.5 1.007 4.5 2.25S14.485 16.5 12 16.5s-4.5-1.007-4.5-2.25" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                </svg>
+                                Commission Settings
                             </a>
                         @endif
 

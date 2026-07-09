@@ -31,7 +31,7 @@
                 <h2 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Create Service</h2>
                 <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Add a service for one brand/account.</p>
 
-                <form method="POST" action="{{ route('admin.services.store') }}" class="mt-5 space-y-4">
+                <form method="POST" action="{{ route('admin.services.store') }}" enctype="multipart/form-data" class="mt-5 space-y-4">
                     @csrf
 
                     <div>
@@ -100,6 +100,17 @@
                                   rows="4"
                                   class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">{{ old('description') }}</textarea>
                         <x-input-error :messages="$errors->get('description')" class="mt-2" />
+                    </div>
+
+                    <div>
+                        <label for="pdf_file" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">Service File</label>
+                        <input id="pdf_file"
+                               name="pdf_file"
+                               type="file"
+                               accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif"
+                               class="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm shadow-sm file:mr-4 file:rounded-lg file:border-0 file:bg-zinc-950 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-amber-100 hover:file:bg-black focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:file:bg-amber-400 dark:file:text-zinc-950">
+                        <p class="mt-1 text-xs text-slate-500 dark:text-zinc-400">PDF, JPG, PNG, WebP, or GIF. Maximum file size is 10MB.</p>
+                        <x-input-error :messages="$errors->get('pdf_file')" class="mt-2" />
                     </div>
 
                     <div class="rounded-xl border border-slate-200 p-4 dark:border-zinc-800">
@@ -196,6 +207,13 @@
                                     <td class="break-words px-5 py-4">
                                         <p class="font-semibold text-slate-900 dark:text-zinc-100">{{ $service->name }}</p>
                                         <p class="mt-1 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-zinc-400">{{ $service->description ?: 'No description' }}</p>
+                                        @if ($service->pdf_path)
+                                            <a href="{{ asset('storage/' . $service->pdf_path) }}"
+                                               target="_blank"
+                                               class="mt-2 inline-flex text-xs font-semibold text-[var(--brand-primary)] hover:underline">
+                                                View File
+                                            </a>
+                                        @endif
                                     </td>
                                     <td class="px-5 py-4">
                                         <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 dark:bg-zinc-800 dark:text-zinc-300">
@@ -259,6 +277,7 @@
                                              class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 text-left">
                                             <form method="POST"
                                                   action="{{ route('admin.services.update', $service) }}"
+                                                  enctype="multipart/form-data"
                                                   x-data="serviceForm({ inclusions: @js($service->inclusions->map(fn ($inclusion) => ['name' => $inclusion->name])->values()->all() ?: [['name' => '']]) })"
                                                   class="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900">
                                                 @csrf
@@ -328,6 +347,22 @@
                                                         <textarea name="description"
                                                                   rows="4"
                                                                   class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">{{ old('description', $service->description) }}</textarea>
+                                                    </div>
+
+                                                    <div>
+                                                        <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">Service File</label>
+                                                        @if ($service->pdf_path)
+                                                            <a href="{{ asset('storage/' . $service->pdf_path) }}"
+                                                               target="_blank"
+                                                               class="mb-2 inline-flex text-xs font-semibold text-[var(--brand-primary)] hover:underline">
+                                                                Current File
+                                                            </a>
+                                                        @endif
+                                                        <input name="pdf_file"
+                                                               type="file"
+                                                               accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif"
+                                                               class="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm shadow-sm file:mr-4 file:rounded-lg file:border-0 file:bg-zinc-950 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-amber-100 hover:file:bg-black focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:file:bg-amber-400 dark:file:text-zinc-950">
+                                                        <p class="mt-1 text-xs text-slate-500 dark:text-zinc-400">Upload a new PDF or image only if you want to replace the current file.</p>
                                                     </div>
 
                                                     <div class="rounded-xl border border-slate-200 p-4 dark:border-zinc-800">

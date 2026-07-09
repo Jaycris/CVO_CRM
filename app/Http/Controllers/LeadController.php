@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Lead;
 use App\Models\LeadAssignmentHistory;
 use App\Models\SalesEndorsement;
+use App\Models\SalesActivity;
 use App\Models\SalesPayment;
 use App\Models\User;
 use App\Notifications\LeadAssignedNotification;
@@ -1806,13 +1807,17 @@ class LeadController extends Controller
                 ->where('status', 'Refund')
                 ->whereHas('endorsement', fn ($query) => $query->where('agent_id', $request?->user()->id))
                 ->count();
-            $overallSalesAmount = SalesPayment::query()
+            $overallSalesAmount = SalesActivity::query()
                 ->tap(fn ($query) => BrandScope::apply($query, $request?->user()))
-                ->with('endorsement')
-                ->where('status', 'Payment Success')
-                ->whereHas('endorsement', fn ($query) => $query->where('agent_id', $request?->user()->id))
+                ->where('payment_status', 'Payment Success')
+                ->where(function ($query) use ($request) {
+                    $query->where('agent_id', $request?->user()->id)
+                        ->orWhere('frankie_agent_id', $request?->user()->id);
+                })
                 ->get()
-                ->sum(fn (SalesPayment $payment) => (float) $payment->endorsement?->amount);
+                ->sum(fn (SalesActivity $activity) => (int) $activity->agent_id === (int) $request?->user()->id
+                    ? (float) ($activity->agent_credit_amount ?: $activity->amount)
+                    : (float) $activity->frankie_credit_amount);
 
             return [
                 [

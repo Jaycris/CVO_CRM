@@ -144,6 +144,41 @@
             </div>
         @endif
 
+        @php
+            $salesMtdGlobal = $salesMtdSummary['global'] ?? ['mtd' => 0, 'target' => 0, 'remaining' => 0, 'percent' => 0];
+        @endphp
+
+        <section class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
+            <div class="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                    <p class="text-sm font-semibold uppercase tracking-wide text-[var(--brand-primary)] dark:text-[var(--brand-accent)]">
+                        Sales MTD Snapshot
+                    </p>
+                    <h3 class="mt-2 text-2xl font-bold text-slate-900 dark:text-zinc-100">
+                        ${{ number_format((float) $salesMtdGlobal['mtd'], 2) }}
+                        <span class="text-base font-semibold text-slate-500 dark:text-zinc-400">
+                            of ${{ number_format((float) $salesMtdGlobal['target'], 2) }} target
+                        </span>
+                    </h3>
+                    <p class="mt-2 text-sm text-slate-500 dark:text-zinc-400">
+                        Remaining Target MTD:
+                        <span class="font-bold text-rose-600 dark:text-rose-300">${{ number_format((float) $salesMtdGlobal['remaining'], 2) }}</span>.
+                        PHP total and exchange-rate details are viewable in CreatiVision HRIS.
+                    </p>
+                </div>
+
+                <div class="w-full lg:max-w-md">
+                    <div class="flex justify-between text-sm font-semibold text-slate-600 dark:text-zinc-300">
+                        <span>Global MTD Progress</span>
+                        <span>{{ number_format((float) $salesMtdGlobal['percent'], 2) }}%</span>
+                    </div>
+                    <div class="mt-3 h-4 overflow-hidden rounded-full bg-slate-100 dark:bg-zinc-800">
+                        <div class="h-4 rounded-full bg-[var(--brand-primary)] transition-all" style="width: {{ min((float) $salesMtdGlobal['percent'], 100) }}%;"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <div class="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
             @php
                 $cardToneClasses = [

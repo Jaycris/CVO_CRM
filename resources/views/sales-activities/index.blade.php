@@ -43,6 +43,7 @@
                             <th class="px-6 py-4">SE ID</th>
                             <th class="px-6 py-4">Brand</th>
                             <th class="px-6 py-4">Agent</th>
+                            <th class="px-6 py-4">Frankie / Split</th>
                             <th class="px-6 py-4">Author / Book Title</th>
                             <th class="px-6 py-4">Service</th>
                             <th class="px-6 py-4">Lead Miner</th>
@@ -55,6 +56,7 @@
                         @forelse ($activities as $activity)
                             @php
                                 $agentName = trim(($activity->agent?->first_name ?? '') . ' ' . ($activity->agent?->last_name ?? '')) ?: '-';
+                                $frankieName = trim(($activity->frankieAgent?->first_name ?? '') . ' ' . ($activity->frankieAgent?->last_name ?? ''));
                                 $minerName = trim(($activity->leadMiner?->first_name ?? '') . ' ' . ($activity->leadMiner?->last_name ?? '')) ?: '-';
                                 $verifierName = trim(($activity->verifier?->first_name ?? '') . ' ' . ($activity->verifier?->last_name ?? '')) ?: '-';
                                 $statusClasses = match ($activity->payment_status) {
@@ -68,7 +70,23 @@
                                 <td class="px-6 py-4 text-slate-600 dark:text-zinc-300">{{ $activity->sold_date?->format('M d, Y') ?? '-' }}</td>
                                 <td class="px-6 py-4 font-semibold text-slate-900 dark:text-zinc-100">{{ $activity->endorsement_code ?? '-' }}</td>
                                 <td class="px-6 py-4 text-slate-600 dark:text-zinc-300">{{ $activity->brand?->imprint_name ?? '-' }}</td>
-                                <td class="px-6 py-4 font-medium text-slate-900 dark:text-zinc-100">{{ $agentName }}</td>
+                                <td class="px-6 py-4 font-medium text-slate-900 dark:text-zinc-100">
+                                    <p>{{ $agentName }}</p>
+                                    <p class="mt-1 text-xs text-slate-500 dark:text-zinc-400">
+                                        Credit: ${{ number_format((float) ($activity->agent_credit_amount ?: $activity->amount), 2) }}
+                                    </p>
+                                </td>
+                                <td class="px-6 py-4 text-slate-600 dark:text-zinc-300">
+                                    @if ($activity->frankieAgent && (float) $activity->frankie_credit_amount > 0)
+                                        <p class="font-medium text-slate-900 dark:text-zinc-100">{{ $frankieName }}</p>
+                                        <p class="mt-1 text-xs text-slate-500 dark:text-zinc-400">
+                                            {{ number_format((float) $activity->frankie_commission_percent, 0) }}% |
+                                            ${{ number_format((float) $activity->frankie_credit_amount, 2) }}
+                                        </p>
+                                    @else
+                                        -
+                                    @endif
+                                </td>
                                 <td class="max-w-sm px-6 py-4">
                                     <p class="font-semibold text-slate-900 dark:text-zinc-100">{{ $activity->author_name ?? '-' }}</p>
                                     <p class="mt-1 text-slate-500 dark:text-zinc-400">{{ $activity->book_title ?? '-' }}</p>
@@ -76,7 +94,10 @@
                                 <td class="px-6 py-4 text-slate-600 dark:text-zinc-300">{{ $activity->service_name ?? '-' }}</td>
                                 <td class="px-6 py-4 text-slate-600 dark:text-zinc-300">{{ $minerName }}</td>
                                 <td class="px-6 py-4 text-slate-600 dark:text-zinc-300">{{ $verifierName }}</td>
-                                <td class="px-6 py-4 font-semibold text-slate-900 dark:text-zinc-100">${{ number_format((float) $activity->amount, 2) }}</td>
+                                <td class="px-6 py-4 font-semibold text-slate-900 dark:text-zinc-100">
+                                    ${{ number_format((float) $activity->amount, 2) }}
+                                    <p class="mt-1 text-xs font-normal text-slate-500 dark:text-zinc-400">Gross sale</p>
+                                </td>
                                 <td class="px-6 py-4">
                                     <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold {{ $statusClasses }}">
                                         {{ $activity->payment_status ?? 'Recorded' }}
@@ -85,7 +106,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="10" class="px-6 py-16 text-center text-slate-500 dark:text-zinc-400">
+                                <td colspan="11" class="px-6 py-16 text-center text-slate-500 dark:text-zinc-400">
                                     No sales activity yet.
                                 </td>
                             </tr>

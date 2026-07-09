@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'hris' => [
+        'token' => env('HRIS_API_TOKEN'),
+    ],
+
 ];

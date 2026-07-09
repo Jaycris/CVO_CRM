@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\SalesEndorsement;
+use App\Models\AppSetting;
 use App\Models\SalesActivity;
 use App\Models\SalesPayment;
 use App\Notifications\LeadSaleCreditNotification;
@@ -85,7 +86,7 @@ class SalesPaymentController extends Controller
         $payment->brand_id = $endorsement->brand_id ?? BrandScope::userBrandId($request->user());
         $payment->sales_endorsement_id = $validated['sales_endorsement_id'];
         $payment->save();
-        $payment->load('endorsement.agent', 'endorsement.service', 'endorsement.lead.createdBy', 'endorsement.lead.verifiedBy');
+        $payment->load('endorsement.agent', 'endorsement.frankieAgent', 'endorsement.service', 'endorsement.lead.createdBy', 'endorsement.lead.verifiedBy');
 
         if ($this->shouldNotifyLeadCreditForStatus($validated['status']) && $previousStatus !== $validated['status']) {
             $this->notifyLeadSaleCreditUsers($payment);
@@ -115,11 +116,11 @@ class SalesPaymentController extends Controller
         $payment->update($validated);
 
         if ($this->shouldNotifyLeadCreditForStatus($validated['status']) && $previousStatus !== $validated['status']) {
-            $payment->loadMissing('endorsement.agent', 'endorsement.service', 'endorsement.lead.createdBy', 'endorsement.lead.verifiedBy');
+            $payment->loadMissing('endorsement.agent', 'endorsement.frankieAgent', 'endorsement.service', 'endorsement.lead.createdBy', 'endorsement.lead.verifiedBy');
             $this->notifyLeadSaleCreditUsers($payment);
         }
 
-        $payment->loadMissing('endorsement.agent', 'endorsement.service', 'endorsement.lead.createdBy', 'endorsement.lead.verifiedBy');
+        $payment->loadMissing('endorsement.agent', 'endorsement.frankieAgent', 'endorsement.service', 'endorsement.lead.createdBy', 'endorsement.lead.verifiedBy');
         $this->syncSalesActivity($payment);
 
         if ($validated['status'] !== $previousStatus) {
@@ -229,6 +230,12 @@ class SalesPaymentController extends Controller
         }
 
         $lead = $endorsement->lead;
+        $amount = (float) ($endorsement->amount ?? 0);
+        $frankiePercent = ($endorsement->has_frankie && $endorsement->frankie_agent_id)
+            ? (float) ($endorsement->frankie_commission_percent ?? AppSetting::get('frankie_commission_percent', 50))
+            : 0.0;
+        $frankieCredit = round($amount * ($frankiePercent / 100), 2);
+        $agentCredit = round($amount - $frankieCredit, 2);
 
         SalesActivity::updateOrCreate(
             ['sales_payment_id' => $payment->id],
@@ -237,6 +244,7 @@ class SalesPaymentController extends Controller
                 'sales_endorsement_id' => $endorsement->id,
                 'lead_id' => $endorsement->lead_id,
                 'agent_id' => $endorsement->agent_id,
+                'frankie_agent_id' => $endorsement->frankie_agent_id,
                 'lead_miner_id' => $lead?->created_by,
                 'verifier_id' => $lead?->verified_by,
                 'service_id' => $endorsement->service_id,
@@ -245,7 +253,10 @@ class SalesPaymentController extends Controller
                 'author_name' => $endorsement->author_name,
                 'book_title' => $endorsement->book_title,
                 'service_name' => $endorsement->service?->name ?? $endorsement->services,
-                'amount' => $endorsement->amount ?? 0,
+                'amount' => $amount,
+                'agent_credit_amount' => $agentCredit,
+                'frankie_credit_amount' => $frankieCredit,
+                'frankie_commission_percent' => $frankiePercent,
                 'payment_method' => $payment->payment_method,
                 'payment_status' => $payment->status,
                 'sold_date' => $payment->sold_date,

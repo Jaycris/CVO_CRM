@@ -15,6 +15,8 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SalesEndorsementController;
 use App\Http\Controllers\SalesPaymentController;
 use App\Http\Controllers\SalesActivityController;
+use App\Http\Controllers\SalesPerformanceController;
+use App\Http\Controllers\ServiceCatalogController;
 use App\Models\CalendarTodo;
 use App\Models\DashboardBanner;
 use App\Models\Lead;
@@ -23,6 +25,7 @@ use App\Models\ProductionProject;
 use App\Models\SalesEndorsement;
 use App\Models\SalesPayment;
 use App\Support\BrandScope;
+use App\Support\SalesMtdCalculator;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\RolePermissionController;
 use App\Http\Controllers\Admin\TrashController;
@@ -31,7 +34,9 @@ use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\DashboardBannerController;
 use App\Http\Controllers\Admin\ServiceController;
 use App\Http\Controllers\Admin\TeamController;
+use App\Http\Controllers\Admin\CommissionSettingController;
 use App\Http\Controllers\Admin\AnnouncementController as AdminAnnouncementController;
+use App\Models\SalesActivity;
 
 
 Route::get('/', function () {
@@ -187,40 +192,55 @@ Route::get('/dashboard', function () {
         ],
     };
 
-    $successfulPayments = SalesPayment::query()
-        ->with('endorsement.agent')
-        ->where('status', 'Payment Success');
-    BrandScope::apply($successfulPayments, $user);
+    $successfulActivities = SalesActivity::query()
+        ->with(['agent', 'frankieAgent'])
+        ->where('payment_status', 'Payment Success');
+    BrandScope::apply($successfulActivities, $user);
 
-    $topSalesPerformance = SalesPayment::query()
-        ->with('endorsement.agent')
-        ->where('status', 'Payment Success')
+    $topSalesPerformance = SalesActivity::query()
+        ->with(['agent', 'frankieAgent'])
+        ->where('payment_status', 'Payment Success')
         ->whereBetween('sold_date', [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()])
         ->tap(fn ($query) => BrandScope::apply($query, $user))
         ->get()
-        ->groupBy('endorsement.agent_id')
-        ->map(function ($payments) {
-            $agent = $payments->first()?->endorsement?->agent;
+        ->flatMap(function (SalesActivity $activity) {
+            $rows = [[
+                'agent' => $activity->agent,
+                'amount' => (float) ($activity->agent_credit_amount ?: $activity->amount),
+            ]];
+
+            if ($activity->frankieAgent && (float) $activity->frankie_credit_amount > 0) {
+                $rows[] = [
+                    'agent' => $activity->frankieAgent,
+                    'amount' => (float) $activity->frankie_credit_amount,
+                ];
+            }
+
+            return $rows;
+        })
+        ->groupBy(fn (array $row) => $row['agent']?->id ?: 'unknown')
+        ->map(function ($rows) {
+            $agent = $rows->first()['agent'] ?? null;
 
             return [
                 'agent_name' => trim(($agent?->first_name ?? '') . ' ' . ($agent?->last_name ?? '')) ?: 'Unknown Agent',
-                'total_amount' => $payments->sum(fn (SalesPayment $payment) => (float) $payment->endorsement?->amount),
+                'total_amount' => $rows->sum('amount'),
             ];
         })
         ->sortByDesc('total_amount')
         ->take(5)
         ->values();
 
-    $currentMonthTotal = (clone $successfulPayments)
+    $currentMonthTotal = (clone $successfulActivities)
         ->whereBetween('sold_date', [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()])
         ->get()
-        ->sum(fn (SalesPayment $payment) => (float) $payment->endorsement?->amount);
+        ->sum('amount');
 
     $lastMonth = now()->subMonthNoOverflow();
-    $lastMonthTotal = (clone $successfulPayments)
+    $lastMonthTotal = (clone $successfulActivities)
         ->whereBetween('sold_date', [$lastMonth->copy()->startOfMonth()->toDateString(), $lastMonth->copy()->endOfMonth()->toDateString()])
         ->get()
-        ->sum(fn (SalesPayment $payment) => (float) $payment->endorsement?->amount);
+        ->sum('amount');
 
     $highestMonthlyTotal = max($currentMonthTotal, $lastMonthTotal, 1);
     $monthlySalesComparison = [
@@ -241,6 +261,8 @@ Route::get('/dashboard', function () {
             'text_color' => 'text-amber-600 dark:text-amber-300',
         ],
     ];
+
+    $salesMtdSummary = SalesMtdCalculator::summary($user, now());
 
     $recentNotes = PersonalNote::where('user_id', $user?->id)
         ->latest('updated_at')
@@ -268,6 +290,7 @@ Route::get('/dashboard', function () {
         'dashboardCards',
         'topSalesPerformance',
         'monthlySalesComparison',
+        'salesMtdSummary',
         'recentNotes',
         'upcomingCalendarTodos',
         'dashboardBanners'
@@ -276,6 +299,7 @@ Route::get('/dashboard', function () {
 
 Route::middleware('auth')->group(function () {
     Route::get('/announcements', [AnnouncementController::class, 'index'])->name('announcements.index');
+    Route::get('/services', [ServiceCatalogController::class, 'index'])->name('services.index');
 
     Route::get('/notes', [PersonalNoteController::class, 'index'])->name('notes.index');
     Route::post('/notes', [PersonalNoteController::class, 'store'])->name('notes.store');
@@ -363,6 +387,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/sold-mined', [LeadSaleCreditController::class, 'soldMined'])->name('sold-mined');
         Route::get('/verified-sold', [LeadSaleCreditController::class, 'verifiedSold'])->name('verified-sold');
         Route::get('/sales-activity', [SalesActivityController::class, 'index'])->name('sales-activity.index');
+        Route::get('/sales-performance', [SalesPerformanceController::class, 'index'])->name('sales-performance.index');
+        Route::put('/sales-performance/targets', [SalesPerformanceController::class, 'updateTargets'])->name('sales-performance.targets');
         Route::get('/production', [ProductionReportController::class, 'index'])->name('production.index');
     });
 });
@@ -375,6 +401,8 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::post('/dashboard-banners', [DashboardBannerController::class, 'store'])->name('dashboard-banners.store');
     Route::put('/dashboard-banners/{dashboardBanner}', [DashboardBannerController::class, 'update'])->name('dashboard-banners.update');
     Route::delete('/dashboard-banners/{dashboardBanner}', [DashboardBannerController::class, 'destroy'])->name('dashboard-banners.destroy');
+    Route::get('/commission-settings', [CommissionSettingController::class, 'edit'])->name('commission-settings.edit');
+    Route::put('/commission-settings', [CommissionSettingController::class, 'update'])->name('commission-settings.update');
     Route::get('/services', [ServiceController::class, 'index'])->name('services.index');
     Route::post('/services', [ServiceController::class, 'store'])->name('services.store');
     Route::put('/services/{service}', [ServiceController::class, 'update'])->name('services.update');

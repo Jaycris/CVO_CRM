@@ -57,6 +57,7 @@ class RolePermissionController extends Controller
                     ['name' => 'Team Leads', 'allowed' => 'Admin, permitted Sales Team Leaders', 'note' => 'Team Leaders can monitor assigned Sales department leads across agents.'],
                     ['name' => 'Sales', 'allowed' => 'Admin, Sales users', 'note' => 'Sales users work pipeline, prospect, callbacks, sold, and refunds.'],
                     ['name' => 'Sales Endorsement', 'allowed' => 'Admin, Finance users, permitted Sales users', 'note' => 'This page is shown under Finance. Sales users may be allowed to submit endorsements for Finance review.'],
+                    ['name' => 'Services Catalog', 'allowed' => 'Admin, permitted users', 'note' => 'Read-only service list for agents and staff to see prices, descriptions, and inclusions.'],
                     ['name' => 'Payment Records', 'allowed' => 'Admin, Finance Officer', 'note' => 'Finance users can view, update, search, or delete payment records based on permissions.'],
                     ['name' => 'Sold Clients', 'allowed' => 'Admin, Finance Officer', 'note' => 'Finance users can view clients with successful payment records.'],
                     ['name' => 'Refunds & Disputes', 'allowed' => 'Admin, Finance Officer', 'note' => 'Finance users can separate refund and dispute records from paid clients.'],
@@ -99,6 +100,7 @@ class RolePermissionController extends Controller
                     ['name' => 'Update production project status', 'allowed' => 'Admin, Fulfillment Officer, Operation Manager, assigned Production users', 'note' => 'Updates status as Pending, In Progress, Fulfilled, or Hold Off. When assigned staff marks a task Done, the Fulfillment Officer is notified.'],
                     ['name' => 'Delete fulfillment records', 'allowed' => 'Admin by default, permitted Production users', 'note' => 'Soft-deletes selected fulfillment tracker records so Admin can restore them from Trash.'],
                     ['name' => 'Manage services', 'allowed' => 'Admin by default, permitted managers', 'note' => 'Can create, edit, and delete services and inclusions for accessible brands/accounts.'],
+                    ['name' => 'View services catalog', 'allowed' => 'Admin, permitted users', 'note' => 'Can browse services without editing the service setup.'],
                 ],
             ],
             [

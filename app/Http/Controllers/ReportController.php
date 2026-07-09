@@ -74,7 +74,7 @@ class ReportController extends Controller
         return view('reports.index', [
             'summaryCards' => $summaryCards,
             'reportRows' => $reportType ? $this->reportRows($activities, $payments, $productionProjects, $reportType) : collect(),
-            'salesByAgent' => $this->sumByPerson($activities, 'agent'),
+            'salesByAgent' => $this->sumSalesCreditByAgent($activities),
             'salesByBrand' => $this->sumByLabel($activities, fn (SalesActivity $activity) => $activity->brand?->imprint_name ?: 'No Brand'),
             'salesByMonth' => $this->sumByLabel($activities, fn (SalesActivity $activity) => $activity->sold_date?->format('F Y') ?: 'No Date'),
             'salesByService' => $this->sumByLabel($activities, fn (SalesActivity $activity) => $activity->service_name ?: 'No Service'),
@@ -167,7 +167,7 @@ class ReportController extends Controller
         $productionProjects = collect();
 
         if (in_array($reportType, ['sales', 'lead_miner'], true)) {
-            $activities = SalesActivity::with(['brand', 'agent', 'leadMiner', 'verifier', 'service'])
+            $activities = SalesActivity::with(['brand', 'agent', 'frankieAgent', 'leadMiner', 'verifier', 'service'])
                 ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
                 ->where('payment_status', 'Payment Success')
                 ->when($startDate, fn ($query) => $query->whereDate('sold_date', '>=', $startDate))
@@ -341,13 +341,14 @@ class ReportController extends Controller
     {
         $options = collect();
 
-        SalesActivity::with(['brand', 'agent', 'service'])
+        SalesActivity::with(['brand', 'agent', 'frankieAgent', 'service'])
             ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
             ->latest('sold_date')
             ->limit(50)
             ->get()
             ->each(function (SalesActivity $activity) use ($options) {
                 $agentName = trim(($activity->agent?->first_name ?? '') . ' ' . ($activity->agent?->last_name ?? '')) ?: 'Unassigned Agent';
+                $frankieName = trim(($activity->frankieAgent?->first_name ?? '') . ' ' . ($activity->frankieAgent?->last_name ?? ''));
                 $brandName = $activity->brand?->imprint_name ?: 'No Brand';
                 $serviceName = $activity->service_name ?: $activity->service?->service_name ?: 'No Service';
 
@@ -355,6 +356,7 @@ class ReportController extends Controller
                 $this->pushReportSearchOption($options, $activity->author_name, "Author: {$activity->author_name}", "{$activity->book_title} | Agent: {$agentName}");
                 $this->pushReportSearchOption($options, $activity->book_title, "Book: {$activity->book_title}", "{$activity->author_name} | {$serviceName}");
                 $this->pushReportSearchOption($options, $agentName, "Agent: {$agentName}", "{$brandName} | {$serviceName}");
+                $this->pushReportSearchOption($options, $frankieName, "Frankie Agent: {$frankieName}", "{$brandName} | {$serviceName}");
                 $this->pushReportSearchOption($options, $brandName, "Brand: {$brandName}", "{$serviceName}");
                 $this->pushReportSearchOption($options, $serviceName, "Service: {$serviceName}", "{$brandName}");
             });
@@ -432,6 +434,7 @@ class ReportController extends Controller
                 ->orWhere('payment_status', 'like', "%{$search}%")
                 ->orWhereHas('brand', fn ($query) => $query->where('imprint_name', 'like', "%{$search}%"))
                 ->orWhereHas('agent', fn ($query) => $this->filterUserName($query, $search))
+                ->orWhereHas('frankieAgent', fn ($query) => $this->filterUserName($query, $search))
                 ->orWhereHas('leadMiner', fn ($query) => $this->filterUserName($query, $search))
                 ->orWhereHas('verifier', fn ($query) => $this->filterUserName($query, $search));
         });
@@ -484,6 +487,39 @@ class ReportController extends Controller
 
                 return trim(($user?->first_name ?? '') . ' ' . ($user?->last_name ?? '')) ?: 'Unassigned';
             })
+            ->map(fn (Collection $items, string $name) => [
+                'label' => $name,
+                'count' => $items->count(),
+                'total' => (float) $items->sum('amount'),
+            ])
+            ->sortByDesc('total')
+            ->values();
+    }
+
+    private function sumSalesCreditByAgent(Collection $activities): Collection
+    {
+        return $activities
+            ->flatMap(function (SalesActivity $activity) {
+                $rows = collect();
+                $agentName = trim(($activity->agent?->first_name ?? '') . ' ' . ($activity->agent?->last_name ?? '')) ?: 'Unassigned';
+
+                $rows->push([
+                    'label' => $agentName,
+                    'amount' => (float) ($activity->agent_credit_amount ?: $activity->amount),
+                ]);
+
+                if ($activity->frankieAgent && (float) $activity->frankie_credit_amount > 0) {
+                    $frankieName = trim(($activity->frankieAgent?->first_name ?? '') . ' ' . ($activity->frankieAgent?->last_name ?? '')) ?: 'Unassigned';
+
+                    $rows->push([
+                        'label' => $frankieName,
+                        'amount' => (float) $activity->frankie_credit_amount,
+                    ]);
+                }
+
+                return $rows;
+            })
+            ->groupBy('label')
             ->map(fn (Collection $items, string $name) => [
                 'label' => $name,
                 'count' => $items->count(),

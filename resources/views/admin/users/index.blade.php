@@ -212,9 +212,15 @@
                                 </td>
                                 <td class="px-6 py-4">
                                     <div class="flex items-center gap-3">
-                                        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 font-bold text-amber-800 dark:bg-amber-400/15 dark:text-amber-200">
-                                            {{ strtoupper(substr($user->first_name, 0, 1)) }}
-                                        </div>
+                                        @if ($user->profile_photo_path)
+                                            <img src="{{ asset('storage/' . $user->profile_photo_path) }}?v={{ $user->updated_at?->timestamp }}"
+                                                 alt="{{ $user->first_name }} {{ $user->last_name }}"
+                                                 class="h-10 w-10 rounded-xl object-cover ring-2 ring-[var(--brand-primary)]/30">
+                                        @else
+                                            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 font-bold text-amber-800 dark:bg-amber-400/15 dark:text-amber-200">
+                                                {{ strtoupper(substr($user->first_name, 0, 1)) }}
+                                            </div>
+                                        @endif
 
                                         <div>
                                             <p class="font-semibold text-slate-900 dark:text-zinc-100">

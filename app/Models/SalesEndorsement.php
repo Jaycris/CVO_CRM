@@ -17,6 +17,8 @@ class SalesEndorsement extends Model
         'lead_id',
         'has_frankie',
         'frankie_agent_name',
+        'frankie_agent_id',
+        'frankie_commission_percent',
         'author_name',
         'contact_number',
         'email',
@@ -39,6 +41,7 @@ class SalesEndorsement extends Model
     {
         return [
             'has_frankie' => 'boolean',
+            'frankie_commission_percent' => 'decimal:2',
             'amount' => 'decimal:2',
             'contract_sent_at' => 'datetime',
             'contract_signed_at' => 'datetime',
@@ -48,6 +51,11 @@ class SalesEndorsement extends Model
     public function agent(): BelongsTo
     {
         return $this->belongsTo(User::class, 'agent_id');
+    }
+
+    public function frankieAgent(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'frankie_agent_id');
     }
 
     public function brand(): BelongsTo

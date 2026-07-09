@@ -8,6 +8,7 @@ use App\Models\Service;
 use App\Support\BrandScope;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -55,13 +56,19 @@ class ServiceController extends Controller
         $validated = $this->validatedService($request);
         abort_unless($this->userCanAccessBrand($request, (int) $validated['brand_id']), 403);
 
-        $service = Service::create([
+        $serviceData = [
             'brand_id' => $validated['brand_id'],
             'name' => trim($validated['name']),
             'category' => $validated['category'],
             'price' => $validated['price'] ?? null,
             'description' => $this->nullableTrim($validated['description'] ?? null),
-        ]);
+        ];
+
+        if ($request->hasFile('pdf_file')) {
+            $serviceData['pdf_path'] = $request->file('pdf_file')->store('service-pdfs', 'public');
+        }
+
+        $service = Service::create($serviceData);
 
         $this->syncInclusions($service, $validated['inclusions'] ?? []);
 
@@ -78,13 +85,23 @@ class ServiceController extends Controller
         $validated = $this->validatedService($request, $service);
         abort_unless($this->userCanAccessBrand($request, (int) $validated['brand_id']), 403);
 
-        $service->update([
+        $serviceData = [
             'brand_id' => $validated['brand_id'],
             'name' => trim($validated['name']),
             'category' => $validated['category'],
             'price' => $validated['price'] ?? null,
             'description' => $this->nullableTrim($validated['description'] ?? null),
-        ]);
+        ];
+
+        if ($request->hasFile('pdf_file')) {
+            if ($service->pdf_path) {
+                Storage::disk('public')->delete($service->pdf_path);
+            }
+
+            $serviceData['pdf_path'] = $request->file('pdf_file')->store('service-pdfs', 'public');
+        }
+
+        $service->update($serviceData);
 
         $this->syncInclusions($service, $validated['inclusions'] ?? []);
 
@@ -97,6 +114,10 @@ class ServiceController extends Controller
     {
         $this->ensureCanManageServices($request);
         abort_unless($this->userCanAccessBrand($request, $service->brand_id), 403);
+
+        if ($service->pdf_path) {
+            Storage::disk('public')->delete($service->pdf_path);
+        }
 
         $service->delete();
 
@@ -118,6 +139,7 @@ class ServiceController extends Controller
             'category' => ['required', 'in:Publishing,Marketing,Events'],
             'price' => ['nullable', 'numeric', 'min:0', 'max:999999999.99'],
             'description' => ['nullable', 'string', 'max:5000'],
+            'pdf_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp,gif', 'max:10240'],
             'inclusions' => ['nullable', 'array'],
             'inclusions.*.name' => ['nullable', 'string', 'max:255'],
         ]);

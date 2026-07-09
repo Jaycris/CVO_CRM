@@ -15,6 +15,7 @@ class Service extends Model
         'category',
         'price',
         'description',
+        'pdf_path',
     ];
 
     protected $casts = [

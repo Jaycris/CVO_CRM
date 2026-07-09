@@ -156,6 +156,9 @@
                                     @if ($endorsement->has_frankie)
                                         <p class="mt-1 break-words text-[11px] leading-tight text-slate-500 dark:text-zinc-400">
                                             Frankie: {{ $endorsement->frankie_agent_name }}
+                                            @if ($endorsement->frankie_commission_percent)
+                                                ({{ number_format((float) $endorsement->frankie_commission_percent, 0) }}%)
+                                            @endif
                                         </p>
                                     @endif
                                 </td>

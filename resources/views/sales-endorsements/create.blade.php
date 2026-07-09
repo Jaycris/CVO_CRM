@@ -36,8 +36,12 @@
                     leadOptions: @js($leadOptions),
                     serviceName: @js(old('services', '')),
                     serviceOptions: @js($serviceOptions),
+                    frankieAgentId: @js(old('frankie_agent_id', '')),
+                    frankieAgentName: @js(collect($frankieAgentOptions)->firstWhere('id', (int) old('frankie_agent_id'))['name'] ?? ''),
+                    frankieAgentOptions: @js($frankieAgentOptions),
                     authorDropdownOpen: false,
                     serviceDropdownOpen: false,
+                    frankieDropdownOpen: false,
                     filteredLeadOptions() {
                         const search = this.authorName.trim().toLowerCase();
 
@@ -61,6 +65,21 @@
 
                         return this.serviceOptions
                             .filter((service) => service.toLowerCase().includes(search))
+                            .slice(0, 8);
+                    },
+                    filteredFrankieAgentOptions() {
+                        const search = this.frankieAgentName.trim().toLowerCase();
+
+                        if (!search) {
+                            return this.frankieAgentOptions.slice(0, 8);
+                        }
+
+                        return this.frankieAgentOptions
+                            .filter((agent) => {
+                                return agent.name.toLowerCase().includes(search)
+                                    || agent.role.toLowerCase().includes(search)
+                                    || agent.brand.toLowerCase().includes(search);
+                            })
                             .slice(0, 8);
                     },
                     fillLeadDetails() {
@@ -88,6 +107,11 @@
                     selectService(service) {
                         this.serviceName = service;
                         this.serviceDropdownOpen = false;
+                    },
+                    selectFrankieAgent(agent) {
+                        this.frankieAgentId = agent.id;
+                        this.frankieAgentName = agent.name;
+                        this.frankieDropdownOpen = false;
                     }
                   }"
                   class="space-y-6">
@@ -117,17 +141,50 @@
                     </div>
                 </div>
 
-                <div x-show="hasFrankie" x-cloak>
+                <div x-show="hasFrankie" x-cloak class="relative" x-on:click.outside="frankieDropdownOpen = false">
                     <label for="frankie_agent_name" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">
                         Frankie Agent Name <span class="text-rose-600">*</span>
                     </label>
-                    <input id="frankie_agent_name"
-                           name="frankie_agent_name"
-                           type="text"
-                           value="{{ old('frankie_agent_name') }}"
-                           x-bind:required="hasFrankie"
-                           class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
-                    <x-input-error :messages="$errors->get('frankie_agent_name')" class="mt-2" />
+                    <input type="hidden" name="frankie_agent_id" x-bind:value="frankieAgentId">
+                    <div class="relative">
+                        <input id="frankie_agent_name"
+                               type="text"
+                               x-model="frankieAgentName"
+                               x-bind:required="hasFrankie"
+                               x-on:focus="frankieDropdownOpen = true"
+                               x-on:input.debounce.150ms="frankieAgentId = ''; frankieDropdownOpen = true"
+                               x-on:keydown.escape.prevent="frankieDropdownOpen = false"
+                               autocomplete="off"
+                               placeholder="Search a Sales agent"
+                               class="w-full rounded-xl border-slate-300 px-4 py-3 pr-11 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                        <button type="button"
+                                x-on:click="frankieDropdownOpen = !frankieDropdownOpen"
+                                class="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-500 hover:text-amber-700 dark:text-zinc-400 dark:hover:text-amber-300"
+                                aria-label="Show Frankie agent suggestions">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform" x-bind:class="{ 'rotate-180': frankieDropdownOpen }" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div x-show="frankieDropdownOpen"
+                         x-cloak
+                         x-transition
+                         class="absolute z-30 mt-2 max-h-72 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+                        <template x-for="agent in filteredFrankieAgentOptions()" :key="agent.id">
+                            <button type="button"
+                                    x-on:click="selectFrankieAgent(agent)"
+                                    class="block w-full rounded-lg px-3 py-2 text-left hover:bg-amber-50 dark:hover:bg-amber-400/10">
+                                <span class="block text-sm font-semibold text-slate-900 dark:text-zinc-100" x-text="agent.name"></span>
+                                <span class="mt-0.5 block truncate text-xs text-slate-500 dark:text-zinc-400" x-text="`${agent.role} | ${agent.brand}`"></span>
+                            </button>
+                        </template>
+
+                        <div x-show="filteredFrankieAgentOptions().length === 0" class="px-3 py-4 text-sm text-slate-500 dark:text-zinc-400">
+                            No matching Sales agent found.
+                        </div>
+                    </div>
+                    <x-input-error :messages="$errors->get('frankie_agent_id')" class="mt-2" />
                 </div>
 
                 <div class="relative" x-on:click.outside="authorDropdownOpen = false">

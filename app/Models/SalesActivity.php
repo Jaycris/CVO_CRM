@@ -13,6 +13,7 @@ class SalesActivity extends Model
         'sales_endorsement_id',
         'lead_id',
         'agent_id',
+        'frankie_agent_id',
         'lead_miner_id',
         'verifier_id',
         'service_id',
@@ -22,6 +23,9 @@ class SalesActivity extends Model
         'book_title',
         'service_name',
         'amount',
+        'agent_credit_amount',
+        'frankie_credit_amount',
+        'frankie_commission_percent',
         'payment_method',
         'payment_status',
         'sold_date',
@@ -31,6 +35,9 @@ class SalesActivity extends Model
     {
         return [
             'amount' => 'decimal:2',
+            'agent_credit_amount' => 'decimal:2',
+            'frankie_credit_amount' => 'decimal:2',
+            'frankie_commission_percent' => 'decimal:2',
             'sold_date' => 'date',
         ];
     }
@@ -58,6 +65,11 @@ class SalesActivity extends Model
     public function agent(): BelongsTo
     {
         return $this->belongsTo(User::class, 'agent_id');
+    }
+
+    public function frankieAgent(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'frankie_agent_id');
     }
 
     public function leadMiner(): BelongsTo

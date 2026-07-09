@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Lead;
+use App\Models\AppSetting;
 use App\Models\SalesEndorsement;
 use App\Models\Service;
 use App\Models\User;
@@ -20,7 +21,7 @@ class SalesEndorsementController extends Controller
 
         $search = trim((string) $request->query('search', ''));
 
-        $endorsements = SalesEndorsement::with(['agent', 'brand'])
+        $endorsements = SalesEndorsement::with(['agent', 'frankieAgent', 'brand'])
             ->tap(fn ($query) => $this->applyEndorsementBrandScope($query, $request))
             ->when(! $this->canViewAllEndorsements($request), fn ($query) => $query->where('agent_id', $request->user()->id))
             ->when($search !== '', function ($query) use ($search) {
@@ -60,6 +61,7 @@ class SalesEndorsementController extends Controller
             'paymentOptions' => ['First Payment', 'Recurring', 'Final Payment', 'Full Payment'],
             'serviceOptions' => $this->serviceOptions($request),
             'leadOptions' => $this->leadOptions($request),
+            'frankieAgentOptions' => $this->frankieAgentOptions($request),
         ]);
     }
 
@@ -69,7 +71,7 @@ class SalesEndorsementController extends Controller
 
         $validated = $request->validate([
             'has_frankie' => ['nullable', 'boolean'],
-            'frankie_agent_name' => ['required_if:has_frankie,1', 'nullable', 'string', 'max:255'],
+            'frankie_agent_id' => ['required_if:has_frankie,1', 'nullable', 'integer', 'exists:users,id'],
             'lead_id' => ['nullable', 'exists:leads,id'],
             'author_name' => ['required', 'string', 'max:255'],
             'contact_number' => ['required', 'string', 'max:255'],
@@ -92,6 +94,20 @@ class SalesEndorsementController extends Controller
         abort_if($lead && ! $this->userCanAccessBrand($request, $lead->brand_id), 403);
 
         $brandId = $lead?->brand_id ?? BrandScope::userBrandId($request->user());
+        $frankieAgent = $request->boolean('has_frankie')
+            ? User::query()->whereKey($validated['frankie_agent_id'])->first()
+            : null;
+
+        abort_if(
+            $frankieAgent
+            && (
+                (int) $frankieAgent->id === (int) $request->user()->id
+                || $frankieAgent->department !== 'Sales'
+                || ! $this->userCanAccessBrand($request, $frankieAgent->brand_id)
+            ),
+            403
+        );
+
         $serviceId = Service::query()
             ->where('brand_id', $brandId)
             ->whereRaw('LOWER(name) = ?', [mb_strtolower(trim($validated['services']))])
@@ -103,6 +119,13 @@ class SalesEndorsementController extends Controller
             'service_id' => $serviceId,
             'agent_id' => $request->user()->id,
             'has_frankie' => $request->boolean('has_frankie'),
+            'frankie_agent_id' => $frankieAgent?->id,
+            'frankie_agent_name' => $frankieAgent
+                ? trim($frankieAgent->first_name . ' ' . $frankieAgent->last_name)
+                : null,
+            'frankie_commission_percent' => $frankieAgent
+                ? (float) AppSetting::get('frankie_commission_percent', 50)
+                : null,
         ]);
 
         $this->notifyFinanceUsers($endorsement->loadMissing('agent'));
@@ -196,6 +219,27 @@ class SalesEndorsementController extends Controller
                 'bookTitle' => $lead->book_title,
                 'contactNumber' => collect($lead->phone_numbers ?? [])->first() ?? '',
                 'email' => $lead->email ?? '',
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function frankieAgentOptions(Request $request): array
+    {
+        return User::query()
+            ->with(['brand', 'role'])
+            ->whereNull('suspended_at')
+            ->where('department', 'Sales')
+            ->whereKeyNot($request->user()->id)
+            ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get()
+            ->map(fn (User $user) => [
+                'id' => $user->id,
+                'name' => trim($user->first_name . ' ' . $user->last_name),
+                'role' => $user->role?->name ?? 'Sales',
+                'brand' => $user->brand?->imprint_name ?? 'CreatiVision',
             ])
             ->values()
             ->all();

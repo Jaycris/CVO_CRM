@@ -31,6 +31,8 @@ class User extends Authenticatable implements MustVerifyEmail
         'department',
         'email',
         'phone_number',
+        'service_commission_percent',
+        'markup_commission_percent',
         'profile_photo_path',
         'password',
         'password_created_at',
@@ -154,6 +156,8 @@ class User extends Authenticatable implements MustVerifyEmail
             'password_created_at' => 'datetime',
             'invitation_expires_at' => 'datetime',
             'suspended_at' => 'datetime',
+            'service_commission_percent' => 'decimal:2',
+            'markup_commission_percent' => 'decimal:2',
             'password' => 'hashed',
         ];
     }
