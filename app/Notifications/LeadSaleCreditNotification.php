@@ -44,8 +44,8 @@ class LeadSaleCreditNotification extends Notification
             default => "{$this->count} leads you {$creditLabel} now have successful payments.",
         };
         $bookTitle = match ($status) {
-            'Refund' => 'Refunded credited leads',
-            'Dispute' => 'Disputed credited leads',
+            'Refund' => 'Refunded sold leads',
+            'Dispute' => 'Disputed sold leads',
             default => 'New successful sales',
         };
 
@@ -62,23 +62,18 @@ class LeadSaleCreditNotification extends Notification
             ];
         }
 
-        $endorsement = $this->payment?->endorsement;
-        $agentName = trim(($endorsement?->agent?->first_name ?? '') . ' ' . ($endorsement?->agent?->last_name ?? '')) ?: 'Sales Agent';
-
         return [
             'title' => $singularTitle,
             'message' => match ($status) {
-                'Refund' => "{$agentName}'s sale was marked as a refund.",
-                'Dispute' => "{$agentName}'s sale was marked as a dispute.",
-                default => "{$agentName} closed this sale.",
+                'Refund' => "A sold lead you {$creditLabel} was marked as a refund.",
+                'Dispute' => "A sold lead you {$creditLabel} was marked as a dispute.",
+                default => "A lead you {$creditLabel} now has a successful payment.",
             },
-            'author_name' => $endorsement?->author_name ?? 'Client',
-            'book_title' => $endorsement?->book_title ?? $bookTitle,
+            'author_name' => $isVerifiedCredit ? 'Verified Sold Lead' : 'Sold Lead',
+            'book_title' => $bookTitle,
             'credit_type' => $this->creditType,
             'payment_status' => $status,
             'count' => 1,
-            'payment_id' => $this->payment?->id,
-            'lead_id' => $endorsement?->lead_id,
             'url' => route($route),
         ];
     }

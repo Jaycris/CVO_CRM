@@ -42,38 +42,47 @@ class ReportController extends Controller
             ? $this->reportCollections($request, $reportType, $search, $startDate, $endDate)
             : [collect(), collect(), collect()];
 
-        $summaryCards = [
-            [
-                'label' => 'Total Sales',
-                'count' => '$' . number_format((float) $activities->sum('amount'), 2),
-                'hint' => 'Successful payments',
-                'tone' => 'emerald',
-            ],
-            [
-                'label' => 'Successful Payments',
-                'count' => $payments->where('status', 'Payment Success')->count(),
-                'hint' => 'Finance confirmed',
-                'tone' => 'sky',
-            ],
-            [
-                'label' => 'Refunds / Disputes',
-                'count' => $payments->whereIn('status', ['Refund', 'Dispute', 'Declined'])->count(),
-                'hint' => 'Needs finance review',
-                'tone' => 'rose',
-            ],
-            [
-                'label' => 'Production Projects',
-                'count' => $productionProjects->count(),
-                'hint' => 'Generated from sales',
-                'tone' => 'amber',
-            ],
-        ];
+        $summaryCards = $reportType === 'lead_miner' && ! $this->canSeeSensitiveCreditDetails($request)
+            ? [
+                [
+                    'label' => 'Sold Leads',
+                    'count' => $activities->count(),
+                    'hint' => 'Sold lead count only',
+                    'tone' => 'emerald',
+                ],
+            ]
+            : [
+                [
+                    'label' => 'Total Sales',
+                    'count' => '$' . number_format((float) $activities->sum('amount'), 2),
+                    'hint' => 'Successful payments',
+                    'tone' => 'emerald',
+                ],
+                [
+                    'label' => 'Successful Payments',
+                    'count' => $payments->where('status', 'Payment Success')->count(),
+                    'hint' => 'Finance confirmed',
+                    'tone' => 'sky',
+                ],
+                [
+                    'label' => 'Refunds / Disputes',
+                    'count' => $payments->whereIn('status', ['Refund', 'Dispute', 'Declined'])->count(),
+                    'hint' => 'Needs finance review',
+                    'tone' => 'rose',
+                ],
+                [
+                    'label' => 'Production Projects',
+                    'count' => $productionProjects->count(),
+                    'hint' => 'Generated from sales',
+                    'tone' => 'amber',
+                ],
+            ];
 
         $summaryCards = $reportType ? $summaryCards : [];
 
         return view('reports.index', [
             'summaryCards' => $summaryCards,
-            'reportRows' => $reportType ? $this->reportRows($activities, $payments, $productionProjects, $reportType) : collect(),
+            'reportRows' => $reportType ? $this->reportRows($request, $activities, $payments, $productionProjects, $reportType) : collect(),
             'salesByAgent' => $this->sumSalesCreditByAgent($activities),
             'salesByBrand' => $this->sumByLabel($activities, fn (SalesActivity $activity) => $activity->brand?->imprint_name ?: 'No Brand'),
             'salesByMonth' => $this->sumByLabel($activities, fn (SalesActivity $activity) => $activity->sold_date?->format('F Y') ?: 'No Date'),
@@ -126,7 +135,7 @@ class ReportController extends Controller
             $validated['end_date'] ?? null
         );
 
-        $rows = $this->reportRows($activities, $payments, $productionProjects, $validated['report_type']);
+        $rows = $this->reportRows($request, $activities, $payments, $productionProjects, $validated['report_type']);
         $filename = str($validated['report_type'])->replace('_', '-')->append('-report-', now()->format('Ymd-His'));
 
         if ($format === 'csv') {
@@ -170,9 +179,15 @@ class ReportController extends Controller
             $activities = SalesActivity::with(['brand', 'agent', 'frankieAgent', 'leadMiner', 'verifier', 'service'])
                 ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
                 ->where('payment_status', 'Payment Success')
+                ->when($reportType === 'lead_miner' && ! $this->canSeeSensitiveCreditDetails($request), function ($query) use ($request) {
+                    $query->where(function ($query) use ($request) {
+                        $query->where('lead_miner_id', $request->user()->id)
+                            ->orWhere('verifier_id', $request->user()->id);
+                    });
+                })
                 ->when($startDate, fn ($query) => $query->whereDate('sold_date', '>=', $startDate))
                 ->when($endDate, fn ($query) => $query->whereDate('sold_date', '<=', $endDate))
-                ->when($search !== '', fn ($query) => $this->filterSalesActivities($query, $search))
+                ->when($search !== '' && ($reportType !== 'lead_miner' || $this->canSeeSensitiveCreditDetails($request)), fn ($query) => $this->filterSalesActivities($query, $search))
                 ->get();
         }
 
@@ -276,7 +291,7 @@ class ReportController extends Controller
         return str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], $value);
     }
 
-    private function reportRows(Collection $activities, Collection $payments, Collection $productionProjects, string $reportType): Collection
+    private function reportRows(Request $request, Collection $activities, Collection $payments, Collection $productionProjects, string $reportType): Collection
     {
         if ($reportType === 'finance') {
             return $payments->map(function (SalesPayment $payment) {
@@ -316,6 +331,26 @@ class ReportController extends Controller
             })->sortByDesc(fn (array $row) => $row['date']?->timestamp ?? 0)->values();
         }
 
+        if ($reportType === 'lead_miner' && ! $this->canSeeSensitiveCreditDetails($request)) {
+            return $activities
+                ->groupBy(fn (SalesActivity $activity) => $activity->sold_date?->format('F Y') ?: 'No Sold Date')
+                ->map(function (Collection $activities, string $month) {
+                    return [
+                        'type' => 'Sold Lead Summary',
+                        'date' => $activities->max('sold_date'),
+                        'reference' => $month,
+                        'brand' => 'Hidden',
+                        'author' => 'Hidden for privacy',
+                        'book_title' => 'Only sold lead counts are shown.',
+                        'agent' => 'Hidden',
+                        'status' => 'Sold Leads: ' . $activities->count(),
+                        'amount' => null,
+                    ];
+                })
+                ->sortByDesc(fn (array $row) => $row['date']?->timestamp ?? 0)
+                ->values();
+        }
+
         return $activities
             ->map(function (SalesActivity $activity) use ($reportType) {
                 $agentName = trim(($activity->agent?->first_name ?? '') . ' ' . ($activity->agent?->last_name ?? '')) ?: '-';
@@ -337,8 +372,19 @@ class ReportController extends Controller
             ->values();
     }
 
+    private function canSeeSensitiveCreditDetails(Request $request): bool
+    {
+        return $request->user()?->role?->name === 'Admin'
+            || (bool) $request->user()?->hasPermission('view_reports')
+            || (bool) $request->user()?->hasPermission('view_sales_activity');
+    }
+
     private function reportSearchOptions(Request $request): Collection
     {
+        if (! $this->canSeeSensitiveCreditDetails($request)) {
+            return collect();
+        }
+
         $options = collect();
 
         SalesActivity::with(['brand', 'agent', 'frankieAgent', 'service'])

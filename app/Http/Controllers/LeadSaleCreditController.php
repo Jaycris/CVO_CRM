@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\SalesPayment;
 use App\Support\BrandScope;
+use Illuminate\Support\Collection;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -40,23 +41,24 @@ class LeadSaleCreditController extends Controller
     private function index(Request $request, string $creditType, string $pageTitle, string $pageDescription): View
     {
         $search = trim((string) $request->query('search', ''));
+        $canSeeFullDetails = $this->userCanSeeAllCredit($request);
 
-        $payments = SalesPayment::with([
+        $paymentsQuery = SalesPayment::with([
                 'brand',
                 'endorsement.agent',
                 'endorsement.brand',
                 'endorsement.lead.createdBy',
                 'endorsement.lead.verifiedBy',
             ])
-            ->where('status', 'Payment Success')
+            ->whereIn('status', ['Payment Success', 'Refund', 'Dispute'])
             ->whereHas('endorsement.lead')
             ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
-            ->when(! $this->userCanSeeAllCredit($request), function ($query) use ($request, $creditType) {
+            ->when(! $canSeeFullDetails, function ($query) use ($request, $creditType) {
                 $column = $creditType === 'verified' ? 'verified_by' : 'created_by';
 
                 $query->whereHas('endorsement.lead', fn ($query) => $query->where($column, $request->user()->id));
             })
-            ->when($search !== '', function ($query) use ($search) {
+            ->when($canSeeFullDetails && $search !== '', function ($query) use ($search) {
                 $query->where(function ($query) use ($search) {
                     $query->where('payment_method', 'like', "%{$search}%")
                         ->orWhere('sold_date', 'like', "%{$search}%")
@@ -80,17 +82,39 @@ class LeadSaleCreditController extends Controller
                                 });
                         });
                 });
-            })
+            });
+
+        $creditSummaries = $this->creditSummaries((clone $paymentsQuery)->get());
+
+        $payments = $canSeeFullDetails
+            ? $paymentsQuery
             ->latest('sold_date')
             ->paginate(10)
-            ->withQueryString();
+                ->withQueryString()
+            : null;
+
+        $soldCount = (clone $paymentsQuery)->where('status', 'Payment Success')->count();
+        $refundCount = (clone $paymentsQuery)->where('status', 'Refund')->count();
+        $disputeCount = (clone $paymentsQuery)->where('status', 'Dispute')->count();
 
         $summaryCards = [
             [
                 'label' => $creditType === 'verified' ? 'Verified Sold Leads' : 'Sold Leads',
-                'count' => $payments->total(),
-                'hint' => 'Successful payments',
+                'count' => $soldCount,
+                'hint' => 'Successful sold leads',
                 'tone' => 'emerald',
+            ],
+            [
+                'label' => 'Refunded Sold Leads',
+                'count' => $refundCount,
+                'hint' => 'Sold leads refunded',
+                'tone' => 'rose',
+            ],
+            [
+                'label' => 'Disputed Sold Leads',
+                'count' => $disputeCount,
+                'hint' => 'Sold leads disputed',
+                'tone' => 'amber',
             ],
         ];
 
@@ -100,8 +124,26 @@ class LeadSaleCreditController extends Controller
             'pageDescription',
             'summaryCards',
             'search',
-            'creditType'
+            'creditType',
+            'creditSummaries',
+            'canSeeFullDetails'
         ));
+    }
+
+    private function creditSummaries(Collection $payments): Collection
+    {
+        return $payments
+            ->groupBy(fn (SalesPayment $payment) => $payment->sold_date?->format('F Y') ?? 'No Sold Date')
+            ->map(function (Collection $payments, string $month) {
+                return [
+                    'month' => $month,
+                    'sold' => $payments->where('status', 'Payment Success')->count(),
+                    'refund' => $payments->where('status', 'Refund')->count(),
+                    'dispute' => $payments->where('status', 'Dispute')->count(),
+                    'total' => $payments->count(),
+                ];
+            })
+            ->values();
     }
 
     private function userHasPermission(Request $request, string $permission): bool

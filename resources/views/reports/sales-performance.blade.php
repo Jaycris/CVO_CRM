@@ -132,7 +132,7 @@
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h2 class="font-semibold text-slate-900 dark:text-zinc-100">Agent MTD Directory</h2>
-                        <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Agent sales credit, service/markup split, commission, and target progress for {{ $month->format('F Y') }}.</p>
+                        <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Agent sales totals, service/markup split, commission, and target progress for {{ $month->format('F Y') }}.</p>
                     </div>
                     <form method="GET" class="flex flex-wrap items-center gap-2">
                         <input type="text" name="month" value="{{ $month->format('Y-m') }}" placeholder="YYYY-MM"
