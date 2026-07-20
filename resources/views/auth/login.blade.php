@@ -4,7 +4,7 @@
              style="background: radial-gradient(circle at top left, #0f4f32 0%, #082d21 42%, #050706 100%);">
             <div>
                 <div class="max-w-xl">
-                    <img src="{{ asset('images/CreativeVision LOGO 1.png') }}"
+                    <img src="{{ asset('images/CreativeVision-LOGO-1.png') }}"
                          alt="CreatiVision Outsourcing"
                          class="h-24 w-auto max-w-full object-contain">
 

@@ -3,7 +3,7 @@
     $crmName = 'CreatiVision CRM';
     $brandPrimary = $brand?->primary_color ?: '#065f46';
     $brandAccent = $brand?->accent_color ?: '#d1fae5';
-    $brandLogo = asset('images/CreativeVision LOGO 1.png');
+    $brandLogo = asset('images/CreativeVision-LOGO-1.png');
     $headerBackground = 'linear-gradient(135deg, #064e3b 0%, #022c22 45%, #050505 100%)';
     $buttonBackground = 'linear-gradient(135deg, #065f46 0%, #022c22 100%)';
     $buttonBorder = '#065f46';

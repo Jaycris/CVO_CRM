@@ -247,7 +247,7 @@
                 ? asset('storage/' . $currentBrand->logo_path)
                 : match ($currentBrandName) {
                     'Inkspire Media House' => asset('images/inkspire-logo.png'),
-                    'CreatiVision Outsourcing' => asset('images/CreativeVision LOGO 1.png'),
+                    'CreatiVision Outsourcing' => asset('images/CreativeVision-LOGO-1.png'),
                     default => null,
                 };
             $brandPrimaryColor = $currentBrand?->primary_color ?? ($currentBrandName === 'CreatiVision Outsourcing' ? '#065f46' : '#d97706');

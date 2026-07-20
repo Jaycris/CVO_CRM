@@ -3,7 +3,7 @@
     $crmName = 'CreatiVision CRM';
     $brandPrimary = '#065f46';
     $brandAccent = '#d1fae5';
-    $brandLogo = asset('images/CreativeVision LOGO 1.png');
+    $brandLogo = asset('images/CreativeVision-LOGO-1.png');
 @endphp
 
 <x-guest-layout plain>

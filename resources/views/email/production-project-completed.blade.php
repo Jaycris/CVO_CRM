@@ -1,7 +1,7 @@
 @php
     $crmName = 'CreatiVision CRM';
     $brandName = 'CreatiVision Outsourcing';
-    $brandLogo = asset('images/CreativeVision LOGO 1.png');
+    $brandLogo = asset('images/CreativeVision-LOGO-1.png');
     $headerBackground = 'linear-gradient(135deg, #064e3b 0%, #022c22 45%, #050505 100%)';
     $buttonBackground = 'linear-gradient(135deg, #065f46 0%, #022c22 100%)';
     $projectCode = 'PRJ-' . str_pad((string) $project->id, 5, '0', STR_PAD_LEFT);
