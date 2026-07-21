@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Throwable;
 
 class LeadController extends Controller
 {
@@ -280,6 +281,13 @@ class LeadController extends Controller
         ]);
 
         $file = fopen($request->file('lead_csv')->getRealPath(), 'r');
+
+        if ($file === false) {
+            return back()
+                ->withErrors(['lead_csv' => 'The CSV file could not be opened. Please upload the file again.'])
+                ->withInput();
+        }
+
         $headers = fgetcsv($file) ?: [];
         $headerMap = $this->csvHeaderMap($headers);
         $requiredHeaders = ['book_title', 'author_name', 'phone_numbers'];
@@ -299,50 +307,66 @@ class LeadController extends Controller
         $skipped = [];
         $rowNumber = 1;
 
-        DB::transaction(function () use ($file, $headerMap, $request, &$created, &$skipped, &$rowNumber) {
-            while (($row = fgetcsv($file)) !== false) {
-                $rowNumber++;
+        try {
+            DB::transaction(function () use ($file, $headerMap, $request, &$created, &$skipped, &$rowNumber) {
+                while (($row = fgetcsv($file)) !== false) {
+                    $rowNumber++;
 
-                if (count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
-                    continue;
+                    if (count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
+                        continue;
+                    }
+
+                    $leadData = $this->leadDataFromCsvRow($row, $headerMap);
+                    $validator = Validator::make($leadData, [
+                        'publisher' => ['nullable', 'string', 'max:255'],
+                        'book_title' => ['required', 'string', 'max:255'],
+                        'author_name' => ['required', 'string', 'max:255'],
+                        'phone_numbers' => ['required', 'array', 'min:1'],
+                        'phone_numbers.*' => ['required', 'string'],
+                        'email' => ['nullable', 'email', 'max:255'],
+                        'book_link' => ['nullable', 'url', 'max:5000'],
+                        'published_date' => ['nullable', 'date'],
+                    ]);
+
+                    if ($validator->fails()) {
+                        $skipped[] = "Row {$rowNumber}: " . $validator->errors()->first();
+                        continue;
+                    }
+
+                    if ($this->hasDuplicatePhonesInLead($leadData['phone_numbers'])) {
+                        $skipped[] = "Row {$rowNumber}: Please remove duplicate phone numbers from this lead.";
+                        continue;
+                    }
+
+                    if ($duplicateMessage = $this->leadDuplicateMessage($leadData)) {
+                        $skipped[] = "Row {$rowNumber}: {$duplicateMessage}";
+                        continue;
+                    }
+
+                    try {
+                        Lead::create([
+                            ...$leadData,
+                            'brand_id' => BrandScope::userBrandId($request->user()),
+                            'created_by' => $request->user()->id,
+                        ]);
+                    } catch (Throwable $exception) {
+                        report($exception);
+
+                        $skipped[] = "Row {$rowNumber}: This row could not be imported. Please check the link, email, and field values.";
+                        continue;
+                    }
+
+                    $created++;
                 }
+            });
+        } catch (Throwable $exception) {
+            report($exception);
+            fclose($file);
 
-                $leadData = $this->leadDataFromCsvRow($row, $headerMap);
-                $validator = Validator::make($leadData, [
-                    'publisher' => ['nullable', 'string', 'max:255'],
-                    'book_title' => ['required', 'string', 'max:255'],
-                    'author_name' => ['required', 'string', 'max:255'],
-                    'phone_numbers' => ['required', 'array', 'min:1'],
-                    'phone_numbers.*' => ['required', 'string'],
-                    'email' => ['nullable', 'email', 'max:255'],
-                    'book_link' => ['nullable', 'url', 'max:2048'],
-                    'published_date' => ['nullable', 'date'],
-                ]);
-
-                if ($validator->fails()) {
-                    $skipped[] = "Row {$rowNumber}: " . $validator->errors()->first();
-                    continue;
-                }
-
-                if ($this->hasDuplicatePhonesInLead($leadData['phone_numbers'])) {
-                    $skipped[] = "Row {$rowNumber}: Please remove duplicate phone numbers from this lead.";
-                    continue;
-                }
-
-                if ($duplicateMessage = $this->leadDuplicateMessage($leadData)) {
-                    $skipped[] = "Row {$rowNumber}: {$duplicateMessage}";
-                    continue;
-                }
-
-                Lead::create([
-                    ...$leadData,
-                    'brand_id' => BrandScope::userBrandId($request->user()),
-                    'created_by' => $request->user()->id,
-                ]);
-
-                $created++;
-            }
-        });
+            return back()
+                ->withErrors(['lead_csv' => 'The CSV import could not be completed. Please check the file format and try again.'])
+                ->withInput();
+        }
 
         fclose($file);
 
@@ -1092,7 +1116,7 @@ class LeadController extends Controller
             'author_name' => ['required', 'string', 'max:255'],
             'phone_numbers' => ['required', 'string'],
             'email' => ['nullable', 'email', 'max:255'],
-            'book_link' => ['nullable', 'url', 'max:2048'],
+            'book_link' => ['nullable', 'url', 'max:5000'],
             'published_date' => ['nullable', 'date'],
         ]);
 
@@ -1168,7 +1192,7 @@ class LeadController extends Controller
 
     private function parsePhoneNumbers(string $phoneNumbers): array
     {
-        return collect(preg_split('/\r\n|\r|\n|\||;/', $phoneNumbers))
+        return collect(preg_split('/\r\n|\r|\n|\||;|,(?=\s*\(?\+?\d)/', $phoneNumbers))
             ->map(fn (string $phoneNumber) => trim($phoneNumber))
             ->filter()
             ->values()
