@@ -83,7 +83,7 @@ class FinanceClientController extends Controller
                 });
             })
             ->latest('sold_date')
-            ->paginate(10)
+            ->paginate(\App\Models\AppSetting::recordsPerPage())
             ->withQueryString();
     }
 

@@ -184,7 +184,7 @@ class SalesPerformanceController extends Controller
     private function paginateCollection(Collection $rows, Request $request): LengthAwarePaginator
     {
         $page = LengthAwarePaginator::resolveCurrentPage();
-        $perPage = 10;
+        $perPage = \App\Models\AppSetting::recordsPerPage();
 
         return new LengthAwarePaginator(
             $rows->forPage($page, $perPage)->values(),

@@ -49,7 +49,7 @@ class SalesActivityController extends Controller
             })
             ->latest('sold_date')
             ->latest()
-            ->paginate(10)
+            ->paginate(\App\Models\AppSetting::recordsPerPage())
             ->withQueryString();
 
         return view('sales-activities.index', [

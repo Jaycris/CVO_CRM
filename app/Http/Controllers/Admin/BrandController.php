@@ -18,7 +18,7 @@ class BrandController extends Controller
 
         $brands = Brand::query()
             ->orderBy('imprint_name')
-            ->paginate(10)
+            ->paginate(\App\Models\AppSetting::recordsPerPage())
             ->withQueryString();
 
         return view('admin.brands.index', compact('brands'));

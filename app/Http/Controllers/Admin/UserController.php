@@ -33,7 +33,7 @@ class UserController extends Controller
                     $query->whereNull('sales_stage')
                         ->orWhereIn('sales_stage', ['pipeline', 'prospect', 'scheduled_callback']);
                 }),
-        ])->latest()->paginate(10);
+        ])->latest()->paginate(\App\Models\AppSetting::recordsPerPage());
 
         return view('admin.users.index', compact('users'));
     }

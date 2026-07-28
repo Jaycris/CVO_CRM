@@ -48,7 +48,7 @@ class ServiceCatalogController extends Controller
         }
 
         $services = $servicesQuery
-            ->paginate(10)
+            ->paginate(\App\Models\AppSetting::recordsPerPage())
             ->withQueryString();
 
         $brandsQuery = Brand::query()->orderBy('imprint_name');

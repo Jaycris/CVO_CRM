@@ -34,7 +34,7 @@ class DashboardBannerController extends Controller
                 });
             })
             ->latest()
-            ->paginate(10)
+            ->paginate(\App\Models\AppSetting::recordsPerPage())
             ->withQueryString();
 
         $brands = Brand::query()

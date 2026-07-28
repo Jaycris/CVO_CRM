@@ -20,7 +20,7 @@ class TeamController extends Controller
         $teams = Team::with(['brand', 'manager', 'teamLeader', 'members.role'])
             ->withCount('members')
             ->latest()
-            ->paginate(10)
+            ->paginate(\App\Models\AppSetting::recordsPerPage())
             ->withQueryString();
 
         return view('admin.teams.index', [

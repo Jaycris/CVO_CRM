@@ -89,7 +89,7 @@ class LeadSaleCreditController extends Controller
         $payments = $canSeeFullDetails
             ? $paymentsQuery
             ->latest('sold_date')
-            ->paginate(10)
+            ->paginate(\App\Models\AppSetting::recordsPerPage())
                 ->withQueryString()
             : null;
 

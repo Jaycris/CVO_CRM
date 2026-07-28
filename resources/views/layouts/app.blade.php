@@ -338,6 +338,7 @@
                 $canManageAnnouncements = $isAdmin || auth()->user()->hasPermission('manage_announcements');
                 $canManageDashboardBanners = $isAdmin || auth()->user()->hasPermission('manage_dashboard_banners');
                 $canManageCommissionSettings = $isAdmin;
+                $canManageSystemSettings = $isAdmin;
                 $notifications = auth()->user()
                     ->notifications()
                     ->latest()
@@ -938,7 +939,7 @@
                     </div>
                 @endif
 
-                @if ($canManageUsers || $canManageRolesPermissions || $canManageServices || $canViewTeams || $canManageAnnouncements || $canManageDashboardBanners || $canManageCommissionSettings)
+                @if ($canManageUsers || $canManageRolesPermissions || $canManageServices || $canViewTeams || $canManageAnnouncements || $canManageDashboardBanners || $canManageCommissionSettings || $canManageSystemSettings)
                     <div class="py-4">
                         <p class="px-3 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">
                             Admin
@@ -993,6 +994,16 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                                 </svg>
                                 Commission Settings
+                            </a>
+                        @endif
+
+                        @if ($canManageSystemSettings)
+                            <a href="{{ route('admin.system-settings.edit') }}" class="{{ $sidebarLink(request()->routeIs('admin.system-settings.*')) }} mt-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ $sidebarIcon(request()->routeIs('admin.system-settings.*')) }}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9M10.5 12h9M10.5 18h9" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 6h.01M4.5 12h.01M4.5 18h.01" />
+                                </svg>
+                                System Settings
                             </a>
                         @endif
 

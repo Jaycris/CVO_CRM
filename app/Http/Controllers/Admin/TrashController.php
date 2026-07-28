@@ -89,7 +89,7 @@ class TrashController extends Controller
                     });
                 })
                 ->latest('deleted_at')
-                ->paginate(10)
+                ->paginate(\App\Models\AppSetting::recordsPerPage())
                 ->withQueryString(),
             'leads' => Lead::onlyTrashed()
                 ->with(['createdBy', 'assignedUser'])
@@ -102,7 +102,7 @@ class TrashController extends Controller
                     });
                 })
                 ->latest('deleted_at')
-                ->paginate(10)
+                ->paginate(\App\Models\AppSetting::recordsPerPage())
                 ->withQueryString(),
             'endorsements' => SalesEndorsement::onlyTrashed()
                 ->with('agent')
@@ -119,7 +119,7 @@ class TrashController extends Controller
                     });
                 })
                 ->latest('deleted_at')
-                ->paginate(10)
+                ->paginate(\App\Models\AppSetting::recordsPerPage())
                 ->withQueryString(),
             'payments' => SalesPayment::onlyTrashed()
                 ->with(['endorsement' => fn ($query) => $query->withTrashed()->with('agent')])
@@ -135,7 +135,7 @@ class TrashController extends Controller
                     });
                 })
                 ->latest('deleted_at')
-                ->paginate(10)
+                ->paginate(\App\Models\AppSetting::recordsPerPage())
                 ->withQueryString(),
             'projects' => ProductionProject::onlyTrashed()
                 ->with([
@@ -160,7 +160,7 @@ class TrashController extends Controller
                     });
                 })
                 ->latest('deleted_at')
-                ->paginate(10)
+                ->paginate(\App\Models\AppSetting::recordsPerPage())
                 ->withQueryString(),
         };
     }

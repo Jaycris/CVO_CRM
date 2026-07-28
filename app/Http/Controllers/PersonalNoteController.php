@@ -13,7 +13,7 @@ class PersonalNoteController extends Controller
     {
         $notes = PersonalNote::where('user_id', $request->user()->id)
             ->latest()
-            ->paginate(10)
+            ->paginate(\App\Models\AppSetting::recordsPerPage())
             ->withQueryString();
 
         return view('notes.index', compact('notes'));

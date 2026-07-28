@@ -15,7 +15,7 @@ class NotificationController extends Controller
             $notifications = $request->user()
                 ->notifications()
                 ->latest()
-                ->paginate(10)
+                ->paginate(\App\Models\AppSetting::recordsPerPage())
                 ->withQueryString();
 
             return view('notifications.index', compact('notifications'));

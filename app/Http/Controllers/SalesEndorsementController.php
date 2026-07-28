@@ -41,7 +41,7 @@ class SalesEndorsementController extends Controller
                 });
             })
             ->latest()
-            ->paginate(10)
+            ->paginate(\App\Models\AppSetting::recordsPerPage())
             ->withQueryString();
 
         return view('sales-endorsements.index', [

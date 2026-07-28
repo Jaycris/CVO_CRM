@@ -13,7 +13,7 @@ class AnnouncementController extends Controller
         $announcements = Announcement::with('creator')
             ->latest('published_at')
             ->latest()
-            ->paginate(10)
+            ->paginate(\App\Models\AppSetting::recordsPerPage())
             ->withQueryString();
 
         return view('announcements.index', compact('announcements'));

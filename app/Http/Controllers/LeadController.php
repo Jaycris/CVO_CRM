@@ -109,7 +109,7 @@ class LeadController extends Controller
             ->whereHas('paymentRecord', fn ($query) => $query->where('status', $paymentStatus))
             ->where('agent_id', $request->user()->id)
             ->latest()
-            ->paginate(10)
+            ->paginate(\App\Models\AppSetting::recordsPerPage())
             ->withQueryString();
 
         return view('sales.payment-records', [
@@ -189,7 +189,7 @@ class LeadController extends Controller
 
         $this->applyLeadFilters($query, $request);
 
-        $leads = $query->latest()->paginate(10)->withQueryString();
+        $leads = $query->latest()->paginate(\App\Models\AppSetting::recordsPerPage())->withQueryString();
         $summaryCards = $this->summaryCards($viewMode, $request);
         $salesAssignees = User::with('role')
             ->where('department', 'Sales')

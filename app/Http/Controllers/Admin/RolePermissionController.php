@@ -36,7 +36,7 @@ class RolePermissionController extends Controller
             ->when(request('department'), fn ($query, string $department) => $query->where('department', $department))
             ->orderBy('department')
             ->orderBy('name')
-            ->paginate(10)
+            ->paginate(\App\Models\AppSetting::recordsPerPage())
             ->withQueryString();
         $availablePermissions = $this->availablePermissions();
 

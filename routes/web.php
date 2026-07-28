@@ -35,6 +35,7 @@ use App\Http\Controllers\Admin\DashboardBannerController;
 use App\Http\Controllers\Admin\ServiceController;
 use App\Http\Controllers\Admin\TeamController;
 use App\Http\Controllers\Admin\CommissionSettingController;
+use App\Http\Controllers\Admin\SystemSettingController;
 use App\Http\Controllers\Admin\AnnouncementController as AdminAnnouncementController;
 use App\Models\SalesActivity;
 
@@ -403,6 +404,8 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::delete('/dashboard-banners/{dashboardBanner}', [DashboardBannerController::class, 'destroy'])->name('dashboard-banners.destroy');
     Route::get('/commission-settings', [CommissionSettingController::class, 'edit'])->name('commission-settings.edit');
     Route::put('/commission-settings', [CommissionSettingController::class, 'update'])->name('commission-settings.update');
+    Route::get('/system-settings', [SystemSettingController::class, 'edit'])->name('system-settings.edit');
+    Route::put('/system-settings', [SystemSettingController::class, 'update'])->name('system-settings.update');
     Route::get('/services', [ServiceController::class, 'index'])->name('services.index');
     Route::post('/services', [ServiceController::class, 'store'])->name('services.store');
     Route::put('/services/{service}', [ServiceController::class, 'update'])->name('services.update');

@@ -72,7 +72,7 @@ class ProductionProjectController extends Controller
                 });
             })
             ->latest()
-            ->paginate(10)
+            ->paginate(\App\Models\AppSetting::recordsPerPage())
             ->withQueryString();
 
         return view('production.task-tracker', [
@@ -116,7 +116,7 @@ class ProductionProjectController extends Controller
                 });
             })
             ->latest()
-            ->paginate(10)
+            ->paginate(\App\Models\AppSetting::recordsPerPage())
             ->withQueryString();
 
         $summaryQuery = ProductionTask::where('assigned_to', $request->user()->id)
@@ -197,7 +197,7 @@ class ProductionProjectController extends Controller
                 });
             })
             ->latest()
-            ->paginate(10)
+            ->paginate(\App\Models\AppSetting::recordsPerPage())
             ->withQueryString();
 
         $summary = [
