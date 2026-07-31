@@ -1,6 +1,6 @@
 <x-app-layout>
     <x-slot name="header">
-        Verify Lead
+        Lead Verification
     </x-slot>
 
     @php
@@ -49,7 +49,7 @@
          }">
         <div class="flex flex-wrap items-center justify-between gap-4">
             <div>
-                <h1 class="text-2xl font-bold text-slate-900 dark:text-zinc-100">Verify Lead</h1>
+                <h1 class="text-2xl font-bold text-slate-900 dark:text-zinc-100">Verify and Review Lead</h1>
                 <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
                     Review the lead with your usual sources, then save the verification score.
                 </p>

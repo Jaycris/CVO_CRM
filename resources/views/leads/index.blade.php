@@ -711,7 +711,7 @@
 
                         @if ($showMoveVerifiedToReadyAction)
                             <form method="POST" action="{{ route('leads.move-verified-to-ready') }}"
-                                  x-on:submit="if (!confirm('Move selected verified leads to the next queue?')) { $event.preventDefault(); }"
+                                  x-on:submit="if (!confirm('Move selected reviewed leads to the next queue?')) { $event.preventDefault(); }"
                                   class="rounded-xl border border-slate-200 p-4 dark:border-zinc-800">
                                 @csrf
                                 <input type="hidden" name="return_to" value="{{ request()->fullUrl() }}">
@@ -720,9 +720,9 @@
                                     <input type="hidden" name="lead_ids[]" :value="leadId">
                                 </template>
 
-                                <h4 class="text-sm font-semibold text-slate-900 dark:text-zinc-100">Move to Ready Queue</h4>
+                                <h4 class="text-sm font-semibold text-slate-900 dark:text-zinc-100">Move Reviewed Leads to Ready Queue</h4>
                                 <p class="mt-2 text-sm text-slate-500 dark:text-zinc-400">
-                                    Verified new leads go to Unassigned Leads. Verified returned leads go back to Returned Leads.
+                                    Reviewed leads with at least 25/100 score go to Unassigned Leads. Reviewed returned leads go back to Returned Leads.
                                 </p>
                                 <button type="submit"
                                         class="mt-5 flex min-h-12 w-full items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200 dark:hover:bg-emerald-400/20">

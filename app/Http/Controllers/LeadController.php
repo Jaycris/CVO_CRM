@@ -602,7 +602,7 @@ class LeadController extends Controller
         $readyLeads = Lead::whereIn('id', $validated['lead_ids'])
             ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
             ->where('lead_generation_stage', 'verification_queue')
-            ->whereNotNull('verified_at')
+            ->where('verify_score', '>=', 25)
             ->whereNull('archived_at')
             ->whereNull('sales_stage')
             ->when(! $this->userIsAdmin($request), fn ($query) => $query->where('verification_assigned_to', $request->user()->id))
@@ -611,7 +611,7 @@ class LeadController extends Controller
         if ($readyLeads->count() !== count(array_unique($validated['lead_ids']))) {
             return redirect()
                 ->to($this->safeReturnUrl($validated['return_to'] ?? null) ?? route('leads.verification-queue'))
-                ->with('error', 'Only verified leads from Verification Queue can be moved forward.');
+                ->with('error', 'Only reviewed leads with at least 25/100 score can be moved forward.');
         }
 
         Lead::whereIn('id', $readyLeads)
@@ -629,7 +629,7 @@ class LeadController extends Controller
 
         return redirect()
             ->to($this->safeReturnUrl($validated['return_to'] ?? null) ?? route('leads.verification-queue'))
-            ->with('success', 'Selected verified leads moved to the next queue.');
+            ->with('success', 'Selected reviewed leads moved to the next queue.');
     }
 
     public function destroy(Lead $lead): RedirectResponse
@@ -902,6 +902,25 @@ class LeadController extends Controller
             'verification_assigned_to' => null,
         ]);
 
+        if ($this->userCanSelfMineAndWork($request)) {
+            Lead::whereIn('id', $movableLeads)
+                ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
+                ->where('created_by', $request->user()->id)
+                ->where('assigned_to', $request->user()->id)
+                ->where(function ($query) {
+                    $query->whereNull('verified_at')
+                        ->orWhereNull('verify_score')
+                        ->orWhere('verify_score', '<', 25);
+                })
+                ->update([
+                    'verify_score' => 25,
+                    'verified_at' => now(),
+                    'verified_by' => $request->user()->id,
+                    'lead_generation_stage' => null,
+                    'verification_assigned_to' => null,
+                ]);
+        }
+
         return redirect()
             ->to($this->safeReturnUrl($validated['return_to'] ?? null) ?? route('leads.assigned'))
             ->with('success', 'Selected leads moved successfully.');
@@ -1042,7 +1061,7 @@ class LeadController extends Controller
             'phone_number_statuses' => $phoneStatuses,
             'verified_phone_numbers' => $verifiedPhoneNumbers,
             'phone_confirmed' => $checks['phone_confirmed'],
-            'verify_score' => $score > 0 ? $score : null,
+            'verify_score' => $score,
             'verified_at' => $isVerified ? $lead->verified_at : null,
             'verified_by' => $isVerified ? $lead->verified_by : null,
             'archived_at' => $hasDnc ? now() : $lead->archived_at,
@@ -1103,7 +1122,7 @@ class LeadController extends Controller
             ...$checks,
             'verified_phone_numbers' => $verifiedPhoneNumbers,
             'phone_number_statuses' => $phoneStatuses,
-            'verify_score' => $score > 0 ? $score : null,
+            'verify_score' => $score,
             'verification_notes' => $validated['verification_notes'] ?? null,
             'verified_at' => $isVerified ? now() : null,
             'verified_by' => $isVerified ? $request->user()->id : null,
@@ -1343,7 +1362,7 @@ class LeadController extends Controller
             'verified_phone_numbers' => $verifiedPhoneNumbers,
             'phone_number_statuses' => $this->validPhoneNumberStatuses($lead, $lead->phone_number_statuses ?? []),
             'phone_confirmed' => $checks['phone_confirmed'],
-            'verify_score' => $score > 0 ? $score : null,
+            'verify_score' => $score,
             'verified_at' => $isVerified ? $lead->verified_at : null,
             'verified_by' => $isVerified ? $lead->verified_by : null,
         ]);
@@ -2026,8 +2045,8 @@ class LeadController extends Controller
             ],
             [
                 'label' => 'Ready to Assign',
-                'count' => (clone $leadQuery)->where('lead_generation_stage', 'ready_to_assign')->whereNotNull('verified_at')->count(),
-                'hint' => 'Verified and ready',
+                'count' => (clone $leadQuery)->where('lead_generation_stage', 'ready_to_assign')->count(),
+                'hint' => 'Reviewed and ready',
                 'tone' => 'emerald',
             ],
         ];
@@ -2046,7 +2065,7 @@ class LeadController extends Controller
             ],
             'unassigned' => [
                 'Unassigned Leads',
-                'View verified leads that are ready to assign to Sales.',
+                'View reviewed leads that are ready to assign to Sales.',
             ],
             'assigned' => [
                 'Assigned Leads',
