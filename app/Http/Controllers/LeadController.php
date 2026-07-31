@@ -563,17 +563,26 @@ class LeadController extends Controller
                 $verificationNotifications[$verifier->id]['leads'][] = $lead;
             });
 
+        $affectedVerifierIds = collect($verificationNotifications)
+            ->keys()
+            ->map(fn ($id) => (int) $id);
+
         collect($verificationNotifications)->each(function (array $group) {
             $leads = collect($group['leads'] ?? []);
             $verifier = $group['user'] ?? null;
 
             if ($verifier && $leads->isNotEmpty()) {
-                $verifier->notify(new LeadSentToVerificationNotification(
-                    $leads->count() === 1 ? $leads->first() : null,
-                    $leads->count()
-                ));
+                $this->refreshVerifierQueueNotification($verifier, $leads);
             }
         });
+
+        $verifiers
+            ->reject(fn (User $verifier) => $affectedVerifierIds->contains((int) $verifier->id))
+            ->each(function (User $verifier) {
+                if (! $this->activeVerificationQueueFor($verifier)->exists()) {
+                    $this->clearVerifierQueueNotifications($verifier);
+                }
+            });
 
         return redirect()
             ->to($this->safeReturnUrl($validated['return_to'] ?? null) ?? route('leads.my'))
@@ -1540,6 +1549,7 @@ class LeadController extends Controller
     private function notificationRecipients(array $permissions, ?string $department = null)
     {
         return User::with(['role.permissionRecords', 'permissionOverrides'])
+            ->whereNull('suspended_at')
             ->when($department, fn ($query) => $query->where('department', $department))
             ->get()
             ->filter(function (User $user) use ($permissions) {
@@ -1581,6 +1591,40 @@ class LeadController extends Controller
         $verifier->active_verification_count++;
 
         return $verifier;
+    }
+
+    private function refreshVerifierQueueNotification(User $verifier, $leads): void
+    {
+        $leads = collect($leads);
+
+        $this->clearVerifierQueueNotifications($verifier);
+
+        if ($leads->isEmpty()) {
+            return;
+        }
+
+        $verifier->notify(new LeadSentToVerificationNotification(
+            $leads->count() === 1 ? $leads->first() : null,
+            $leads->count(),
+            $leads->pluck('id')->all()
+        ));
+    }
+
+    private function clearVerifierQueueNotifications(User $verifier): void
+    {
+        $verifier->unreadNotifications()
+            ->where('type', LeadSentToVerificationNotification::class)
+            ->delete();
+    }
+
+    private function activeVerificationQueueFor(User $verifier)
+    {
+        return Lead::query()
+            ->where('verification_assigned_to', $verifier->id)
+            ->where('lead_generation_stage', 'verification_queue')
+            ->whereNull('verified_at')
+            ->whereNull('archived_at')
+            ->whereNull('sales_stage');
     }
 
     private function markSharedLeadPageSeen(string $viewMode, ?Request $request): void
