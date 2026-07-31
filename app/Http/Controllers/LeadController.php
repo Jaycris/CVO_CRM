@@ -1015,11 +1015,14 @@ class LeadController extends Controller
             ->update([
             'archived_at' => null,
             'archived_by' => null,
+            'assigned_to' => null,
+            'assigned_date' => null,
             'sales_stage' => null,
             'sales_stage_updated_at' => null,
             'returned_at' => null,
             'returned_by' => null,
             'return_notes' => null,
+            'lead_generation_stage' => null,
             'verification_assigned_to' => null,
         ]);
 
