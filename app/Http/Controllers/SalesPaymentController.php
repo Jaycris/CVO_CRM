@@ -93,6 +93,7 @@ class SalesPaymentController extends Controller
         }
 
         $this->syncSalesActivity($payment);
+        $this->syncLeadSoldStage($payment);
 
         $this->notifySalesAgentPaymentStatus($payment);
 
@@ -122,6 +123,7 @@ class SalesPaymentController extends Controller
 
         $payment->loadMissing('endorsement.agent', 'endorsement.frankieAgent', 'endorsement.service', 'endorsement.lead.createdBy', 'endorsement.lead.verifiedBy');
         $this->syncSalesActivity($payment);
+        $this->syncLeadSoldStage($payment);
 
         if ($validated['status'] !== $previousStatus) {
             $this->notifySalesAgentPaymentStatus($payment);
@@ -262,6 +264,26 @@ class SalesPaymentController extends Controller
                 'sold_date' => $payment->sold_date,
             ]
         );
+    }
+
+    private function syncLeadSoldStage(SalesPayment $payment): void
+    {
+        if ($payment->status !== 'Payment Success') {
+            return;
+        }
+
+        $payment->loadMissing('endorsement.lead');
+
+        $lead = $payment->endorsement?->lead;
+
+        if (! $lead || $lead->sales_stage === 'sold') {
+            return;
+        }
+
+        $lead->forceFill([
+            'sales_stage' => 'sold',
+            'sales_stage_updated_at' => now(),
+        ])->save();
     }
 
     private function userCanAccessBrand(Request $request, ?int $brandId): bool

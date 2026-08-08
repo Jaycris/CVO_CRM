@@ -233,6 +233,15 @@
                                                 {{ $user->phone_number ?? 'No phone number' }}
                                             </p>
                                             <p class="text-xs text-slate-400 dark:text-zinc-500">
+                                                Work Type:
+                                                {{ match($user->work_type) {
+                                                    'remote' => 'Remote',
+                                                    'site' => 'On-site',
+                                                    'part_time' => 'Part-time',
+                                                    default => 'Not set',
+                                                } }}
+                                            </p>
+                                            <p class="text-xs text-slate-400 dark:text-zinc-500">
                                                 {{ $user->team?->name ? 'Team: ' . $user->team->name : 'No team' }}
                                             </p>
                                         </div>

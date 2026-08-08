@@ -8,6 +8,8 @@ class AppSetting extends Model
 {
     public const DEFAULT_RECORDS_PER_PAGE = 50;
 
+    protected static array $runtimeCache = [];
+
     protected $fillable = [
         'key',
         'value',
@@ -15,7 +17,11 @@ class AppSetting extends Model
 
     public static function get(string $key, mixed $default = null): mixed
     {
-        return static::where('key', $key)->value('value') ?? $default;
+        if (array_key_exists($key, static::$runtimeCache)) {
+            return static::$runtimeCache[$key];
+        }
+
+        return static::$runtimeCache[$key] = static::where('key', $key)->value('value') ?? $default;
     }
 
     public static function set(string $key, mixed $value): void
@@ -24,6 +30,8 @@ class AppSetting extends Model
             ['key' => $key],
             ['value' => (string) $value]
         );
+
+        static::$runtimeCache[$key] = (string) $value;
     }
 
     public static function recordsPerPage(): int

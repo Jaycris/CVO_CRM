@@ -25,7 +25,7 @@ return new class extends Migration
         $permissions = [
             'view_sales_performance_mtd' => [
                 'Reports',
-                'View Sales Performance MTD',
+                'View Sales Dashboard MTD',
                 'Can view monthly sales target performance, Global MTD, Remote MTD, Site MTD, and agent MTD rows.',
             ],
             'manage_sales_targets' => [

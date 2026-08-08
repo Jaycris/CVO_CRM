@@ -34,7 +34,7 @@ class SalesMtdCalculator
             ->whereNotNull('user_id')
             ->keyBy('user_id');
 
-        $creditRows = self::creditRows($activities);
+        $creditRows = self::statementRows($activities);
         $agentCredits = $creditRows
             ->groupBy('agent_id')
             ->map(fn (Collection $rows) => [
@@ -51,8 +51,8 @@ class SalesMtdCalculator
         $remoteTarget = (float) $targets->where('target_type', 'remote')->sum('amount');
         $siteTarget = (float) $targets->where('target_type', 'site')->sum('amount');
 
-        $remoteMtd = self::teamMtd($creditRows, $agentTargetRows, 'remote');
-        $siteMtd = self::teamMtd($creditRows, $agentTargetRows, 'site');
+        $remoteMtd = self::teamMtd($creditRows, 'remote');
+        $siteMtd = self::teamMtd($creditRows, 'site');
 
         return [
             'month' => $monthStart,
@@ -64,7 +64,7 @@ class SalesMtdCalculator
         ];
     }
 
-    private static function creditRows(Collection $activities): Collection
+    public static function statementRows(Collection $activities): Collection
     {
         return $activities->flatMap(function (SalesActivity $activity) {
             $rows = collect();
@@ -73,7 +73,8 @@ class SalesMtdCalculator
                 $rows->push(self::creditRow(
                     $activity,
                     $activity->agent,
-                    (float) ($activity->agent_credit_amount ?: $activity->amount)
+                    (float) ($activity->agent_credit_amount ?: $activity->amount),
+                    'Main Agent'
                 ));
             }
 
@@ -81,7 +82,8 @@ class SalesMtdCalculator
                 $rows->push(self::creditRow(
                     $activity,
                     $activity->frankieAgent,
-                    (float) $activity->frankie_credit_amount
+                    (float) $activity->frankie_credit_amount,
+                    'Frankie Agent'
                 ));
             }
 
@@ -89,7 +91,7 @@ class SalesMtdCalculator
         });
     }
 
-    private static function creditRow(SalesActivity $activity, ?User $agent, float $creditAmount): array
+    private static function creditRow(SalesActivity $activity, ?User $agent, float $creditAmount, string $shareRole): array
     {
         $saleAmount = max((float) $activity->amount, 0);
         $shareRatio = $saleAmount > 0 ? min($creditAmount / $saleAmount, 1) : 0;
@@ -105,20 +107,28 @@ class SalesMtdCalculator
         $markupCommission = round($markupAmount * ($markupRate / 100), 2);
 
         return [
+            'activity' => $activity,
+            'agent' => $agent,
             'agent_id' => $agent?->id ?? $activity->agent_id,
+            'share_role' => $shareRole,
+            'share_percent' => round($shareRatio * 100, 2),
+            'sale_amount' => $saleAmount,
             'amount' => $creditAmount,
+            'credit_amount' => $creditAmount,
             'service_amount' => $serviceAmount,
             'markup_amount' => $markupAmount,
+            'service_commission_percent' => $serviceRate,
+            'markup_commission_percent' => $markupRate,
             'service_commission' => $serviceCommission,
             'markup_commission' => $markupCommission,
             'usd_total' => $serviceCommission + $markupCommission,
         ];
     }
 
-    private static function teamMtd(Collection $creditRows, Collection $agentTargetRows, string $workSetup): float
+    private static function teamMtd(Collection $creditRows, string $workType): float
     {
         return (float) $creditRows
-            ->filter(fn (array $row) => ($agentTargetRows->get($row['agent_id'])?->work_setup) === $workSetup)
+            ->filter(fn (array $row) => ($row['agent']?->work_type) === $workType)
             ->sum('amount');
     }
 

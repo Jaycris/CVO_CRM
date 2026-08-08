@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Lead;
 use App\Models\LeadAssignmentHistory;
 use App\Models\SalesEndorsement;
-use App\Models\SalesActivity;
 use App\Models\SalesPayment;
 use App\Models\User;
 use App\Notifications\LeadAssignedNotification;
@@ -107,7 +106,12 @@ class LeadController extends Controller
         $endorsements = SalesEndorsement::with(['agent', 'paymentRecord'])
             ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
             ->whereHas('paymentRecord', fn ($query) => $query->where('status', $paymentStatus))
-            ->where('agent_id', $request->user()->id)
+            ->when(! $this->userIsAdmin($request), function ($query) use ($request) {
+                $query->where(function ($query) use ($request) {
+                    $query->where('agent_id', $request->user()->id)
+                        ->orWhere('frankie_agent_id', $request->user()->id);
+                });
+            })
             ->latest()
             ->paginate(\App\Models\AppSetting::recordsPerPage())
             ->withQueryString();
@@ -1897,18 +1901,6 @@ class LeadController extends Controller
                 ->where('status', 'Refund')
                 ->whereHas('endorsement', fn ($query) => $query->where('agent_id', $request?->user()->id))
                 ->count();
-            $overallSalesAmount = SalesActivity::query()
-                ->tap(fn ($query) => BrandScope::apply($query, $request?->user()))
-                ->where('payment_status', 'Payment Success')
-                ->where(function ($query) use ($request) {
-                    $query->where('agent_id', $request?->user()->id)
-                        ->orWhere('frankie_agent_id', $request?->user()->id);
-                })
-                ->get()
-                ->sum(fn (SalesActivity $activity) => (int) $activity->agent_id === (int) $request?->user()->id
-                    ? (float) ($activity->agent_credit_amount ?: $activity->amount)
-                    : (float) $activity->frankie_credit_amount);
-
             return [
                 [
                     'label' => 'Sales Leads',
@@ -1935,13 +1927,10 @@ class LeadController extends Controller
                     'tone' => 'rose',
                 ],
                 [
-                    'label' => $viewMode === 'sales_sold' ? 'Overall Sales Amount' : 'Sold',
-                    'count' => $viewMode === 'sales_sold'
-                        ? $overallSalesAmount
-                        : (clone $salesQuery)->where('sales_stage', 'sold')->count(),
-                    'hint' => $viewMode === 'sales_sold' ? 'Total amount you sold' : 'Closed sales',
+                    'label' => 'Sold',
+                    'count' => (clone $salesQuery)->where('sales_stage', 'sold')->count(),
+                    'hint' => 'Closed sales',
                     'tone' => 'emerald',
-                    'format' => $viewMode === 'sales_sold' ? 'currency' : null,
                 ],
                 [
                     'label' => 'Refunds',

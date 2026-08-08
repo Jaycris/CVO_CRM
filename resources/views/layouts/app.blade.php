@@ -315,9 +315,13 @@
                     || $departmentName === 'Sales'
                     || auth()->user()->hasPermission('view_sales_performance_mtd')
                     || auth()->user()->hasPermission('manage_sales_targets');
+                $canViewAgentStatements = $isAdmin
+                    || $departmentName === 'Sales'
+                    || auth()->user()->hasPermission('view_agent_statements')
+                    || auth()->user()->hasPermission('view_all_agent_statements');
                 $canViewProductionReports = $isAdmin || auth()->user()->hasPermission('view_production_reports') || auth()->user()->hasPermission('view_reports');
-                $canViewReportOverview = $isAdmin || auth()->user()->hasPermission('view_reports') || $canViewSoldMinedLeads || $canViewVerifiedSoldLeads || $canViewSalesActivity || $canViewSalesPerformance || $canViewProductionReports;
-                $canViewAnyReportPage = $canViewReportOverview || $canViewSoldMinedLeads || $canViewVerifiedSoldLeads || $canViewSalesActivity || $canViewSalesPerformance || $canViewProductionReports;
+                $canViewReportOverview = $isAdmin || auth()->user()->hasPermission('view_reports') || $canViewSoldMinedLeads || $canViewVerifiedSoldLeads || $canViewSalesActivity || $canViewSalesPerformance || $canViewAgentStatements || $canViewProductionReports;
+                $canViewAnyReportPage = $canViewReportOverview || $canViewSoldMinedLeads || $canViewVerifiedSoldLeads || $canViewSalesActivity || $canViewSalesPerformance || $canViewAgentStatements || $canViewProductionReports;
                 $canViewFinanceClients = $isAdmin || auth()->user()->hasPermission('view_finance_clients');
                 $canViewContractRecords = $isAdmin || auth()->user()->hasPermission('view_contract_records');
                 $canViewProductionTaskTracker = $isAdmin
@@ -796,7 +800,17 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 15.75 10.5 12l3 2.25 3.75-6" />
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 19.5v-3.75m4.5 3.75V12m4.5 7.5V8.25" />
                                 </svg>
-                                Sales Performance MTD
+                                Sales Dashboard MTD
+                            </a>
+                        @endif
+
+                        @if ($canViewAgentStatements)
+                            <a href="{{ route('reports.agent-statements.index') }}" class="{{ $sidebarLink(request()->routeIs('reports.agent-statements.*')) }} mt-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ $sidebarIcon(request()->routeIs('reports.agent-statements.*')) }}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h7.5M8.25 10.5h7.5M8.25 14.25h4.5" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 3.75h13.5v16.5l-2.25-1.5-2.25 1.5-2.25-1.5-2.25 1.5-2.25-1.5-2.25 1.5V3.75Z" />
+                                </svg>
+                                Agent Statements
                             </a>
                         @endif
 

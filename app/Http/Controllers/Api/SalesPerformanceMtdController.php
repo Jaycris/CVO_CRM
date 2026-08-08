@@ -65,7 +65,12 @@ class SalesPerformanceMtdController extends Controller
                     'email' => $agent->email,
                     'brand_id' => $agent->brand_id,
                     'brand_name' => $agent->brand?->imprint_name,
-                    'work_type' => $target?->work_setup === 'site' ? 'on-site' : ($target?->work_setup ?? null),
+                    'work_type' => match ($agent->work_type) {
+                        'remote' => 'remote',
+                        'site' => 'on-site',
+                        'part_time' => 'part-time',
+                        default => null,
+                    },
                     'mtd' => round($mtd, 2),
                     'service_mtd' => round((float) $credit['service_mtd'], 2),
                     'markup_mtd' => round((float) $credit['markup_mtd'], 2),

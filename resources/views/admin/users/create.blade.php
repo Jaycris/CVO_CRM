@@ -127,6 +127,24 @@
                     </div>
 
                     <div>
+                        <label for="work_type" class="mb-2 block text-sm font-medium text-slate-700">
+                            Work Type
+                        </label>
+                        <select id="work_type"
+                                name="work_type"
+                                class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500">
+                            <option value="">Select work type</option>
+                            <option value="remote" @selected(old('work_type') === 'remote')>Remote</option>
+                            <option value="site" @selected(old('work_type') === 'site')>On-site</option>
+                            <option value="part_time" @selected(old('work_type') === 'part_time')>Part-time</option>
+                        </select>
+                        <p class="mt-2 text-xs text-slate-500">
+                            Used for Sales MTD grouping and employee records.
+                        </p>
+                        <x-input-error :messages="$errors->get('work_type')" class="mt-2" />
+                    </div>
+
+                    <div>
                         <label for="email" class="mb-2 block text-sm font-medium text-slate-700">
                             Email Address <span class="text-rose-600">*</span>
                         </label>

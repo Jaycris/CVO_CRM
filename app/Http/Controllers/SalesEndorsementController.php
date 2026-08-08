@@ -178,26 +178,10 @@ class SalesEndorsementController extends Controller
 
     private function serviceOptions(Request $request): array
     {
-        $configuredServices = Service::query()
+        return Service::query()
             ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
             ->orderBy('name')
             ->pluck('name')
-            ->all();
-
-        $fallbackServices = [
-            'Publishing',
-            'Branding',
-            'Website Design',
-            'Book Trailer',
-            'Press Release',
-            'Marketing Campaign',
-        ];
-
-        return collect($configuredServices)
-            ->merge($fallbackServices)
-            ->filter()
-            ->unique()
-            ->values()
             ->all();
     }
 

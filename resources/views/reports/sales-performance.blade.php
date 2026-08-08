@@ -1,6 +1,6 @@
 <x-app-layout>
     <x-slot name="header">
-        Sales Performance MTD
+        Sales Dashboard MTD
     </x-slot>
 
     @php
@@ -23,7 +23,7 @@
     <div class="space-y-6">
         <div class="flex flex-wrap items-start justify-between gap-4">
             <div>
-                <h1 class="text-2xl font-bold text-slate-900 dark:text-zinc-100">Sales Performance MTD</h1>
+                <h1 class="text-2xl font-bold text-slate-900 dark:text-zinc-100">Sales Dashboard MTD</h1>
                 <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
                     Track monthly credited sales, targets, and remaining target amounts.
                 </p>
@@ -179,7 +179,12 @@
                                 </td>
                                 <td class="px-6 py-4">
                                     <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 dark:bg-zinc-800 dark:text-zinc-300">
-                                        {{ $row['work_setup'] === 'site' ? 'On-site' : ($row['work_setup'] ? ucfirst($row['work_setup']) : 'Not set') }}
+                                        {{ match($row['work_type']) {
+                                            'remote' => 'Remote',
+                                            'site' => 'On-site',
+                                            'part_time' => 'Part-time',
+                                            default => 'Not set',
+                                        } }}
                                     </span>
                                 </td>
                                 <td class="px-6 py-4 font-bold text-slate-900 dark:text-zinc-100">{{ $money($row['mtd']) }}</td>
@@ -272,11 +277,15 @@
                                             <input type="hidden" name="agents[{{ $row['id'] }}][id]" value="{{ $row['id'] }}">
                                         </td>
                                         <td class="px-5 py-4">
-                                            <select name="agents[{{ $row['id'] }}][work_setup]" class="h-11 w-40 rounded-xl border border-slate-300 bg-white px-4 text-sm shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
-                                                <option value="">Not set</option>
-                                                <option value="remote" @selected($row['work_setup'] === 'remote')>Remote</option>
-                                                <option value="site" @selected($row['work_setup'] === 'site')>On-site</option>
-                                            </select>
+                                            <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 dark:bg-zinc-800 dark:text-zinc-300">
+                                                {{ match($row['work_type']) {
+                                                    'remote' => 'Remote',
+                                                    'site' => 'On-site',
+                                                    'part_time' => 'Part-time',
+                                                    default => 'Not set',
+                                                } }}
+                                            </span>
+                                            <p class="mt-1 text-xs text-slate-500 dark:text-zinc-500">Set in User Record</p>
                                         </td>
                                         <td class="px-5 py-4">
                                             <input type="number" step="0.01" min="0" name="agents[{{ $row['id'] }}][target]" value="{{ $row['target'] }}"

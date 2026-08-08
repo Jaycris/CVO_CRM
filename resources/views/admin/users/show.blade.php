@@ -45,6 +45,18 @@
                 </div>
 
                 <div>
+                    <dt class="text-sm font-medium text-slate-500">Work Type</dt>
+                    <dd class="mt-1 font-semibold text-slate-900">
+                        {{ match($user->work_type) {
+                            'remote' => 'Remote',
+                            'site' => 'On-site',
+                            'part_time' => 'Part-time',
+                            default => 'Not set',
+                        } }}
+                    </dd>
+                </div>
+
+                <div>
                     <dt class="text-sm font-medium text-slate-500">Phone Number</dt>
                     <dd class="mt-1 font-semibold text-slate-900">{{ $user->phone_number ?? 'Not provided' }}</dd>
                 </div>

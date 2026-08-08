@@ -65,6 +65,7 @@ class UserController extends Controller
             'first_name' => ['required', 'string', 'max:255'],
             'last_name' => ['required', 'string', 'max:255'],
             'department' => ['required', 'string', 'max:255', Rule::in($this->departments())],
+            'work_type' => ['nullable', Rule::in(['remote', 'site', 'part_time'])],
             'email' => ['required', 'email', 'unique:users,email'],
             'phone_number' => ['nullable', 'required_if:department,Sales', 'string', 'max:50'],
         ], [
@@ -81,6 +82,7 @@ class UserController extends Controller
             'first_name'    => $validated['first_name'],
             'last_name'     => $validated['last_name'],
             'department'    => $validated['department'] ?? null,
+            'work_type'     => $validated['work_type'] ?? null,
             'email'         =>  $validated['email'],
             'phone_number' => $validated['phone_number'] ?? null,
 
@@ -144,6 +146,7 @@ class UserController extends Controller
             'first_name' => ['required', 'string', 'max:255'],
             'last_name' => ['required', 'string', 'max:255'],
             'department' => ['required', 'string', 'max:255', Rule::in($this->departments())],
+            'work_type' => ['nullable', Rule::in(['remote', 'site', 'part_time'])],
             'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($user)],
             'phone_number' => ['nullable', 'required_if:department,Sales', 'string', 'max:50'],
             'final_permissions' => ['nullable', 'array'],

@@ -15,6 +15,7 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SalesEndorsementController;
 use App\Http\Controllers\SalesPaymentController;
 use App\Http\Controllers\SalesActivityController;
+use App\Http\Controllers\AgentStatementController;
 use App\Http\Controllers\SalesPerformanceController;
 use App\Http\Controllers\ServiceCatalogController;
 use App\Models\CalendarTodo;
@@ -390,6 +391,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/sales-activity', [SalesActivityController::class, 'index'])->name('sales-activity.index');
         Route::get('/sales-performance', [SalesPerformanceController::class, 'index'])->name('sales-performance.index');
         Route::put('/sales-performance/targets', [SalesPerformanceController::class, 'updateTargets'])->name('sales-performance.targets');
+        Route::get('/agent-statements', [AgentStatementController::class, 'index'])->name('agent-statements.index');
         Route::get('/production', [ProductionReportController::class, 'index'])->name('production.index');
     });
 });

@@ -64,7 +64,7 @@ class SalesPerformanceController extends Controller
             return [
                 'id' => $agent->id,
                 'agent' => $agent,
-                'work_setup' => $target?->work_setup,
+                'work_type' => $agent->work_type,
                 'mtd' => $mtd,
                 'service_mtd' => (float) $credit['service_mtd'],
                 'markup_mtd' => (float) $credit['markup_mtd'],
@@ -105,7 +105,6 @@ class SalesPerformanceController extends Controller
             'site_target' => ['nullable', 'numeric', 'min:0'],
             'agents' => ['nullable', 'array'],
             'agents.*.id' => ['required', 'exists:users,id'],
-            'agents.*.work_setup' => ['nullable', 'in:remote,site'],
             'agents.*.target' => ['nullable', 'numeric', 'min:0'],
             'agents.*.service_commission_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'agents.*.markup_commission_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
@@ -130,16 +129,8 @@ class SalesPerformanceController extends Controller
                 ],
                 [
                     'amount' => $amount,
-                    'work_setup' => null,
                 ]
             );
-
-            User::query()
-                ->whereKey($agentPayload['id'])
-                ->update([
-                    'service_commission_percent' => $agentPayload['service_commission_percent'] ?? 20,
-                    'markup_commission_percent' => $agentPayload['markup_commission_percent'] ?? 50,
-                ]);
         }
 
         foreach ($validated['agents'] ?? [] as $agentPayload) {
@@ -152,9 +143,15 @@ class SalesPerformanceController extends Controller
                 ],
                 [
                     'amount' => $agentPayload['target'] ?? 0,
-                    'work_setup' => $agentPayload['work_setup'] ?: null,
                 ]
             );
+
+            User::query()
+                ->whereKey($agentPayload['id'])
+                ->update([
+                    'service_commission_percent' => $agentPayload['service_commission_percent'] ?? 20,
+                    'markup_commission_percent' => $agentPayload['markup_commission_percent'] ?? 50,
+                ]);
         }
 
         return redirect()
