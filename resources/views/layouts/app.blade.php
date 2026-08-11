@@ -1009,6 +1009,13 @@
                                 </svg>
                                 Commission Settings
                             </a>
+                            <a href="{{ route('admin.commission-profiles.index') }}" class="{{ $sidebarLink(request()->routeIs('admin.commission-profiles.*')) }} mt-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ $sidebarIcon(request()->routeIs('admin.commission-profiles.*')) }}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 6.75v10.5m9-10.5v10.5" />
+                                </svg>
+                                Commission Profiles
+                            </a>
                         @endif
 
                         @if ($canManageSystemSettings)

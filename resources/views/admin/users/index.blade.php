@@ -99,6 +99,17 @@
                             </svg>
                         </a>
 
+                        <a x-bind:href="hasSingleSelection() ? selectedUser.commissionProfileUrl : '#'"
+                           x-bind:class="hasSingleSelection() ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200 dark:hover:bg-emerald-400/20' : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-500'"
+                           x-on:click="if (!hasSingleSelection()) { $event.preventDefault(); }"
+                           title="Employee commission profile"
+                           class="inline-flex h-11 w-11 items-center justify-center rounded-xl border shadow-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 5.25h16.5v13.5H3.75z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v7.5m-2.25-5.25c0-1.036 1.007-1.875 2.25-1.875s2.25.84 2.25 1.875S13.243 12.375 12 12.375s-2.25.84-2.25 1.875S10.757 16.125 12 16.125s2.25-.84 2.25-1.875" />
+                            </svg>
+                        </a>
+
                         <form method="POST"
                               x-bind:action="selectedUser.suspendUrl"
                               x-on:submit="if (!hasSingleSelection() || !selectedUser.canSuspend || !confirm('Suspend this user? Active assigned leads will move back to Unassigned Leads.')) { $event.preventDefault(); }">
@@ -160,6 +171,7 @@
                         'id' => $user->id,
                         'viewUrl' => route('admin.users.show', $user),
                         'editUrl' => route('admin.users.edit', $user),
+                        'commissionProfileUrl' => route('admin.users.commission-profile.show', $user),
                         'suspendUrl' => route('admin.users.suspend', $user),
                         'unsuspendUrl' => route('admin.users.unsuspend', $user),
                         'deleteUrl' => route('admin.users.destroy', $user),
@@ -193,6 +205,7 @@
                                     'id' => $user->id,
                                     'viewUrl' => route('admin.users.show', $user),
                                     'editUrl' => route('admin.users.edit', $user),
+                                    'commissionProfileUrl' => route('admin.users.commission-profile.show', $user),
                                     'suspendUrl' => route('admin.users.suspend', $user),
                                     'unsuspendUrl' => route('admin.users.unsuspend', $user),
                                     'deleteUrl' => route('admin.users.destroy', $user),

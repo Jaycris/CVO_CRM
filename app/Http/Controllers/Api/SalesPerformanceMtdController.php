@@ -39,9 +39,20 @@ class SalesPerformanceMtdController extends Controller
         }
 
         $summary = SalesMtdCalculator::summary(null, $month, $brandId);
+        $visibleAgentIds = $summary['agentCredits']->keys()
+            ->merge($summary['agentTargets']->keys())
+            ->filter()
+            ->unique()
+            ->values();
         $agents = User::query()
             ->with('brand')
-            ->where('department', 'Sales')
+            ->where(function ($query) use ($visibleAgentIds) {
+                $query->where('department', 'Sales');
+
+                if ($visibleAgentIds->isNotEmpty()) {
+                    $query->orWhereIn('id', $visibleAgentIds);
+                }
+            })
             ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
             ->orderBy('first_name')
             ->orderBy('last_name')
@@ -52,9 +63,13 @@ class SalesPerformanceMtdController extends Controller
                     'mtd' => 0,
                     'service_mtd' => 0,
                     'markup_mtd' => 0,
+                    'commissionable_service_mtd' => 0,
+                    'threshold_applied_amount' => 0,
                     'service_commission' => 0,
                     'markup_commission' => 0,
                     'usd_total' => 0,
+                    'service_commission_percent' => SalesMtdCalculator::SERVICE_RATE_LOW,
+                    'markup_commission_percent' => (float) ($agent->markup_commission_percent ?? 50),
                 ]);
                 $targetAmount = (float) ($target?->amount ?? 0);
                 $mtd = (float) $credit['mtd'];
@@ -73,12 +88,16 @@ class SalesPerformanceMtdController extends Controller
                     },
                     'mtd' => round($mtd, 2),
                     'service_mtd' => round((float) $credit['service_mtd'], 2),
+                    'commissionable_service_mtd' => round((float) ($credit['commissionable_service_mtd'] ?? 0), 2),
+                    'threshold_applied_amount' => round((float) ($credit['threshold_applied_amount'] ?? 0), 2),
                     'markup_mtd' => round((float) $credit['markup_mtd'], 2),
                     'target' => round($targetAmount, 2),
                     'mtd_percent' => $targetAmount > 0 ? round(($mtd / $targetAmount) * 100, 2) : 0,
                     'remaining_target' => round(max($targetAmount - $mtd, 0), 2),
-                    'service_commission_percent' => round((float) ($agent->service_commission_percent ?? 20), 2),
-                    'markup_commission_percent' => round((float) ($agent->markup_commission_percent ?? 50), 2),
+                    'service_commission_percent' => round((float) ($credit['service_commission_percent'] ?? SalesMtdCalculator::SERVICE_RATE_LOW), 2),
+                    'markup_commission_percent' => round((float) ($credit['markup_commission_percent'] ?? $agent->markup_commission_percent ?? 50), 2),
+                    'commission_threshold_amount' => round((float) ($agent->commission_threshold_amount ?? SalesMtdCalculator::DEFAULT_SERVICE_THRESHOLD), 2),
+                    'is_commission_threshold_exempt' => (bool) $agent->is_commission_threshold_exempt,
                     'service_comm' => round((float) $credit['service_commission'], 2),
                     'markup_comm' => round((float) $credit['markup_commission'], 2),
                     'usd_total' => round((float) $credit['usd_total'], 2),
@@ -97,6 +116,7 @@ class SalesPerformanceMtdController extends Controller
                 'work_type',
                 'mtd',
                 'service_mtd',
+                'commissionable_service_mtd',
                 'markup_mtd',
                 'target',
                 'mtd_percent',

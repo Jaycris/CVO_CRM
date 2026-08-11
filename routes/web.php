@@ -35,6 +35,7 @@ use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\DashboardBannerController;
 use App\Http\Controllers\Admin\ServiceController;
 use App\Http\Controllers\Admin\TeamController;
+use App\Http\Controllers\Admin\CommissionProfileController;
 use App\Http\Controllers\Admin\CommissionSettingController;
 use App\Http\Controllers\Admin\SystemSettingController;
 use App\Http\Controllers\Admin\AnnouncementController as AdminAnnouncementController;
@@ -404,6 +405,10 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::post('/dashboard-banners', [DashboardBannerController::class, 'store'])->name('dashboard-banners.store');
     Route::put('/dashboard-banners/{dashboardBanner}', [DashboardBannerController::class, 'update'])->name('dashboard-banners.update');
     Route::delete('/dashboard-banners/{dashboardBanner}', [DashboardBannerController::class, 'destroy'])->name('dashboard-banners.destroy');
+    Route::get('/commission-profiles', [CommissionProfileController::class, 'index'])->name('commission-profiles.index');
+    Route::post('/commission-profiles', [CommissionProfileController::class, 'store'])->name('commission-profiles.store');
+    Route::put('/commission-profiles/assignments', [CommissionProfileController::class, 'updateAssignments'])->name('commission-profiles.assignments.update');
+    Route::put('/commission-profiles/{commissionProfile}', [CommissionProfileController::class, 'update'])->name('commission-profiles.update');
     Route::get('/commission-settings', [CommissionSettingController::class, 'edit'])->name('commission-settings.edit');
     Route::put('/commission-settings', [CommissionSettingController::class, 'update'])->name('commission-settings.update');
     Route::get('/system-settings', [SystemSettingController::class, 'edit'])->name('system-settings.edit');
@@ -429,6 +434,8 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::get('/users', [UserController::class, 'index'])->name('users.index');
     Route::get('/users/create', [UserController::class, 'create'])->name('users.create');
     Route::post('/users', [UserController::class, 'store'])->name('users.store');
+    Route::get('/users/{user}/commission-profile', [CommissionProfileController::class, 'showEmployee'])->name('users.commission-profile.show');
+    Route::put('/users/{user}/commission-profile', [CommissionProfileController::class, 'updateEmployee'])->name('users.commission-profile.update');
     Route::get('/users/{user}', [UserController::class, 'show'])->name('users.show');
     Route::get('/users/{user}/edit', [UserController::class, 'edit'])->name('users.edit');
     Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');

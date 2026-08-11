@@ -33,7 +33,10 @@ class User extends Authenticatable implements MustVerifyEmail
         'email',
         'phone_number',
         'service_commission_percent',
+        'commission_profile_id',
         'markup_commission_percent',
+        'commission_threshold_amount',
+        'is_commission_threshold_exempt',
         'profile_photo_path',
         'password',
         'password_created_at',
@@ -56,6 +59,11 @@ class User extends Authenticatable implements MustVerifyEmail
     public function team()
     {
         return $this->belongsTo(Team::class);
+    }
+
+    public function commissionProfile()
+    {
+        return $this->belongsTo(CommissionProfile::class);
     }
 
     public function managedTeams()
@@ -158,7 +166,10 @@ class User extends Authenticatable implements MustVerifyEmail
             'invitation_expires_at' => 'datetime',
             'suspended_at' => 'datetime',
             'service_commission_percent' => 'decimal:2',
+            'commission_profile_id' => 'integer',
             'markup_commission_percent' => 'decimal:2',
+            'commission_threshold_amount' => 'decimal:2',
+            'is_commission_threshold_exempt' => 'boolean',
             'password' => 'hashed',
         ];
     }

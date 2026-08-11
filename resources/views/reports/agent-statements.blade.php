@@ -177,6 +177,9 @@
                                 <td class="whitespace-nowrap px-4 py-3 text-xs">
                                     {{ $money($row['service_commission']) }}
                                     <span class="block text-xs text-slate-400">{{ number_format($row['service_commission_percent'], 2) }}%</span>
+                                    @if (($row['threshold_applied_amount'] ?? 0) > 0)
+                                        <span class="block text-xs font-semibold text-amber-600 dark:text-amber-300">After threshold</span>
+                                    @endif
                                 </td>
                                 <td class="whitespace-nowrap px-4 py-3 text-xs">
                                     {{ $money($row['markup_commission']) }}

@@ -62,10 +62,10 @@ class AgentStatementController extends Controller
             ->latest('id')
             ->get();
 
-        $rows = SalesMtdCalculator::statementRows($activities)
-            ->when($agentId, fn (Collection $rows, int $selectedAgentId) => $rows->where('agent_id', $selectedAgentId)->values())
-            ->sortByDesc(fn (array $row) => $row['activity']->sold_date?->timestamp ?? 0)
-            ->values();
+        $activityAgentIds = $activities->flatMap(fn (SalesActivity $activity) => [
+            $activity->agent_id,
+            $activity->frankie_agent_id,
+        ])->filter()->unique()->values();
 
         $targets = SalesTarget::query()
             ->whereDate('target_month', $month->toDateString())
@@ -73,8 +73,14 @@ class AgentStatementController extends Controller
             ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
             ->when(! $brandId, fn ($query) => BrandScope::apply($query, $user))
             ->when($agentId, fn ($query) => $query->where('user_id', $agentId))
-            ->when(! $agentId && $rows->isNotEmpty(), fn ($query) => $query->whereIn('user_id', $rows->pluck('agent_id')->filter()->unique()))
+            ->when(! $agentId && $activityAgentIds->isNotEmpty(), fn ($query) => $query->whereIn('user_id', $activityAgentIds))
             ->get();
+
+        $agentTargetRows = $targets->whereNotNull('user_id')->keyBy('user_id');
+        $rows = SalesMtdCalculator::statementRows($activities, $agentTargetRows)
+            ->when($agentId, fn (Collection $rows, int $selectedAgentId) => $rows->where('agent_id', $selectedAgentId)->values())
+            ->sortByDesc(fn (array $row) => $row['activity']->sold_date?->timestamp ?? 0)
+            ->values();
 
         $targetAmount = (float) $targets->sum('amount');
         $salesCredit = (float) $rows->sum('amount');
@@ -91,10 +97,21 @@ class AgentStatementController extends Controller
         ];
 
         $brands = BrandScope::canAccessAllBrands($user) ? Brand::orderBy('imprint_name')->get() : collect();
+        $agentIds = $rows->pluck('agent_id')
+            ->merge($targets->pluck('user_id'))
+            ->filter()
+            ->unique()
+            ->values();
         $agents = $canViewAll
             ? User::query()
                 ->with('brand')
-                ->where('department', 'Sales')
+                ->where(function ($query) use ($agentIds) {
+                    $query->where('department', 'Sales');
+
+                    if ($agentIds->isNotEmpty()) {
+                        $query->orWhereIn('id', $agentIds);
+                    }
+                })
                 ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
                 ->when(! $brandId, fn ($query) => BrandScope::apply($query, $user))
                 ->orderBy('first_name')

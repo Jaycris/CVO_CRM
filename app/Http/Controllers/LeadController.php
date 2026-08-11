@@ -312,57 +312,55 @@ class LeadController extends Controller
         $rowNumber = 1;
 
         try {
-            DB::transaction(function () use ($file, $headerMap, $request, &$created, &$skipped, &$rowNumber) {
-                while (($row = fgetcsv($file)) !== false) {
-                    $rowNumber++;
+            while (($row = fgetcsv($file)) !== false) {
+                $rowNumber++;
 
-                    if (count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
-                        continue;
-                    }
-
-                    $leadData = $this->leadDataFromCsvRow($row, $headerMap);
-                    $validator = Validator::make($leadData, [
-                        'publisher' => ['nullable', 'string', 'max:255'],
-                        'book_title' => ['required', 'string', 'max:255'],
-                        'author_name' => ['required', 'string', 'max:255'],
-                        'phone_numbers' => ['required', 'array', 'min:1'],
-                        'phone_numbers.*' => ['required', 'string'],
-                        'email' => ['nullable', 'email', 'max:255'],
-                        'book_link' => ['nullable', 'url', 'max:5000'],
-                        'published_date' => ['nullable', 'date'],
-                    ]);
-
-                    if ($validator->fails()) {
-                        $skipped[] = "Row {$rowNumber}: " . $validator->errors()->first();
-                        continue;
-                    }
-
-                    if ($this->hasDuplicatePhonesInLead($leadData['phone_numbers'])) {
-                        $skipped[] = "Row {$rowNumber}: Please remove duplicate phone numbers from this lead.";
-                        continue;
-                    }
-
-                    if ($duplicateMessage = $this->leadDuplicateMessage($leadData)) {
-                        $skipped[] = "Row {$rowNumber}: {$duplicateMessage}";
-                        continue;
-                    }
-
-                    try {
-                        Lead::create([
-                            ...$leadData,
-                            'brand_id' => BrandScope::userBrandId($request->user()),
-                            'created_by' => $request->user()->id,
-                        ]);
-                    } catch (Throwable $exception) {
-                        report($exception);
-
-                        $skipped[] = "Row {$rowNumber}: This row could not be imported. Please check the link, email, and field values.";
-                        continue;
-                    }
-
-                    $created++;
+                if (count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
+                    continue;
                 }
-            });
+
+                $leadData = $this->leadDataFromCsvRow($row, $headerMap);
+                $validator = Validator::make($leadData, [
+                    'publisher' => ['nullable', 'string', 'max:255'],
+                    'book_title' => ['required', 'string', 'max:255'],
+                    'author_name' => ['required', 'string', 'max:255'],
+                    'phone_numbers' => ['required', 'array', 'min:1'],
+                    'phone_numbers.*' => ['required', 'string'],
+                    'email' => ['nullable', 'email', 'max:255'],
+                    'book_link' => ['nullable', 'url', 'max:5000'],
+                    'published_date' => ['nullable', 'date'],
+                ]);
+
+                if ($validator->fails()) {
+                    $skipped[] = "Row {$rowNumber}: " . $validator->errors()->first();
+                    continue;
+                }
+
+                if ($this->hasDuplicatePhonesInLead($leadData['phone_numbers'])) {
+                    $skipped[] = "Row {$rowNumber}: Please remove duplicate phone numbers from this lead.";
+                    continue;
+                }
+
+                if ($duplicateMessage = $this->leadDuplicateMessage($leadData)) {
+                    $skipped[] = "Row {$rowNumber}: {$duplicateMessage}";
+                    continue;
+                }
+
+                try {
+                    Lead::create([
+                        ...$leadData,
+                        'brand_id' => BrandScope::userBrandId($request->user()),
+                        'created_by' => $request->user()->id,
+                    ]);
+                } catch (Throwable $exception) {
+                    report($exception);
+
+                    $skipped[] = "Row {$rowNumber}: This row could not be imported. Please check the link, email, and field values.";
+                    continue;
+                }
+
+                $created++;
+            }
         } catch (Throwable $exception) {
             report($exception);
             fclose($file);

@@ -188,7 +188,17 @@
                                     </span>
                                 </td>
                                 <td class="px-6 py-4 font-bold text-slate-900 dark:text-zinc-100">{{ $money($row['mtd']) }}</td>
-                                <td class="px-6 py-4 font-semibold text-slate-700 dark:text-zinc-200">{{ $money($row['service_mtd']) }}</td>
+                                <td class="px-6 py-4 font-semibold text-slate-700 dark:text-zinc-200">
+                                    {{ $money($row['service_mtd']) }}
+                                    <p class="mt-1 text-xs font-medium text-slate-500 dark:text-zinc-400">
+                                        Commissionable {{ $money($row['commissionable_service_mtd'] ?? 0) }}
+                                    </p>
+                                    @if (($row['threshold_applied_amount'] ?? 0) > 0)
+                                        <p class="mt-1 text-xs font-semibold text-amber-600 dark:text-amber-300">
+                                            {{ $money($row['threshold_applied_amount']) }} threshold
+                                        </p>
+                                    @endif
+                                </td>
                                 <td class="px-6 py-4 font-semibold text-slate-700 dark:text-zinc-200">{{ $money($row['markup_mtd']) }}</td>
                                 <td class="px-6 py-4 text-slate-600 dark:text-zinc-300">{{ $money($row['target']) }}</td>
                                 <td class="px-6 py-4">
@@ -230,7 +240,9 @@
         @if ($canManageTargets)
             <section class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
                 <h2 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Manage Monthly Targets</h2>
-                <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Set the Global, Remote, Site, and per-agent targets used by this report.</p>
+                <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
+                    Set monthly targets, markup commission, and threshold exemptions. The monthly threshold deducts from Service MTD first, then Markup MTD when needed. Service commission tiers are managed in Admin > Commission Profiles.
+                </p>
 
                 <form method="POST" action="{{ route('reports.sales-performance.targets') }}" class="mt-6 space-y-6">
                     @csrf
@@ -259,14 +271,16 @@
                     </div>
 
                     <div class="overflow-hidden rounded-xl border border-slate-200 dark:border-zinc-800">
-                        <table class="min-w-[920px] divide-y divide-slate-200 text-sm dark:divide-zinc-800">
+                        <table class="min-w-[1160px] divide-y divide-slate-200 text-sm dark:divide-zinc-800">
                             <thead class="bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500 dark:bg-zinc-950 dark:text-zinc-400">
                                 <tr>
                                     <th class="px-5 py-3">Agent</th>
                                     <th class="px-5 py-3">Work Type</th>
                                     <th class="px-5 py-3">Agent Target</th>
-                                    <th class="px-5 py-3">Service %</th>
+                                    <th class="px-5 py-3">Service Profile</th>
                                     <th class="px-5 py-3">Markup %</th>
+                                    <th class="px-5 py-3">Threshold</th>
+                                    <th class="px-5 py-3">Exempt</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-200 dark:divide-zinc-800">
@@ -292,12 +306,24 @@
                                                    class="h-11 w-44 rounded-xl border border-slate-300 bg-white px-4 text-sm shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
                                         </td>
                                         <td class="px-5 py-4">
-                                            <input type="number" step="0.01" min="0" max="100" name="agents[{{ $row['id'] }}][service_commission_percent]" value="{{ $row['service_commission_percent'] }}"
-                                                   class="h-11 w-32 rounded-xl border border-slate-300 bg-white px-4 text-sm shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                                            <span class="font-semibold text-slate-900 dark:text-zinc-100">{{ $row['commission_profile_name'] ?? 'Default Service Tiers' }}</span>
+                                            <p class="mt-1 text-xs text-slate-500 dark:text-zinc-400">Managed in Commission Profiles</p>
                                         </td>
                                         <td class="px-5 py-4">
                                             <input type="number" step="0.01" min="0" max="100" name="agents[{{ $row['id'] }}][markup_commission_percent]" value="{{ $row['markup_commission_percent'] }}"
                                                    class="h-11 w-32 rounded-xl border border-slate-300 bg-white px-4 text-sm shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                                        </td>
+                                        <td class="px-5 py-4">
+                                            <input type="number" step="0.01" min="0" name="agents[{{ $row['id'] }}][commission_threshold_amount]" value="{{ $row['commission_threshold_amount'] }}"
+                                                   class="h-11 w-36 rounded-xl border border-slate-300 bg-white px-4 text-sm shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                                        </td>
+                                        <td class="px-5 py-4">
+                                            <input type="hidden" name="agents[{{ $row['id'] }}][is_commission_threshold_exempt]" value="0">
+                                            <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-zinc-200">
+                                                <input type="checkbox" name="agents[{{ $row['id'] }}][is_commission_threshold_exempt]" value="1" @checked($row['is_commission_threshold_exempt'])
+                                                       class="rounded border-slate-300 text-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950">
+                                                Exempt
+                                            </label>
                                         </td>
                                     </tr>
                                 @endforeach
