@@ -3,6 +3,30 @@
         Commission Profiles
     </x-slot>
 
+    <style>
+        .commission-rule-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+            gap: 0.75rem;
+            align-items: end;
+        }
+
+        .commission-rule-remove {
+            min-width: 6.5rem;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 768px) {
+            .commission-rule-row {
+                grid-template-columns: 1fr;
+            }
+
+            .commission-rule-remove {
+                width: 100%;
+            }
+        }
+    </style>
+
     <div class="space-y-6">
         <div>
             <h1 class="text-2xl font-bold text-slate-900 dark:text-zinc-100">Commission Profiles</h1>
@@ -65,27 +89,47 @@
                             </div>
 
                             <div class="space-y-2" data-rules>
-                                <div class="grid grid-cols-[1fr_1fr_auto] gap-2" data-rule-row>
-                                    <input type="number" name="rules[0][minimum_mtd_percent]" value="0" min="0" step="0.01" placeholder="Min MTD %" class="rounded-xl border-slate-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
-                                    <input type="number" name="rules[0][commission_percent]" value="15" min="0" max="100" step="0.01" placeholder="Comm %" class="rounded-xl border-slate-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
-                                    <button type="button" class="rounded-xl border border-rose-200 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:border-rose-400/30 dark:hover:bg-rose-400/10" data-remove-rule>Remove</button>
+                                <div class="commission-rule-row rounded-2xl border border-slate-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950" data-rule-row>
+                                    <label class="block min-w-0">
+                                        <span class="mb-1 block text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Minimum MTD %</span>
+                                        <input type="number" name="rules[0][minimum_mtd_percent]" value="0" min="0" step="0.01" placeholder="Example: 0" class="w-full rounded-xl border-slate-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                                    </label>
+                                    <label class="block min-w-0">
+                                        <span class="mb-1 block text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Commission %</span>
+                                        <input type="number" name="rules[0][commission_percent]" value="15" min="0" max="100" step="0.01" placeholder="Example: 15" class="w-full rounded-xl border-slate-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                                    </label>
+                                    <button type="button" class="commission-rule-remove rounded-xl border border-rose-200 px-4 py-3 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:border-rose-400/30 dark:hover:bg-rose-400/10" data-remove-rule>Remove</button>
                                 </div>
-                                <div class="grid grid-cols-[1fr_1fr_auto] gap-2" data-rule-row>
-                                    <input type="number" name="rules[1][minimum_mtd_percent]" value="75" min="0" step="0.01" placeholder="Min MTD %" class="rounded-xl border-slate-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
-                                    <input type="number" name="rules[1][commission_percent]" value="20" min="0" max="100" step="0.01" placeholder="Comm %" class="rounded-xl border-slate-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
-                                    <button type="button" class="rounded-xl border border-rose-200 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:border-rose-400/30 dark:hover:bg-rose-400/10" data-remove-rule>Remove</button>
+                                <div class="commission-rule-row rounded-2xl border border-slate-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950" data-rule-row>
+                                    <label class="block min-w-0">
+                                        <span class="mb-1 block text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Minimum MTD %</span>
+                                        <input type="number" name="rules[1][minimum_mtd_percent]" value="75" min="0" step="0.01" placeholder="Example: 75" class="w-full rounded-xl border-slate-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                                    </label>
+                                    <label class="block min-w-0">
+                                        <span class="mb-1 block text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Commission %</span>
+                                        <input type="number" name="rules[1][commission_percent]" value="20" min="0" max="100" step="0.01" placeholder="Example: 20" class="w-full rounded-xl border-slate-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                                    </label>
+                                    <button type="button" class="commission-rule-remove rounded-xl border border-rose-200 px-4 py-3 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:border-rose-400/30 dark:hover:bg-rose-400/10" data-remove-rule>Remove</button>
                                 </div>
-                                <div class="grid grid-cols-[1fr_1fr_auto] gap-2" data-rule-row>
-                                    <input type="number" name="rules[2][minimum_mtd_percent]" value="100" min="0" step="0.01" placeholder="Min MTD %" class="rounded-xl border-slate-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
-                                    <input type="number" name="rules[2][commission_percent]" value="25" min="0" max="100" step="0.01" placeholder="Comm %" class="rounded-xl border-slate-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
-                                    <button type="button" class="rounded-xl border border-rose-200 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:border-rose-400/30 dark:hover:bg-rose-400/10" data-remove-rule>Remove</button>
+                                <div class="commission-rule-row rounded-2xl border border-slate-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950" data-rule-row>
+                                    <label class="block min-w-0">
+                                        <span class="mb-1 block text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Minimum MTD %</span>
+                                        <input type="number" name="rules[2][minimum_mtd_percent]" value="100" min="0" step="0.01" placeholder="Example: 100" class="w-full rounded-xl border-slate-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                                    </label>
+                                    <label class="block min-w-0">
+                                        <span class="mb-1 block text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Commission %</span>
+                                        <input type="number" name="rules[2][commission_percent]" value="25" min="0" max="100" step="0.01" placeholder="Example: 25" class="w-full rounded-xl border-slate-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                                    </label>
+                                    <button type="button" class="commission-rule-remove rounded-xl border border-rose-200 px-4 py-3 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:border-rose-400/30 dark:hover:bg-rose-400/10" data-remove-rule>Remove</button>
                                 </div>
                             </div>
                         </div>
 
-                        <button type="submit" class="w-full rounded-xl bg-[var(--brand-primary)] px-5 py-3 text-sm font-bold text-[var(--brand-primary-contrast)] shadow-sm hover:opacity-90">
-                            Create Profile
-                        </button>
+                        <div class="flex justify-end">
+                            <button type="submit" class="rounded-xl bg-[var(--brand-primary)] px-5 py-3 text-sm font-bold text-[var(--brand-primary-contrast)] shadow-sm hover:opacity-90">
+                                Create Profile
+                            </button>
+                        </div>
                     </div>
                 </form>
 
@@ -108,10 +152,16 @@
 
                             <div class="mt-4 space-y-2" data-rules>
                                 @foreach ($profile->rules as $rule)
-                                    <div class="grid grid-cols-[1fr_1fr_auto] gap-2" data-rule-row>
-                                        <input type="number" name="rules[{{ $loop->index }}][minimum_mtd_percent]" value="{{ $rule->minimum_mtd_percent + 0 }}" min="0" step="0.01" class="rounded-xl border-slate-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
-                                        <input type="number" name="rules[{{ $loop->index }}][commission_percent]" value="{{ $rule->commission_percent + 0 }}" min="0" max="100" step="0.01" class="rounded-xl border-slate-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
-                                        <button type="button" class="rounded-xl border border-rose-200 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:border-rose-400/30 dark:hover:bg-rose-400/10" data-remove-rule>Remove</button>
+                                    <div class="commission-rule-row rounded-2xl border border-slate-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950" data-rule-row>
+                                        <label class="block min-w-0">
+                                            <span class="mb-1 block text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Minimum MTD %</span>
+                                            <input type="number" name="rules[{{ $loop->index }}][minimum_mtd_percent]" value="{{ $rule->minimum_mtd_percent + 0 }}" min="0" step="0.01" class="w-full rounded-xl border-slate-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                                        </label>
+                                        <label class="block min-w-0">
+                                            <span class="mb-1 block text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Commission %</span>
+                                            <input type="number" name="rules[{{ $loop->index }}][commission_percent]" value="{{ $rule->commission_percent + 0 }}" min="0" max="100" step="0.01" class="w-full rounded-xl border-slate-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                                        </label>
+                                        <button type="button" class="commission-rule-remove rounded-xl border border-rose-200 px-4 py-3 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:border-rose-400/30 dark:hover:bg-rose-400/10" data-remove-rule>Remove</button>
                                     </div>
                                 @endforeach
                             </div>
@@ -154,12 +204,18 @@
                     if (addButton) {
                         const rules = form.querySelector('[data-rules]');
                         const row = document.createElement('div');
-                        row.className = 'grid grid-cols-[1fr_1fr_auto] gap-2';
+                        row.className = 'commission-rule-row rounded-2xl border border-slate-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950';
                         row.setAttribute('data-rule-row', '');
                         row.innerHTML = `
-                            <input type="number" name="rules[0][minimum_mtd_percent]" min="0" step="0.01" placeholder="Min MTD %" class="rounded-xl border-slate-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
-                            <input type="number" name="rules[0][commission_percent]" min="0" max="100" step="0.01" placeholder="Comm %" class="rounded-xl border-slate-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
-                            <button type="button" class="rounded-xl border border-rose-200 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:border-rose-400/30 dark:hover:bg-rose-400/10" data-remove-rule>Remove</button>
+                            <label class="block min-w-0">
+                                <span class="mb-1 block text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Minimum MTD %</span>
+                                <input type="number" name="rules[0][minimum_mtd_percent]" min="0" step="0.01" placeholder="Example: 75" class="w-full rounded-xl border-slate-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                            </label>
+                            <label class="block min-w-0">
+                                <span class="mb-1 block text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Commission %</span>
+                                <input type="number" name="rules[0][commission_percent]" min="0" max="100" step="0.01" placeholder="Example: 20" class="w-full rounded-xl border-slate-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                            </label>
+                            <button type="button" class="commission-rule-remove rounded-xl border border-rose-200 px-4 py-3 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:border-rose-400/30 dark:hover:bg-rose-400/10" data-remove-rule>Remove</button>
                         `;
                         rules.appendChild(row);
                         renumberRules(form);
