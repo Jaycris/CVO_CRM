@@ -20,8 +20,11 @@ class TrashController extends Controller
     {
         $this->ensureAdmin($request);
 
-        $type = $this->validType($request->query('type', 'users'));
-        $search = trim((string) $request->query('search', ''));
+        $typeInput = $request->query('type', 'users');
+        $searchInput = $request->query('search', '');
+
+        $type = $this->validType(is_string($typeInput) ? $typeInput : 'users');
+        $search = trim(is_string($searchInput) ? $searchInput : '');
 
         return view('admin.trash.index', [
             'type' => $type,
