@@ -396,7 +396,7 @@ class ReportController extends Controller
                 $agentName = trim(($activity->agent?->first_name ?? '') . ' ' . ($activity->agent?->last_name ?? '')) ?: 'Unassigned Agent';
                 $frankieName = trim(($activity->frankieAgent?->first_name ?? '') . ' ' . ($activity->frankieAgent?->last_name ?? ''));
                 $brandName = $activity->brand?->imprint_name ?: 'No Brand';
-                $serviceName = $activity->service_name ?: $activity->service?->service_name ?: 'No Service';
+                $serviceName = $activity->service_name ?: $activity->service?->name ?: 'No Service';
 
                 $this->pushReportSearchOption($options, $activity->endorsement_code, "SE ID: {$activity->endorsement_code}", "{$activity->author_name} | {$activity->book_title}");
                 $this->pushReportSearchOption($options, $activity->author_name, "Author: {$activity->author_name}", "{$activity->book_title} | Agent: {$agentName}");

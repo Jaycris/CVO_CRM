@@ -800,16 +800,16 @@ class ProductionProjectController extends Controller
             return;
         }
 
-        DB::table('production_page_views')->updateOrInsert(
-            [
+        DB::table('production_page_views')->upsert(
+            [[
                 'user_id' => $request->user()->id,
                 'page_key' => 'endorsed_projects',
-            ],
-            [
                 'last_seen_at' => now(),
-                'updated_at' => now(),
                 'created_at' => now(),
-            ]
+                'updated_at' => now(),
+            ]],
+            ['user_id', 'page_key'],
+            ['last_seen_at', 'updated_at']
         );
     }
 
