@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
 
 class Service extends Model
 {
@@ -30,5 +31,14 @@ class Service extends Model
     public function inclusions()
     {
         return $this->hasMany(ServiceInclusion::class)->orderBy('sort_order');
+    }
+
+    protected static function booted(): void
+    {
+        static::forceDeleted(function (Service $service) {
+            if ($service->pdf_path) {
+                Storage::disk('public')->delete($service->pdf_path);
+            }
+        });
     }
 }

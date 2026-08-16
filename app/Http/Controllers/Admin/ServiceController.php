@@ -115,10 +115,8 @@ class ServiceController extends Controller
         $this->ensureCanManageServices($request);
         abort_unless($this->userCanAccessBrand($request, $service->brand_id), 403);
 
-        if ($service->pdf_path) {
-            Storage::disk('public')->delete($service->pdf_path);
-        }
-
+        // Soft delete only -- the PDF is removed by the Service model's
+        // forceDeleted hook so a restored service keeps a working file.
         $service->delete();
 
         return back()->with('success', 'Service deleted successfully.');
