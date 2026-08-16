@@ -154,7 +154,32 @@ class SalesPerformanceController extends Controller
             );
         }
 
+        // 'exists:users,id' alone would let any user id be posted, including
+        // agents in another brand or non-Sales accounts. Resolve the set the
+        // caller may actually touch before writing anything.
+        $submittedAgentIds = collect($validated['agents'] ?? [])
+            ->pluck('id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique();
+
+        $editableAgentIds = $submittedAgentIds->isEmpty()
+            ? collect()
+            : User::query()
+                ->whereIn('id', $submittedAgentIds->all())
+                ->where('department', 'Sales')
+                ->when(
+                    ! BrandScope::canAccessAllBrands($request->user()),
+                    fn ($query) => $query->where('brand_id', $brandId)
+                )
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id);
+
         foreach ($validated['agents'] ?? [] as $agentPayload) {
+            if (! $editableAgentIds->contains((int) $agentPayload['id'])) {
+                continue;
+            }
+
             SalesTarget::updateOrCreate(
                 [
                     'brand_id' => $brandId,
