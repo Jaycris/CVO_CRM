@@ -761,13 +761,12 @@ class LeadController extends Controller
 
             $updateData = [
                 ...$updateData,
-                'previous_agent_id' => DB::raw('assigned_to'),
                 'previous_agent_released_at' => now(),
                 'previous_agent_release_reason' => 'Lead reassigned by Sales Team Leader.',
             ];
         }
 
-        DB::transaction(function () use ($assignableLeads, $request, $salesAssignee, $updateData) {
+        DB::transaction(function () use ($assignableLeads, $request, $salesAssignee, $updateData, $isTeamReassignment) {
             $currentAssignments = Lead::whereIn('id', $assignableLeads)
                 ->pluck('assigned_to', 'id');
 
@@ -777,6 +776,12 @@ class LeadController extends Controller
 
             foreach ($assignableLeads as $leadId) {
                 $previousAgentId = $currentAssignments->get($leadId);
+
+                if ($isTeamReassignment) {
+                    Lead::whereKey($leadId)->update([
+                        'previous_agent_id' => $previousAgentId,
+                    ]);
+                }
 
                 if ($previousAgentId && (int) $previousAgentId !== $salesAssignee->id) {
                     $this->closeLeadAssignmentHistory(
