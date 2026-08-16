@@ -8,6 +8,7 @@ use App\Models\ProductionProject;
 use App\Models\SalesEndorsement;
 use App\Models\SalesPayment;
 use App\Models\User;
+use App\Support\SalesActivitySync;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -46,11 +47,17 @@ class TrashController extends Controller
             'record_ids.*' => ['integer'],
         ]);
 
-        $this->modelClass($validated['type'])::onlyTrashed()
+        $records = $this->modelClass($validated['type'])::onlyTrashed()
             ->whereIn('id', $validated['record_ids'])
-            ->get()
-            ->each
-            ->restore();
+            ->get();
+
+        $records->each->restore();
+
+        // A soft-deleted payment drops its sales_activities row; rebuild it so
+        // restored payments reappear in revenue, commission, and MTD reporting.
+        if ($validated['type'] === 'payments') {
+            $records->each(fn (SalesPayment $payment) => SalesActivitySync::sync($payment));
+        }
 
         return back()->with('success', 'Selected record(s) restored successfully.');
     }

@@ -55,6 +55,8 @@ class FinanceClientController extends Controller
 
         SalesPayment::whereIn('id', $validated['payment_ids'])
             ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
+            ->get()
+            ->each
             ->delete();
 
         return back()->with('success', 'Selected client record(s) deleted successfully.');

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\SalesActivitySync;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -33,5 +34,14 @@ class SalesPayment extends Model
     public function brand(): BelongsTo
     {
         return $this->belongsTo(Brand::class);
+    }
+
+    protected static function booted(): void
+    {
+        static::deleting(function (SalesPayment $payment) {
+            if (! $payment->isForceDeleting()) {
+                SalesActivitySync::forget($payment);
+            }
+        });
     }
 }
