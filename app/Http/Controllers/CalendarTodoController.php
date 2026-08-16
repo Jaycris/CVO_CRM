@@ -12,8 +12,13 @@ class CalendarTodoController extends Controller
 {
     public function index(Request $request): View
     {
-        $month = Carbon::createFromFormat('Y-m', $request->query('month', now()->format('Y-m')))
-            ->startOfMonth();
+        $monthInput = $request->query('month', now()->format('Y-m'));
+
+        if (! is_string($monthInput) || ! preg_match('/^\d{4}-\d{2}$/', $monthInput)) {
+            $monthInput = now()->format('Y-m');
+        }
+
+        $month = Carbon::createFromFormat('!Y-m', $monthInput)->startOfMonth();
         $calendarStart = $month->copy()->startOfWeek();
         $calendarEnd = $month->copy()->endOfMonth()->endOfWeek();
 

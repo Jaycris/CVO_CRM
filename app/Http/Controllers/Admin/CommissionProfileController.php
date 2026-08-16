@@ -22,7 +22,7 @@ class CommissionProfileController extends Controller
         $month = preg_match('/^\d{4}-\d{2}$/', (string) $request->query('month'))
             ? (string) $request->query('month')
             : now()->format('Y-m');
-        $monthStart = Carbon::createFromFormat('Y-m', $month)->startOfMonth();
+        $monthStart = Carbon::createFromFormat('!Y-m', $month)->startOfMonth();
         $brandId = $request->integer('brand_id') ?: null;
 
         $brands = Brand::orderBy('imprint_name')->get();
@@ -127,7 +127,7 @@ class CommissionProfileController extends Controller
             'users.*.is_commission_threshold_exempt' => ['nullable', 'boolean'],
         ]);
 
-        $monthStart = Carbon::createFromFormat('Y-m', $validated['month'])->startOfMonth();
+        $monthStart = Carbon::createFromFormat('!Y-m', $validated['month'])->startOfMonth();
 
         DB::transaction(function () use ($request, $validated, $monthStart) {
             foreach ($request->input('users', []) as $userId => $config) {
@@ -176,7 +176,7 @@ class CommissionProfileController extends Controller
         $month = preg_match('/^\d{4}-\d{2}$/', (string) $request->query('month'))
             ? (string) $request->query('month')
             : now()->format('Y-m');
-        $monthStart = Carbon::createFromFormat('Y-m', $month)->startOfMonth();
+        $monthStart = Carbon::createFromFormat('!Y-m', $month)->startOfMonth();
 
         $profiles = CommissionProfile::with(['rules' => fn ($query) => $query->orderBy('minimum_mtd_percent')])
             ->orderByDesc('is_default')
@@ -213,7 +213,7 @@ class CommissionProfileController extends Controller
             'is_commission_threshold_exempt' => ['nullable', 'boolean'],
         ]);
 
-        $monthStart = Carbon::createFromFormat('Y-m', $validated['month'])->startOfMonth();
+        $monthStart = Carbon::createFromFormat('!Y-m', $validated['month'])->startOfMonth();
         $isExempt = (bool) ($validated['is_commission_threshold_exempt'] ?? false);
 
         DB::transaction(function () use ($user, $validated, $monthStart, $isExempt) {

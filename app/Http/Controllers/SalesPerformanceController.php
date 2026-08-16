@@ -131,7 +131,7 @@ class SalesPerformanceController extends Controller
             'agents.*.is_commission_threshold_exempt' => ['nullable', 'boolean'],
         ]);
 
-        $month = Carbon::createFromFormat('Y-m', $validated['month'])->startOfMonth();
+        $month = Carbon::createFromFormat('!Y-m', $validated['month'])->startOfMonth();
         $brandId = BrandScope::canAccessAllBrands($request->user())
             ? ($validated['brand_id'] ?? BrandScope::userBrandId($request->user()))
             : BrandScope::userBrandId($request->user());
@@ -197,7 +197,7 @@ class SalesPerformanceController extends Controller
             $month = now()->format('Y-m');
         }
 
-        return Carbon::createFromFormat('Y-m', $month)->startOfMonth();
+        return Carbon::createFromFormat('!Y-m', $month)->startOfMonth();
     }
 
     private function paginateCollection(Collection $rows, Request $request): LengthAwarePaginator

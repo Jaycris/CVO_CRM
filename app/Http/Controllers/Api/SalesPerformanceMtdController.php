@@ -29,7 +29,7 @@ class SalesPerformanceMtdController extends Controller
             'brand' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $month = Carbon::createFromFormat('Y-m', $validated['month'] ?? now()->format('Y-m'))->startOfMonth();
+        $month = Carbon::createFromFormat('!Y-m', $validated['month'] ?? now()->format('Y-m'))->startOfMonth();
         $brandId = $validated['brand_id'] ?? null;
 
         if (! $brandId && filled($validated['brand'] ?? null)) {

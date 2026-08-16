@@ -147,7 +147,7 @@ class AgentStatementController extends Controller
             $month = now()->format('Y-m');
         }
 
-        return Carbon::createFromFormat('Y-m', $month)->startOfMonth();
+        return Carbon::createFromFormat('!Y-m', $month)->startOfMonth();
     }
 
     private function paginateCollection(Collection $rows, Request $request): LengthAwarePaginator
