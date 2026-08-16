@@ -278,7 +278,7 @@
                                             <form method="POST"
                                                   action="{{ route('admin.services.update', $service) }}"
                                                   enctype="multipart/form-data"
-                                                  x-data="serviceForm({ inclusions: @js($service->inclusions->map(fn ($inclusion) => ['name' => $inclusion->name])->values()->all() ?: [['name' => '']]) })"
+                                                  x-data="serviceForm({ inclusions: @js($service->inclusions->map(fn ($inclusion) => ['id' => $inclusion->id, 'name' => $inclusion->name])->values()->all() ?: [['name' => '']]) })"
                                                   class="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900">
                                                 @csrf
                                                 @method('PUT')
@@ -378,6 +378,11 @@
                                                         <div class="mt-4 space-y-3">
                                                             <template x-for="(inclusion, index) in inclusions" :key="index">
                                                                 <div class="rounded-xl bg-slate-50 p-3 dark:bg-zinc-950">
+                                                                    <template x-if="inclusion.id">
+                                                                        <input type="hidden"
+                                                                               x-bind:name="`inclusions[${index}][id]`"
+                                                                               x-bind:value="inclusion.id">
+                                                                    </template>
                                                                     <div class="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto] md:items-end">
                                                                         <div>
                                                                             <label class="mb-1 block text-xs font-semibold text-slate-500 dark:text-zinc-400">Inclusion</label>

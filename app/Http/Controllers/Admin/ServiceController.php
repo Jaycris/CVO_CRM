@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Brand;
 use App\Models\Service;
+use App\Models\ServiceInclusion;
 use App\Support\BrandScope;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -139,26 +140,63 @@ class ServiceController extends Controller
             'description' => ['nullable', 'string', 'max:5000'],
             'pdf_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp,gif', 'max:10240'],
             'inclusions' => ['nullable', 'array'],
+            'inclusions.*.id' => ['nullable', 'integer'],
             'inclusions.*.name' => ['nullable', 'string', 'max:255'],
         ]);
     }
 
+    /**
+     * Reconcile the submitted inclusions against the stored ones.
+     *
+     * This deliberately avoids delete-and-recreate: service_items rows are
+     * referenced by production_task_items.service_item_id (nullOnDelete), so
+     * recreating them on every save silently unlinked existing production
+     * tasks and broke the duplicate-inclusion guard in
+     * ProductionProjectController::storeTask().
+     */
     private function syncInclusions(Service $service, array $inclusions): void
     {
-        $service->inclusions()->delete();
-
-        collect($inclusions)
+        $submitted = collect($inclusions)
             ->map(fn ($inclusion) => [
+                'id' => isset($inclusion['id']) && $inclusion['id'] !== '' ? (int) $inclusion['id'] : null,
                 'name' => trim((string) ($inclusion['name'] ?? '')),
             ])
-            ->filter(fn ($inclusion) => $inclusion['name'] !== '')
-            ->values()
-            ->each(function ($inclusion, int $index) use ($service) {
-                $service->inclusions()->create([
-                    'name' => $inclusion['name'],
-                    'sort_order' => $index + 1,
-                ]);
-            });
+            ->filter(fn (array $inclusion) => $inclusion['name'] !== '')
+            ->values();
+
+        // Only ids already belonging to this service may be reused; anything
+        // else is treated as a new row rather than trusted from the payload.
+        $ownedIds = ServiceInclusion::where('service_id', $service->id)->pluck('id');
+        $keptIds = [];
+
+        $submitted->each(function (array $inclusion, int $index) use ($service, $ownedIds, &$keptIds) {
+            $sortOrder = $index + 1;
+
+            if ($inclusion['id'] !== null && $ownedIds->contains($inclusion['id'])) {
+                ServiceInclusion::whereKey($inclusion['id'])
+                    ->where('service_id', $service->id)
+                    ->update([
+                        'name' => $inclusion['name'],
+                        'sort_order' => $sortOrder,
+                    ]);
+
+                $keptIds[] = $inclusion['id'];
+
+                return;
+            }
+
+            $keptIds[] = $service->inclusions()->create([
+                'name' => $inclusion['name'],
+                'sort_order' => $sortOrder,
+            ])->id;
+        });
+
+        // Rows the user actually removed still hard-delete, which nulls any
+        // production_task_items pointing at them -- but only on removal now,
+        // not on every save.
+        ServiceInclusion::where('service_id', $service->id)
+            ->when($keptIds !== [], fn ($query) => $query->whereNotIn('id', $keptIds))
+            ->delete();
     }
 
     private function ensureCanManageServices(Request $request): void
