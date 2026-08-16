@@ -680,6 +680,15 @@ class ProductionProjectController extends Controller
         $clientProgressAgentIds = $this->clientProgressAgentIds($request);
 
         $query->where(function ($query) use ($allowedTrackers, $clientProgressAgentIds) {
+            // Laravel discards an empty nested where entirely. Without this
+            // guard a user who resolves to no trackers and no agents would
+            // match every project instead of none.
+            if ($allowedTrackers === [] && $clientProgressAgentIds === []) {
+                $query->whereRaw('1 = 0');
+
+                return;
+            }
+
             if ($allowedTrackers !== []) {
                 $query->whereIn('tracker_type', $allowedTrackers);
             }
