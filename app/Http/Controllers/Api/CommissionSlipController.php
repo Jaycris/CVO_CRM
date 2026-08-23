@@ -38,7 +38,7 @@ class CommissionSlipController extends Controller
 
         $month = Carbon::createFromFormat('!Y-m', $validated['month'] ?? now()->format('Y-m'))->startOfMonth();
         $agent = User::query()
-            ->with(['brand', 'team'])
+            ->with(['brand', 'team', 'commissionProfile.rules'])
             ->where('hris_employee_id', $hrisEmployeeId)
             ->first();
 
@@ -74,15 +74,17 @@ class CommissionSlipController extends Controller
                 'name' => trim($agent->first_name.' '.$agent->last_name),
                 'team' => $agent->team?->name,
                 'work_type' => $this->workArrangementLabel($agent->work_type),
+                'commission_scheme' => $this->commissionScheme($agent),
+                'agent_target' => round((float) $selectedTargets->sum('amount'), 2),
             ],
             'month' => $month->format('Y-m'),
             'hris_employee_id' => $agent->hris_employee_id,
-            'summary' => $this->summary($rows, $selectedTargets),
+            'summary' => $this->summary($rows, $selectedTargets, $agent),
             'transactions' => $this->transactions($rows),
         ]);
     }
 
-    private function summary(Collection $rows, Collection $targets): array
+    private function summary(Collection $rows, Collection $targets, User $agent): array
     {
         $targetAmount = (float) $targets->sum('amount');
         $mtd = (float) $rows->sum('amount');
@@ -90,6 +92,8 @@ class CommissionSlipController extends Controller
         return [
             'mtd' => round($mtd, 2),
             'target' => round($targetAmount, 2),
+            'agent_target' => round($targetAmount, 2),
+            'commission_scheme' => $this->commissionScheme($agent),
             'mtd_percent' => $targetAmount > 0 ? round(($mtd / $targetAmount) * 100, 2) : 0,
             'service_commission' => round((float) $rows->sum('service_commission'), 2),
             'markup_commission' => round((float) $rows->sum('markup_commission'), 2),
@@ -138,5 +142,28 @@ class CommissionSlipController extends Controller
             'site' => 'On-site',
             default => null,
         };
+    }
+
+    private function commissionScheme(User $agent): array
+    {
+        $profile = $agent->commissionProfile;
+
+        return [
+            'name' => $profile?->name ?? 'Default Service Tiers',
+            'rules' => $profile?->rules
+                ? $profile->rules
+                    ->sortBy('minimum_mtd_percent')
+                    ->map(fn ($rule) => [
+                        'minimum_mtd_percent' => round((float) $rule->minimum_mtd_percent, 2),
+                        'commission_percent' => round((float) $rule->commission_percent, 2),
+                    ])
+                    ->values()
+                    ->all()
+                : [
+                    ['minimum_mtd_percent' => 0, 'commission_percent' => 15],
+                    ['minimum_mtd_percent' => 75, 'commission_percent' => 20],
+                    ['minimum_mtd_percent' => 100, 'commission_percent' => 25],
+                ],
+        ];
     }
 }

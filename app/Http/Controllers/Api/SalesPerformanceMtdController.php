@@ -46,7 +46,7 @@ class SalesPerformanceMtdController extends Controller
             ->unique()
             ->values();
         $agents = User::query()
-            ->with('brand')
+            ->with(['brand', 'commissionProfile.rules'])
             ->where(function ($query) use ($visibleAgentIds) {
                 $query->where('department', 'Sales');
 
@@ -99,6 +99,8 @@ class SalesPerformanceMtdController extends Controller
                     'threshold_applied_amount' => round((float) ($credit['threshold_applied_amount'] ?? 0), 2),
                     'markup_mtd' => round((float) $credit['markup_mtd'], 2),
                     'target' => round($targetAmount, 2),
+                    'agent_target' => round($targetAmount, 2),
+                    'commission_scheme' => $this->commissionScheme($agent),
                     'mtd_percent' => $targetAmount > 0 ? round(($mtd / $targetAmount) * 100, 2) : 0,
                     'remaining_target' => round(max($targetAmount - $mtd, 0), 2),
                     'service_commission_percent' => round((float) ($credit['service_commission_percent'] ?? SalesMtdCalculator::SERVICE_RATE_LOW), 2),
@@ -132,6 +134,8 @@ class SalesPerformanceMtdController extends Controller
                 'commissionable_service_mtd',
                 'markup_mtd',
                 'target',
+                'agent_target',
+                'commission_scheme',
                 'mtd_percent',
                 'service_comm',
                 'markup_comm',
@@ -153,5 +157,28 @@ class SalesPerformanceMtdController extends Controller
             ],
             'agents' => $agents,
         ]);
+    }
+
+    private function commissionScheme(User $agent): array
+    {
+        $profile = $agent->commissionProfile;
+
+        return [
+            'name' => $profile?->name ?? 'Default Service Tiers',
+            'rules' => $profile?->rules
+                ? $profile->rules
+                    ->sortBy('minimum_mtd_percent')
+                    ->map(fn ($rule) => [
+                        'minimum_mtd_percent' => round((float) $rule->minimum_mtd_percent, 2),
+                        'commission_percent' => round((float) $rule->commission_percent, 2),
+                    ])
+                    ->values()
+                    ->all()
+                : [
+                    ['minimum_mtd_percent' => 0, 'commission_percent' => 15],
+                    ['minimum_mtd_percent' => 75, 'commission_percent' => 20],
+                    ['minimum_mtd_percent' => 100, 'commission_percent' => 25],
+                ],
+        ];
     }
 }
