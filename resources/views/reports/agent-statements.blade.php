@@ -5,8 +5,9 @@
 
     @php
         $money = fn ($value) => '$' . number_format((float) $value, 2);
+        $peso = fn ($value) => '₱' . number_format((float) $value, 2);
         $showBrandColumn = $canViewAll || auth()->user()?->department !== 'Sales';
-        $statementColumnCount = $showBrandColumn ? 11 : 10;
+        $statementColumnCount = $showBrandColumn ? 14 : 13;
     @endphp
 
     <div class="space-y-6">
@@ -14,7 +15,7 @@
             <div>
                 <h1 class="text-2xl font-bold text-slate-900 dark:text-zinc-100">Agent Statements</h1>
                 <p class="mt-1 text-slate-500 dark:text-zinc-400">
-                    Monthly sales credit, service commission, markup commission, and USD totals.
+                    Monthly sales credit, commission, and PHP totals using the saved bank rate.
                 </p>
             </div>
         </div>
@@ -85,25 +86,25 @@
         </form>
 
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-                <p class="text-sm text-slate-500 dark:text-zinc-400">MTD</p>
-                <p class="mt-3 text-3xl font-bold text-slate-900 dark:text-zinc-100">{{ $money($totals['sales_credit']) }}</p>
-                <p class="mt-2 text-sm text-[var(--brand-primary)]">Month-to-date amount</p>
-            </div>
-            <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+            <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
                 <p class="text-sm text-slate-500 dark:text-zinc-400">Service MTD</p>
-                <p class="mt-3 text-3xl font-bold text-slate-900 dark:text-zinc-100">{{ $money($totals['service_mtd']) }}</p>
+                <p class="mt-3 text-2xl font-bold text-slate-900 dark:text-zinc-100">{{ $money($totals['service_mtd']) }}</p>
                 <p class="mt-2 text-sm text-[var(--brand-primary)]">Base service credit</p>
             </div>
-            <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+            <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
                 <p class="text-sm text-slate-500 dark:text-zinc-400">Markup MTD</p>
-                <p class="mt-3 text-3xl font-bold text-slate-900 dark:text-zinc-100">{{ $money($totals['markup_mtd']) }}</p>
+                <p class="mt-3 text-2xl font-bold text-slate-900 dark:text-zinc-100">{{ $money($totals['markup_mtd']) }}</p>
                 <p class="mt-2 text-sm text-[var(--brand-primary)]">Markup credit</p>
             </div>
-            <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+            <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
                 <p class="text-sm text-slate-500 dark:text-zinc-400">USD Commission</p>
-                <p class="mt-3 text-3xl font-bold text-slate-900 dark:text-zinc-100">{{ $money($totals['usd_total']) }}</p>
+                <p class="mt-3 text-2xl font-bold text-slate-900 dark:text-zinc-100">{{ $money($totals['usd_total']) }}</p>
                 <p class="mt-2 text-sm text-[var(--brand-primary)]">Service + markup commission</p>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+                <p class="text-sm text-slate-500 dark:text-zinc-400">Net Commission</p>
+                <p class="mt-3 text-2xl font-bold text-slate-900 dark:text-zinc-100">{{ $peso($totals['net_commission']) }}</p>
+                <p class="mt-2 text-sm text-[var(--brand-primary)]">PHP less card hold</p>
             </div>
         </div>
 
@@ -134,7 +135,7 @@
             </div>
 
             <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-slate-200 text-xs dark:divide-zinc-800">
+                <table class="min-w-[1580px] divide-y divide-slate-200 text-xs dark:divide-zinc-800">
                     <thead class="bg-slate-50 text-xs uppercase text-slate-500 dark:bg-zinc-900 dark:text-zinc-400">
                         <tr>
                             <th class="px-4 py-3 text-left font-bold">Sold Date</th>
@@ -150,6 +151,9 @@
                             <th class="px-4 py-3 text-left font-bold">Service Comm</th>
                             <th class="px-4 py-3 text-left font-bold">Markup Comm</th>
                             <th class="px-4 py-3 text-left font-bold">USD Total</th>
+                            <th class="px-4 py-3 text-left font-bold">PHP Total</th>
+                            <th class="px-4 py-3 text-left font-bold">Card Hold</th>
+                            <th class="px-4 py-3 text-left font-bold">Net Commission</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-200 dark:divide-zinc-800">
@@ -186,6 +190,15 @@
                                     <span class="block text-xs text-slate-400">{{ number_format($row['markup_commission_percent'], 2) }}%</span>
                                 </td>
                                 <td class="whitespace-nowrap px-4 py-3 text-sm font-bold text-slate-900 dark:text-zinc-100">{{ $money($row['usd_total']) }}</td>
+                                <td class="whitespace-nowrap px-4 py-3 text-sm font-bold text-slate-900 dark:text-zinc-100">
+                                    {{ $peso($row['php_total']) }}
+                                    <span class="block text-xs font-medium text-slate-400">Rate {{ number_format($row['exchange_rate'], 4) }}</span>
+                                </td>
+                                <td class="whitespace-nowrap px-4 py-3 text-sm font-bold text-amber-700 dark:text-amber-300">
+                                    {{ $peso($row['hold_amount']) }}
+                                    <span class="block text-xs font-medium text-slate-400">{{ $activity->payment_method === 'Card' ? number_format($row['card_payment_hold_percent'], 2) . '% card hold' : 'No card hold' }}</span>
+                                </td>
+                                <td class="whitespace-nowrap px-4 py-3 text-sm font-bold text-slate-900 dark:text-zinc-100">{{ $peso($row['net_commission']) }}</td>
                             </tr>
                         @empty
                             <tr>

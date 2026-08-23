@@ -42,20 +42,56 @@ class ReportController extends Controller
             ? $this->reportCollections($request, $reportType, $search, $startDate, $endDate)
             : [collect(), collect(), collect()];
 
-        $summaryCards = $reportType === 'lead_miner' && ! $this->canSeeSensitiveCreditDetails($request)
-            ? [
+        // reportCollections() only fills the collection matching $reportType,
+        // so each report must summarise its own data -- rendering all four
+        // cards from all three collections left three of them permanently
+        // zero.
+        $summaryCards = match (true) {
+            $reportType === null => [],
+            $reportType === 'lead_miner' && ! $this->canSeeSensitiveCreditDetails($request) => [
                 [
                     'label' => 'Sold Leads',
                     'count' => $activities->count(),
                     'hint' => 'Sold lead count only',
                     'tone' => 'emerald',
                 ],
-            ]
-            : [
+            ],
+            in_array($reportType, ['sales', 'lead_miner'], true) => [
                 [
                     'label' => 'Total Sales',
                     'count' => '$' . number_format((float) $activities->sum('amount'), 2),
                     'hint' => 'Successful payments',
+                    'tone' => 'emerald',
+                ],
+                [
+                    'label' => 'Sales Records',
+                    'count' => $activities->count(),
+                    'hint' => 'Confirmed sale entries',
+                    'tone' => 'sky',
+                ],
+                [
+                    'label' => 'Agents Credited',
+                    'count' => $activities->pluck('agent_id')->filter()->unique()->count(),
+                    'hint' => 'Distinct selling agents',
+                    'tone' => 'amber',
+                ],
+                [
+                    'label' => 'Services Sold',
+                    'count' => $activities->pluck('service_name')->filter()->unique()->count(),
+                    'hint' => 'Distinct services',
+                    'tone' => 'rose',
+                ],
+            ],
+            $reportType === 'finance' => [
+                [
+                    'label' => 'Total Collected',
+                    'count' => '$' . number_format(
+                        (float) $payments
+                            ->where('status', 'Payment Success')
+                            ->sum(fn (SalesPayment $payment) => (float) ($payment->endorsement?->amount ?? 0)),
+                        2
+                    ),
+                    'hint' => 'From successful payments',
                     'tone' => 'emerald',
                 ],
                 [
@@ -66,19 +102,45 @@ class ReportController extends Controller
                 ],
                 [
                     'label' => 'Refunds / Disputes',
-                    'count' => $payments->whereIn('status', ['Refund', 'Dispute', 'Declined'])->count(),
+                    'count' => $payments->whereIn('status', ['Refund', 'Dispute'])->count(),
                     'hint' => 'Needs finance review',
                     'tone' => 'rose',
                 ],
                 [
-                    'label' => 'Production Projects',
-                    'count' => $productionProjects->count(),
-                    'hint' => 'Generated from sales',
+                    'label' => 'Declined',
+                    'count' => $payments->where('status', 'Declined')->count(),
+                    'hint' => 'Failed payments',
                     'tone' => 'amber',
                 ],
-            ];
-
-        $summaryCards = $reportType ? $summaryCards : [];
+            ],
+            $reportType === 'production' => [
+                [
+                    'label' => 'Total Projects',
+                    'count' => $productionProjects->count(),
+                    'hint' => 'Endorsed to Production',
+                    'tone' => 'emerald',
+                ],
+                [
+                    'label' => 'Pending',
+                    'count' => $productionProjects->where('status', 'pending')->count(),
+                    'hint' => 'Awaiting fulfillment',
+                    'tone' => 'rose',
+                ],
+                [
+                    'label' => 'In Progress',
+                    'count' => $productionProjects->where('status', 'in_progress')->count(),
+                    'hint' => 'Being worked',
+                    'tone' => 'sky',
+                ],
+                [
+                    'label' => 'Fulfilled',
+                    'count' => $productionProjects->where('status', 'fulfilled')->count(),
+                    'hint' => 'Completed projects',
+                    'tone' => 'amber',
+                ],
+            ],
+            default => [],
+        };
 
         return view('reports.index', [
             'summaryCards' => $summaryCards,

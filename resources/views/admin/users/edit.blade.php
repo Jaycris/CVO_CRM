@@ -59,10 +59,20 @@
                           }
 
                           return 'Not enabled';
-                      }
+                      },
+                      ...window.hrisEmployeeLookup({
+                          mode: 'edit',
+                          healthUrl: @js(route('admin.hris-employees.health')),
+                          searchUrl: @js(route('admin.hris-employees.index')),
+                          showUrlTemplate: @js(route('admin.hris-employees.show', ['hrisEmployeeId' => '__ID__'])),
+                          initialEmployeeId: @js(old('hris_employee_id', $user->hris_employee_id ?? '')),
+                          initialSelectedLabel: @js(trim(($user->first_name ?? '').' '.($user->last_name ?? ''))),
+                      })
                   }">
                 @csrf
                 @method('PUT')
+
+                @include('admin.users.partials.hris-employee-lookup')
 
                 <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
                     <div>
@@ -127,14 +137,14 @@
                 </div>
 
                 <div>
-                    <label for="work_type" class="mb-2 block text-sm font-medium text-slate-700">Work Type</label>
+                    <label for="work_type" class="mb-2 block text-sm font-medium text-slate-700">Work Arrangement</label>
                     <select id="work_type"
                             name="work_type"
                             class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500">
-                        <option value="">Select work type</option>
+                        <option value="">Select work arrangement</option>
                         <option value="remote" @selected(old('work_type', $user->work_type) === 'remote')>Remote</option>
+                        <option value="hybrid" @selected(old('work_type', $user->work_type) === 'hybrid')>Hybrid</option>
                         <option value="site" @selected(old('work_type', $user->work_type) === 'site')>On-site</option>
-                        <option value="part_time" @selected(old('work_type', $user->work_type) === 'part_time')>Part-time</option>
                     </select>
                     <p class="mt-2 text-xs text-slate-500">Used for Sales MTD grouping and employee records.</p>
                     <x-input-error :messages="$errors->get('work_type')" class="mt-2" />

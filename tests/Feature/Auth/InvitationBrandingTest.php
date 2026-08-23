@@ -30,7 +30,7 @@ test('the password invitation page uses the CreatiVision identity', function () 
     $this->get($url)
         ->assertOk()
         ->assertSee('CreatiVision CRM')
-        ->assertSee('images/CreativeVision LOGO 1.png', false)
+        ->assertSee('images/CreativeVision-LOGO-1.png', false)
         ->assertSee('--brand-primary: #065f46', false)
         ->assertDontSee('storage/brands/aurora-logo.png', false)
         ->assertDontSee('images/inkspire-logo.png', false);
@@ -51,7 +51,7 @@ test('the invitation email uses the CreatiVision email identity', function () {
 
     expect($mail->envelope()->subject)->toBe('Create Your CreatiVision CRM Password')
         ->and($html)->toContain('Your CreatiVision CRM account has been created successfully.')
-        ->and($html)->toContain('images/CreativeVision LOGO 1.png')
+        ->and($html)->toContain('images/CreativeVision-LOGO-1.png')
         ->and($html)->toContain('linear-gradient(135deg, #064e3b 0%, #022c22 45%, #050505 100%)')
         ->and($html)->not->toContain('storage/brands/aurora-logo.png')
         ->and($html)->not->toContain('images/inkspire-logo.png');

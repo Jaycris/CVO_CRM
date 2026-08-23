@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\AppSetting;
 use App\Models\Brand;
 use App\Models\User;
 use App\Support\SalesMtdCalculator;
@@ -14,7 +15,7 @@ class SalesPerformanceMtdController extends Controller
 {
     public function __invoke(Request $request): JsonResponse
     {
-        $configuredToken = (string) config('services.hris.token');
+        $configuredToken = AppSetting::hrisApiToken();
         $providedToken = (string) ($request->bearerToken() ?: $request->header('X-HRIS-Token'));
 
         abort_if(
@@ -68,6 +69,11 @@ class SalesPerformanceMtdController extends Controller
                     'service_commission' => 0,
                     'markup_commission' => 0,
                     'usd_total' => 0,
+                    'php_total' => 0,
+                    'exchange_rate' => $summary['exchangeRate'],
+                    'card_payment_hold_percent' => $summary['cardPaymentHoldPercent'],
+                    'hold_amount' => 0,
+                    'net_commission' => 0,
                     'service_commission_percent' => SalesMtdCalculator::SERVICE_RATE_LOW,
                     'markup_commission_percent' => (float) ($agent->markup_commission_percent ?? 50),
                 ]);
@@ -76,14 +82,15 @@ class SalesPerformanceMtdController extends Controller
 
                 return [
                     'agent_id' => $agent->id,
+                    'hris_employee_id' => $agent->hris_employee_id,
                     'agent_name' => trim($agent->first_name.' '.$agent->last_name),
                     'email' => $agent->email,
                     'brand_id' => $agent->brand_id,
                     'brand_name' => $agent->brand?->imprint_name,
                     'work_type' => match ($agent->work_type) {
                         'remote' => 'remote',
+                        'hybrid' => 'hybrid',
                         'site' => 'on-site',
-                        'part_time' => 'part-time',
                         default => null,
                     },
                     'mtd' => round($mtd, 2),
@@ -101,6 +108,11 @@ class SalesPerformanceMtdController extends Controller
                     'service_comm' => round((float) $credit['service_commission'], 2),
                     'markup_comm' => round((float) $credit['markup_commission'], 2),
                     'usd_total' => round((float) $credit['usd_total'], 2),
+                    'exchange_rate' => round((float) ($credit['exchange_rate'] ?? $summary['exchangeRate']), 4),
+                    'php_total' => round((float) ($credit['php_total'] ?? 0), 2),
+                    'card_payment_hold_percent' => round((float) ($credit['card_payment_hold_percent'] ?? $summary['cardPaymentHoldPercent']), 2),
+                    'hold_amount' => round((float) ($credit['hold_amount'] ?? 0), 2),
+                    'net_commission' => round((float) ($credit['net_commission'] ?? 0), 2),
                 ];
             })
             ->values();
@@ -113,6 +125,7 @@ class SalesPerformanceMtdController extends Controller
             'brand_name' => $brandId ? Brand::query()->whereKey($brandId)->value('imprint_name') : 'All Brands',
             'columns' => [
                 'agent_name',
+                'hris_employee_id',
                 'work_type',
                 'mtd',
                 'service_mtd',
@@ -123,12 +136,20 @@ class SalesPerformanceMtdController extends Controller
                 'service_comm',
                 'markup_comm',
                 'usd_total',
+                'exchange_rate',
+                'php_total',
+                'card_payment_hold_percent',
+                'hold_amount',
+                'net_commission',
             ],
             'summary' => [
                 'global' => $summary['global'],
                 'remote' => $summary['remote'],
+                'hybrid' => $summary['hybrid'],
                 'site' => $summary['site'],
-                'hris_note' => 'Use usd_total for HRIS PHP total, hold percentage, and net commission calculations.',
+                'exchange_rate' => round((float) $summary['exchangeRate'], 4),
+                'card_payment_hold_percent' => round((float) $summary['cardPaymentHoldPercent'], 2),
+                'hris_note' => 'Use php_total for HRIS PHP total, hold percentage, and net commission calculations.',
             ],
             'agents' => $agents,
         ]);

@@ -246,11 +246,11 @@
                                                 {{ $user->phone_number ?? 'No phone number' }}
                                             </p>
                                             <p class="text-xs text-slate-400 dark:text-zinc-500">
-                                                Work Type:
+                                                Work Arrangement:
                                                 {{ match($user->work_type) {
                                                     'remote' => 'Remote',
+                                                    'hybrid' => 'Hybrid',
                                                     'site' => 'On-site',
-                                                    'part_time' => 'Part-time',
                                                     default => 'Not set',
                                                 } }}
                                             </p>

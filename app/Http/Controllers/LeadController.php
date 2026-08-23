@@ -14,8 +14,10 @@ use App\Support\BrandScope;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Throwable;
@@ -113,7 +115,7 @@ class LeadController extends Controller
                 });
             })
             ->latest()
-            ->paginate(\App\Models\AppSetting::recordsPerPage())
+            ->paginate(\App\Models\AppSetting::leadsSalesRecordsPerPage())
             ->withQueryString();
 
         return view('sales.payment-records', [
@@ -135,7 +137,11 @@ class LeadController extends Controller
             'verificationAssignedUser', 'returnedBy', 'archivedBy',
             'assignmentHistories.agent', 'assignmentHistories.assignedBy', 'assignmentHistories.releasedBy',
         ]);
-        BrandScope::apply($query, $request?->user());
+        $this->applyLeadBrandScope(
+            $query,
+            $request,
+            $this->viewModeIncludesAssignedToCurrentUser($viewMode, $request)
+        );
 
         match ($viewMode) {
             'mine' => $query->where('created_by', $request?->user()?->id)
@@ -193,7 +199,7 @@ class LeadController extends Controller
 
         $this->applyLeadFilters($query, $request);
 
-        $leads = $query->latest()->paginate(\App\Models\AppSetting::recordsPerPage())->withQueryString();
+        $leads = $query->latest()->paginate(\App\Models\AppSetting::leadsSalesRecordsPerPage())->withQueryString();
         $summaryCards = $this->summaryCards($viewMode, $request);
         $salesAssignees = User::with('role')
             ->where('department', 'Sales')
@@ -341,17 +347,11 @@ class LeadController extends Controller
                     continue;
                 }
 
-                if ($duplicateMessage = $this->leadDuplicateMessage($leadData)) {
-                    $skipped[] = "Row {$rowNumber}: {$duplicateMessage}";
-                    continue;
-                }
-
                 try {
-                    Lead::create([
-                        ...$leadData,
-                        'brand_id' => BrandScope::userBrandId($request->user()),
-                        'created_by' => $request->user()->id,
-                    ]);
+                    $this->createLeadWithDuplicateGuard($leadData, $request, [], false);
+                } catch (ValidationException $exception) {
+                    $skipped[] = "Row {$rowNumber}: " . collect($exception->errors())->flatten()->first();
+                    continue;
                 } catch (Throwable $exception) {
                     report($exception);
 
@@ -392,13 +392,9 @@ class LeadController extends Controller
         ]);
 
         $leadData = $this->validatedLeadData($request, false);
-        $this->ensureLeadIsNotDuplicate($leadData);
         $workSelf = $request->boolean('work_self') && $this->userCanSelfMineAndWork($request);
 
-        Lead::create([
-            ...$leadData,
-            'brand_id' => BrandScope::userBrandId($request->user()),
-            'created_by' => $request->user()->id,
+        $this->createLeadWithDuplicateGuard($leadData, $request, [
             'assigned_to' => $workSelf ? $request->user()->id : null,
             'assigned_date' => $workSelf ? now()->toDateString() : null,
         ]);
@@ -897,7 +893,6 @@ class LeadController extends Controller
         $movableLeads = $this->salesActionLeadIds($request, $validated['lead_ids']);
 
         Lead::whereIn('id', $movableLeads)
-            ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
             ->update([
             'sales_stage' => $validated['sales_stage'],
             'sales_stage_updated_at' => now(),
@@ -911,7 +906,6 @@ class LeadController extends Controller
 
         if ($this->userCanSelfMineAndWork($request)) {
             Lead::whereIn('id', $movableLeads)
-                ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
                 ->where('created_by', $request->user()->id)
                 ->where('assigned_to', $request->user()->id)
                 ->where(function ($query) {
@@ -947,7 +941,6 @@ class LeadController extends Controller
         $returnableLeads = $this->salesActionLeadIds($request, $validated['lead_ids']);
 
         Lead::whereIn('id', $returnableLeads)
-            ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
             ->update([
             'returned_at' => now(),
             'returned_by' => $request->user()->id,
@@ -1267,6 +1260,24 @@ class LeadController extends Controller
         }
 
         $response->throwResponse();
+    }
+
+    private function createLeadWithDuplicateGuard(array $leadData, Request $request, array $extra = [], bool $throwResponse = true): Lead
+    {
+        return Cache::lock('lead-create-duplicate-check', 10)->block(10, function () use ($leadData, $request, $extra, $throwResponse) {
+            if ($throwResponse) {
+                $this->ensureLeadIsNotDuplicate($leadData);
+            } elseif ($duplicateMessage = $this->leadDuplicateMessage($leadData)) {
+                throw ValidationException::withMessages(['lead_duplicate' => $duplicateMessage]);
+            }
+
+            return Lead::create([
+                ...$leadData,
+                'brand_id' => BrandScope::userBrandId($request->user()),
+                'created_by' => $request->user()->id,
+                ...$extra,
+            ]);
+        });
     }
 
     private function leadDuplicateMessage(array $leadData, ?Lead $currentLead = null): ?string
@@ -1794,6 +1805,40 @@ class LeadController extends Controller
             || (int) $request?->user()?->brand_id === (int) $lead->brand_id;
     }
 
+    private function applyLeadBrandScope($query, ?Request $request, bool $includeAssignedToCurrentUser = false): void
+    {
+        if (BrandScope::canAccessAllBrands($request?->user())) {
+            return;
+        }
+
+        $userId = $request?->user()?->id;
+        $brandId = $request?->user()?->brand_id;
+
+        if ($includeAssignedToCurrentUser && $userId !== null) {
+            $query->where(function ($query) use ($brandId, $userId) {
+                $query->where('brand_id', $brandId)
+                    ->orWhere('assigned_to', $userId);
+            });
+
+            return;
+        }
+
+        BrandScope::apply($query, $request?->user());
+    }
+
+    private function viewModeIncludesAssignedToCurrentUser(string $viewMode, ?Request $request): bool
+    {
+        return ! $this->canViewAllAssignedLeads($request)
+            && in_array($viewMode, [
+                'new_assigned',
+                'assigned',
+                'sales_pipeline',
+                'sales_prospect',
+                'sales_scheduled_callback',
+                'sales_sold',
+            ], true);
+    }
+
     private function userCanAssignToBrand(?Request $request, ?int $brandId): bool
     {
         return BrandScope::canAccessAllBrands($request?->user())
@@ -1831,7 +1876,8 @@ class LeadController extends Controller
             'mine' => $this->userHasPermission($request, 'view_my_leads'),
             'returned' => $this->userHasPermission($request, 'view_returned_leads'),
             'archived' => $this->userHasPermission($request, 'view_archived_leads'),
-            'assigned' => $this->userHasPermission($request, 'view_assigned_leads_monitor'),
+            'assigned' => $this->userHasPermission($request, 'view_assigned_leads')
+                || $this->userHasPermission($request, 'view_assigned_leads_monitor'),
             'new_assigned' => $this->userHasPermission($request, 'view_assigned_leads') || $this->userCanSelfMineAndWork($request),
             'verification_queue' => $this->userHasPermission($request, 'view_verification_queue'),
             'unassigned' => $this->userHasPermission($request, 'view_unassigned_leads'),
@@ -1844,8 +1890,11 @@ class LeadController extends Controller
 
     private function salesActionLeadIds(Request $request, array $leadIds)
     {
-        $actionLeadIds = Lead::whereIn('id', $leadIds)
-            ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
+        $query = Lead::whereIn('id', $leadIds);
+
+        $this->applyLeadBrandScope($query, $request, ! $this->userIsAdmin($request));
+
+        $actionLeadIds = $query
             ->when(! $this->userIsAdmin($request), fn ($query) => $query->where('assigned_to', $request->user()->id))
             ->pluck('id');
 
@@ -1898,7 +1947,7 @@ class LeadController extends Controller
                 ->whereNull('returned_at')
                 ->whereNull('archived_at')
                 ->where('assigned_to', $request?->user()->id);
-            BrandScope::apply($salesQuery, $request?->user());
+            $this->applyLeadBrandScope($salesQuery, $request, true);
             $refundCount = SalesPayment::query()
                 ->tap(fn ($query) => BrandScope::apply($query, $request?->user()))
                 ->where('status', 'Refund')
@@ -1949,7 +1998,6 @@ class LeadController extends Controller
                 ->whereNotNull('assigned_to')
                 ->whereNull('returned_at')
                 ->whereNull('archived_at');
-            BrandScope::apply($assignedQuery, $request?->user());
 
             if ($viewMode === 'new_assigned') {
                 $assignedQuery->whereNull('sales_stage');
@@ -1959,11 +2007,15 @@ class LeadController extends Controller
                 ->whereNotNull('assigned_to')
                 ->whereNotNull('returned_at')
                 ->whereNull('archived_at');
-            BrandScope::apply($returnedQuery, $request?->user());
 
             if (! $this->canViewAllAssignedLeads($request)) {
+                $this->applyLeadBrandScope($assignedQuery, $request, true);
+                $this->applyLeadBrandScope($returnedQuery, $request, true);
                 $assignedQuery->where('assigned_to', $request?->user()->id);
                 $returnedQuery->where('assigned_to', $request?->user()->id);
+            } else {
+                BrandScope::apply($assignedQuery, $request?->user());
+                BrandScope::apply($returnedQuery, $request?->user());
             }
 
             if ($viewMode === 'new_assigned') {

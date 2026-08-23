@@ -30,7 +30,7 @@ class AgentStatementController extends Controller
         $month = $this->monthFromRequest($request);
         $brandId = BrandScope::canAccessAllBrands($user)
             ? $request->integer('brand_id') ?: null
-            : BrandScope::userBrandId($user);
+            : null;
         $agentId = $canViewAll ? ($request->integer('agent_id') ?: null) : $user?->id;
         $search = trim((string) $request->query('search', ''));
 
@@ -39,7 +39,7 @@ class AgentStatementController extends Controller
             ->where('payment_status', 'Payment Success')
             ->whereBetween('sold_date', [$month->toDateString(), $month->copy()->endOfMonth()->toDateString()])
             ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
-            ->when(! $brandId, fn ($query) => BrandScope::apply($query, $user))
+            ->when(! $brandId && $canViewAll, fn ($query) => BrandScope::apply($query, $user))
             ->when($agentId, function ($query) use ($agentId) {
                 $query->where(function ($query) use ($agentId) {
                     $query->where('agent_id', $agentId)
@@ -71,18 +71,19 @@ class AgentStatementController extends Controller
             ->whereDate('target_month', $month->toDateString())
             ->where('target_type', 'agent')
             ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
-            ->when(! $brandId, fn ($query) => BrandScope::apply($query, $user))
+            ->when(! $brandId && $canViewAll, fn ($query) => BrandScope::apply($query, $user))
             ->when($agentId, fn ($query) => $query->where('user_id', $agentId))
             ->when(! $agentId && $activityAgentIds->isNotEmpty(), fn ($query) => $query->whereIn('user_id', $activityAgentIds))
             ->get();
 
-        $agentTargetRows = $targets->whereNotNull('user_id')->keyBy('user_id');
+        $agentTargetRows = SalesMtdCalculator::agentTargetRows($targets);
+        $selectedTargets = $agentTargetRows->values();
         $rows = SalesMtdCalculator::statementRows($activities, $agentTargetRows)
             ->when($agentId, fn (Collection $rows, int $selectedAgentId) => $rows->where('agent_id', $selectedAgentId)->values())
             ->sortByDesc(fn (array $row) => $row['activity']->sold_date?->timestamp ?? 0)
             ->values();
 
-        $targetAmount = (float) $targets->sum('amount');
+        $targetAmount = (float) $selectedTargets->sum('amount');
         $salesCredit = (float) $rows->sum('amount');
         $totals = [
             'sales_credit' => $salesCredit,
@@ -91,6 +92,11 @@ class AgentStatementController extends Controller
             'service_commission' => (float) $rows->sum('service_commission'),
             'markup_commission' => (float) $rows->sum('markup_commission'),
             'usd_total' => (float) $rows->sum('usd_total'),
+            'php_total' => (float) $rows->sum('php_total'),
+            'exchange_rate' => AppSetting::commissionExchangeRate(),
+            'card_payment_hold_percent' => AppSetting::cardPaymentHoldPercent(),
+            'hold_amount' => (float) $rows->sum('hold_amount'),
+            'net_commission' => (float) $rows->sum('net_commission'),
             'target' => $targetAmount,
             'remaining' => max($targetAmount - $salesCredit, 0),
             'percent' => $targetAmount > 0 ? round(($salesCredit / $targetAmount) * 100, 2) : 0,
@@ -153,7 +159,7 @@ class AgentStatementController extends Controller
     private function paginateCollection(Collection $rows, Request $request): LengthAwarePaginator
     {
         $page = LengthAwarePaginator::resolveCurrentPage();
-        $perPage = AppSetting::recordsPerPage();
+        $perPage = AppSetting::leadsSalesRecordsPerPage();
 
         return new LengthAwarePaginator(
             $rows->forPage($page, $perPage)->values(),

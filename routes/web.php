@@ -37,9 +37,9 @@ use App\Http\Controllers\Admin\ServiceController;
 use App\Http\Controllers\Admin\TeamController;
 use App\Http\Controllers\Admin\CommissionProfileController;
 use App\Http\Controllers\Admin\CommissionSettingController;
+use App\Http\Controllers\Admin\HrisEmployeeLookupController;
 use App\Http\Controllers\Admin\SystemSettingController;
 use App\Http\Controllers\Admin\AnnouncementController as AdminAnnouncementController;
-use App\Models\SalesActivity;
 
 
 Route::get('/', function () {
@@ -121,19 +121,19 @@ Route::get('/dashboard', function () {
         $departmentName === 'Sales' => [
             [
                 'label' => 'Total Assigned Leads',
-                'count' => BrandScope::apply(Lead::query(), $user)->where('assigned_to', $user?->id)->whereNull('returned_at')->whereNull('archived_at')->count(),
+                'count' => Lead::query()->where('assigned_to', $user?->id)->whereNull('returned_at')->whereNull('archived_at')->count(),
                 'hint' => 'Assigned to you',
                 'tone' => 'emerald',
             ],
             [
                 'label' => 'Total Sold Leads',
-                'count' => BrandScope::apply(Lead::query(), $user)->where('assigned_to', $user?->id)->where('sales_stage', 'sold')->whereNull('returned_at')->whereNull('archived_at')->count(),
+                'count' => Lead::query()->where('assigned_to', $user?->id)->where('sales_stage', 'sold')->whereNull('returned_at')->whereNull('archived_at')->count(),
                 'hint' => 'Your closed sales',
                 'tone' => 'sky',
             ],
             [
                 'label' => 'Total Refund',
-                'count' => BrandScope::apply(Lead::query(), $user)->where('assigned_to', $user?->id)->where('sales_stage', 'refunds')->whereNull('returned_at')->whereNull('archived_at')->count(),
+                'count' => Lead::query()->where('assigned_to', $user?->id)->where('sales_stage', 'refunds')->whereNull('returned_at')->whereNull('archived_at')->count(),
                 'hint' => 'Your refund records',
                 'tone' => 'rose',
             ],
@@ -195,55 +195,39 @@ Route::get('/dashboard', function () {
         ],
     };
 
-    $successfulActivities = SalesActivity::query()
-        ->with(['agent', 'frankieAgent'])
-        ->where('payment_status', 'Payment Success');
-    BrandScope::apply($successfulActivities, $user);
+    $canViewAllMtdRows = $isAdmin
+        || $user?->hasPermission('view_all_agent_mtd_directory')
+        || $user?->hasPermission('manage_sales_targets');
+    $includeOwnCreditsAcrossBrands = ! BrandScope::canAccessAllBrands($user)
+        && $departmentName === 'Sales';
+    $salesMtdSummary = SalesMtdCalculator::summary($user, now(), null, $includeOwnCreditsAcrossBrands);
+    $agentCredits = $salesMtdSummary['agentCredits'];
 
-    $topSalesPerformance = SalesActivity::query()
-        ->with(['agent', 'frankieAgent'])
-        ->where('payment_status', 'Payment Success')
-        ->whereBetween('sold_date', [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()])
-        ->tap(fn ($query) => BrandScope::apply($query, $user))
-        ->get()
-        ->flatMap(function (SalesActivity $activity) {
-            $rows = [[
-                'agent' => $activity->agent,
-                'amount' => (float) ($activity->agent_credit_amount ?: $activity->amount),
-            ]];
+    if (! $canViewAllMtdRows && $user) {
+        $agentCredits = $agentCredits->only([$user->id]);
+    }
 
-            if ($activity->frankieAgent && (float) $activity->frankie_credit_amount > 0) {
-                $rows[] = [
-                    'agent' => $activity->frankieAgent,
-                    'amount' => (float) $activity->frankie_credit_amount,
-                ];
-            }
+    $agentsById = \App\Models\User::query()
+        ->whereIn('id', $agentCredits->keys()->filter()->all())
+        ->get(['id', 'first_name', 'last_name'])
+        ->keyBy('id');
 
-            return $rows;
-        })
-        ->groupBy(fn (array $row) => $row['agent']?->id ?: 'unknown')
-        ->map(function ($rows) {
-            $agent = $rows->first()['agent'] ?? null;
+    $topSalesPerformance = $agentCredits
+        ->map(function (array $credit, $agentId) use ($agentsById) {
+            $agent = $agentsById->get((int) $agentId);
 
             return [
                 'agent_name' => trim(($agent?->first_name ?? '') . ' ' . ($agent?->last_name ?? '')) ?: 'Unknown Agent',
-                'total_amount' => $rows->sum('amount'),
+                'total_amount' => (float) ($credit['mtd'] ?? 0),
             ];
         })
         ->sortByDesc('total_amount')
         ->take(5)
         ->values();
 
-    $currentMonthTotal = (clone $successfulActivities)
-        ->whereBetween('sold_date', [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()])
-        ->get()
-        ->sum('amount');
-
+    $currentMonthTotal = (float) $salesMtdSummary['global']['mtd'];
     $lastMonth = now()->subMonthNoOverflow();
-    $lastMonthTotal = (clone $successfulActivities)
-        ->whereBetween('sold_date', [$lastMonth->copy()->startOfMonth()->toDateString(), $lastMonth->copy()->endOfMonth()->toDateString()])
-        ->get()
-        ->sum('amount');
+    $lastMonthTotal = (float) SalesMtdCalculator::summary($user, $lastMonth, null, $includeOwnCreditsAcrossBrands)['global']['mtd'];
 
     $highestMonthlyTotal = max($currentMonthTotal, $lastMonthTotal, 1);
     $monthlySalesComparison = [
@@ -264,8 +248,6 @@ Route::get('/dashboard', function () {
             'text_color' => 'text-amber-600 dark:text-amber-300',
         ],
     ];
-
-    $salesMtdSummary = SalesMtdCalculator::summary($user, now());
 
     $recentNotes = PersonalNote::where('user_id', $user?->id)
         ->latest('updated_at')
@@ -413,6 +395,7 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::put('/commission-settings', [CommissionSettingController::class, 'update'])->name('commission-settings.update');
     Route::get('/system-settings', [SystemSettingController::class, 'edit'])->name('system-settings.edit');
     Route::put('/system-settings', [SystemSettingController::class, 'update'])->name('system-settings.update');
+    Route::post('/system-settings/hris-api-token', [SystemSettingController::class, 'regenerateApiToken'])->name('system-settings.hris-api-token.regenerate');
     Route::get('/services', [ServiceController::class, 'index'])->name('services.index');
     Route::post('/services', [ServiceController::class, 'store'])->name('services.store');
     Route::put('/services/{service}', [ServiceController::class, 'update'])->name('services.update');
@@ -431,6 +414,9 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::get('/trash', [TrashController::class, 'index'])->name('trash.index');
     Route::post('/trash/restore', [TrashController::class, 'restore'])->name('trash.restore');
     Route::delete('/trash/force-delete', [TrashController::class, 'forceDestroy'])->name('trash.force-delete');
+    Route::get('/hris-employees/health', [HrisEmployeeLookupController::class, 'health'])->name('hris-employees.health');
+    Route::get('/hris-employees', [HrisEmployeeLookupController::class, 'index'])->name('hris-employees.index');
+    Route::get('/hris-employees/{hrisEmployeeId}', [HrisEmployeeLookupController::class, 'show'])->name('hris-employees.show');
     Route::get('/users', [UserController::class, 'index'])->name('users.index');
     Route::get('/users/create', [UserController::class, 'create'])->name('users.create');
     Route::post('/users', [UserController::class, 'store'])->name('users.store');

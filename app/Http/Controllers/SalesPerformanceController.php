@@ -20,16 +20,23 @@ class SalesPerformanceController extends Controller
     {
         $user = $request->user();
         $canManageTargets = $this->canManageTargets($user);
-        $canViewAllRows = $user?->role?->name === 'Admin'
+        $canViewDashboard = $user?->role?->name === 'Admin'
+            || $user?->department === 'Sales'
             || $user?->hasPermission('view_sales_performance_mtd')
             || $canManageTargets;
+        $canViewAllRows = $user?->role?->name === 'Admin'
+            || $user?->hasPermission('view_all_agent_mtd_directory')
+            || $canManageTargets;
 
-        abort_unless($canViewAllRows || $user?->department === 'Sales', 403);
+        abort_unless($canViewDashboard, 403);
 
         $month = $this->monthFromRequest($request);
-        $brandId = BrandScope::canAccessAllBrands($user) ? $request->integer('brand_id') ?: null : BrandScope::userBrandId($user);
+        $brandId = BrandScope::canAccessAllBrands($user) ? $request->integer('brand_id') ?: null : null;
         $search = trim((string) $request->query('search', ''));
-        $summary = SalesMtdCalculator::summary($user, $month, $brandId);
+        $includeOwnCreditsAcrossBrands = ! BrandScope::canAccessAllBrands($user)
+            && $user?->department === 'Sales'
+            && ! $brandId;
+        $summary = SalesMtdCalculator::summary($user, $month, $brandId, $includeOwnCreditsAcrossBrands);
         $visibleAgentIds = $summary['agentCredits']->keys()
             ->merge($summary['agentTargets']->keys())
             ->filter()
@@ -67,9 +74,16 @@ class SalesPerformanceController extends Controller
                 'markup_mtd' => 0,
                 'commissionable_service_mtd' => 0,
                 'threshold_applied_amount' => 0,
+                'threshold_applied_service_amount' => 0,
+                'threshold_applied_markup_amount' => 0,
                 'service_commission' => 0,
                 'markup_commission' => 0,
                 'usd_total' => 0,
+                'php_total' => 0,
+                'exchange_rate' => $summary['exchangeRate'],
+                'card_payment_hold_percent' => $summary['cardPaymentHoldPercent'],
+                'hold_amount' => 0,
+                'net_commission' => 0,
                 'service_commission_percent' => SalesMtdCalculator::SERVICE_RATE_LOW,
                 'markup_commission_percent' => (float) ($agent->markup_commission_percent ?? 50),
             ]);
@@ -85,9 +99,16 @@ class SalesPerformanceController extends Controller
                 'markup_mtd' => (float) $credit['markup_mtd'],
                 'commissionable_service_mtd' => (float) ($credit['commissionable_service_mtd'] ?? 0),
                 'threshold_applied_amount' => (float) ($credit['threshold_applied_amount'] ?? 0),
+                'threshold_applied_service_amount' => (float) ($credit['threshold_applied_service_amount'] ?? 0),
+                'threshold_applied_markup_amount' => (float) ($credit['threshold_applied_markup_amount'] ?? 0),
                 'service_commission' => (float) $credit['service_commission'],
                 'markup_commission' => (float) $credit['markup_commission'],
                 'usd_total' => (float) $credit['usd_total'],
+                'php_total' => (float) ($credit['php_total'] ?? 0),
+                'exchange_rate' => (float) ($credit['exchange_rate'] ?? $summary['exchangeRate']),
+                'card_payment_hold_percent' => (float) ($credit['card_payment_hold_percent'] ?? $summary['cardPaymentHoldPercent']),
+                'hold_amount' => (float) ($credit['hold_amount'] ?? 0),
+                'net_commission' => (float) ($credit['net_commission'] ?? 0),
                 'service_commission_percent' => (float) ($credit['service_commission_percent'] ?? SalesMtdCalculator::SERVICE_RATE_LOW),
                 'commission_profile_name' => (string) ($credit['commission_profile_name'] ?? $agent->commissionProfile?->name ?? 'Default Service Tiers'),
                 'markup_commission_percent' => (float) ($credit['markup_commission_percent'] ?? $agent->markup_commission_percent ?? 50),
@@ -117,18 +138,18 @@ class SalesPerformanceController extends Controller
     {
         abort_unless($this->canManageTargets($request->user()), 403);
 
+        $request->merge([
+            'global_target' => $this->normalizedAmount($request->input('global_target')),
+            'remote_target' => $this->normalizedAmount($request->input('remote_target')),
+            'site_target' => $this->normalizedAmount($request->input('site_target')),
+        ]);
+
         $validated = $request->validate([
             'month' => ['required', 'date_format:Y-m'],
             'brand_id' => ['nullable', 'exists:brands,id'],
             'global_target' => ['nullable', 'numeric', 'min:0'],
             'remote_target' => ['nullable', 'numeric', 'min:0'],
             'site_target' => ['nullable', 'numeric', 'min:0'],
-            'agents' => ['nullable', 'array'],
-            'agents.*.id' => ['required', 'exists:users,id'],
-            'agents.*.target' => ['nullable', 'numeric', 'min:0'],
-            'agents.*.markup_commission_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'agents.*.commission_threshold_amount' => ['nullable', 'numeric', 'min:0'],
-            'agents.*.is_commission_threshold_exempt' => ['nullable', 'boolean'],
         ]);
 
         $month = Carbon::createFromFormat('!Y-m', $validated['month'])->startOfMonth();
@@ -154,53 +175,6 @@ class SalesPerformanceController extends Controller
             );
         }
 
-        // 'exists:users,id' alone would let any user id be posted, including
-        // agents in another brand or non-Sales accounts. Resolve the set the
-        // caller may actually touch before writing anything.
-        $submittedAgentIds = collect($validated['agents'] ?? [])
-            ->pluck('id')
-            ->filter()
-            ->map(fn ($id) => (int) $id)
-            ->unique();
-
-        $editableAgentIds = $submittedAgentIds->isEmpty()
-            ? collect()
-            : User::query()
-                ->whereIn('id', $submittedAgentIds->all())
-                ->where('department', 'Sales')
-                ->when(
-                    ! BrandScope::canAccessAllBrands($request->user()),
-                    fn ($query) => $query->where('brand_id', $brandId)
-                )
-                ->pluck('id')
-                ->map(fn ($id) => (int) $id);
-
-        foreach ($validated['agents'] ?? [] as $agentPayload) {
-            if (! $editableAgentIds->contains((int) $agentPayload['id'])) {
-                continue;
-            }
-
-            SalesTarget::updateOrCreate(
-                [
-                    'brand_id' => $brandId,
-                    'target_month' => $month->toDateString(),
-                    'target_type' => 'agent',
-                    'user_id' => $agentPayload['id'],
-                ],
-                [
-                    'amount' => $agentPayload['target'] ?? 0,
-                ]
-            );
-
-            User::query()
-                ->whereKey($agentPayload['id'])
-                ->update([
-                    'markup_commission_percent' => $agentPayload['markup_commission_percent'] ?? 50,
-                    'commission_threshold_amount' => $agentPayload['commission_threshold_amount'] ?? SalesMtdCalculator::DEFAULT_SERVICE_THRESHOLD,
-                    'is_commission_threshold_exempt' => filter_var($agentPayload['is_commission_threshold_exempt'] ?? false, FILTER_VALIDATE_BOOLEAN),
-                ]);
-        }
-
         return redirect()
             ->route('reports.sales-performance.index', [
                 'month' => $month->format('Y-m'),
@@ -212,6 +186,11 @@ class SalesPerformanceController extends Controller
     private function canManageTargets(?User $user): bool
     {
         return $user?->role?->name === 'Admin' || (bool) $user?->hasPermission('manage_sales_targets');
+    }
+
+    private function normalizedAmount(mixed $value): mixed
+    {
+        return is_string($value) ? str_replace(',', '', $value) : $value;
     }
 
     private function monthFromRequest(Request $request): Carbon
@@ -228,7 +207,7 @@ class SalesPerformanceController extends Controller
     private function paginateCollection(Collection $rows, Request $request): LengthAwarePaginator
     {
         $page = LengthAwarePaginator::resolveCurrentPage();
-        $perPage = \App\Models\AppSetting::recordsPerPage();
+        $perPage = \App\Models\AppSetting::leadsSalesRecordsPerPage();
 
         return new LengthAwarePaginator(
             $rows->forPage($page, $perPage)->values(),

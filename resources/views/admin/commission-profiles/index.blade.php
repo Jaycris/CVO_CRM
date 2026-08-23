@@ -126,7 +126,7 @@
                         </div>
 
                         <div class="flex justify-end">
-                            <button type="submit" class="rounded-xl bg-[var(--brand-primary)] px-5 py-3 text-sm font-bold text-[var(--brand-primary-contrast)] shadow-sm hover:opacity-90">
+                            <button type="submit" class="rounded-xl bg-[var(--brand-primary)] px-5 py-3 text-sm font-bold text-white shadow-sm hover:opacity-90">
                                 Create Profile
                             </button>
                         </div>
@@ -170,7 +170,7 @@
                                 <button type="button" class="rounded-xl border border-[var(--brand-primary)] px-4 py-2 text-sm font-bold text-[var(--brand-primary)] hover:bg-[var(--brand-soft)]" data-add-rule>
                                     + Add Rule
                                 </button>
-                                <button type="submit" class="rounded-xl bg-[var(--brand-primary)] px-5 py-2 text-sm font-bold text-[var(--brand-primary-contrast)] hover:opacity-90">
+                                <button type="submit" class="rounded-xl bg-[var(--brand-primary)] px-5 py-2 text-sm font-bold text-white hover:opacity-90">
                                     Save Profile
                                 </button>
                             </div>

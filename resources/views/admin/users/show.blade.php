@@ -45,12 +45,12 @@
                 </div>
 
                 <div>
-                    <dt class="text-sm font-medium text-slate-500">Work Type</dt>
+                    <dt class="text-sm font-medium text-slate-500">Work Arrangement</dt>
                     <dd class="mt-1 font-semibold text-slate-900">
                         {{ match($user->work_type) {
                             'remote' => 'Remote',
+                            'hybrid' => 'Hybrid',
                             'site' => 'On-site',
-                            'part_time' => 'Part-time',
                             default => 'Not set',
                         } }}
                     </dd>

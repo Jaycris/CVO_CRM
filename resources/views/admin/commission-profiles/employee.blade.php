@@ -2,6 +2,7 @@
     @php
         $fullName = trim($user->first_name . ' ' . $user->last_name);
         $targetAmount = old('target', $target?->amount ?? 0);
+        $formattedTargetAmount = number_format((float) str_replace(',', '', (string) $targetAmount), 2);
         $selectedProfileId = old('commission_profile_id', $user->commission_profile_id);
         $markupPercent = old('markup_commission_percent', $user->markup_commission_percent ?? 50);
         $thresholdAmount = old('commission_threshold_amount', $user->commission_threshold_amount ?? 500);
@@ -94,9 +95,14 @@
                     </div>
 
                     <div class="rounded-2xl bg-slate-50 p-5 dark:bg-zinc-950">
-                        <p class="text-xs font-semibold uppercase text-slate-400 dark:text-zinc-500">Work Type</p>
+                        <p class="text-xs font-semibold uppercase text-slate-400 dark:text-zinc-500">Work Arrangement</p>
                         <p class="mt-2 text-lg font-bold text-slate-950 dark:text-zinc-100">
-                            {{ $user->work_type ? ucfirst(str_replace('-', ' ', $user->work_type)) : 'Not set' }}
+                            {{ match($user->work_type) {
+                                'remote' => 'Remote',
+                                'hybrid' => 'Hybrid',
+                                'site' => 'On-site',
+                                default => 'Not set',
+                            } }}
                         </p>
                         <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Set in the user record.</p>
                     </div>
@@ -110,17 +116,17 @@
 
                     <div>
                         <label class="block text-sm font-semibold text-slate-700 dark:text-zinc-200">Agent Target</label>
-                        <input type="number" min="0" step="0.01" name="target" value="{{ $targetAmount }}"
+                        <input type="text" inputmode="decimal" name="target" value="{{ $formattedTargetAmount }}"
                                x-bind:disabled="!editing"
                                class="mt-2 w-full rounded-xl border-slate-300 shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] disabled:bg-slate-100 disabled:text-slate-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:disabled:bg-zinc-800">
                     </div>
 
                     <div class="lg:col-span-2">
-                        <label class="block text-sm font-semibold text-slate-700 dark:text-zinc-200">Service Profile</label>
+                        <label class="block text-sm font-semibold text-slate-700 dark:text-zinc-200">Commission Scheme</label>
                         <select name="commission_profile_id"
                                 x-bind:disabled="!editing"
                                 class="mt-2 w-full rounded-xl border-slate-300 shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] disabled:bg-slate-100 disabled:text-slate-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:disabled:bg-zinc-800">
-                            <option value="">Use default profile</option>
+                            <option value="">Use default scheme</option>
                             @foreach ($profiles as $profile)
                                 <option value="{{ $profile->id }}" @selected((string) $selectedProfileId === (string) $profile->id)>
                                     {{ $profile->name }}{{ $profile->is_default ? ' (Default)' : '' }}
@@ -167,7 +173,7 @@
 
             <div class="space-y-6">
                 <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                    <h2 class="text-lg font-bold text-slate-950 dark:text-zinc-100">Current Service Rules</h2>
+                    <h2 class="text-lg font-bold text-slate-950 dark:text-zinc-100">Current Commission Rules</h2>
                     <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">{{ $currentProfile?->name ?? 'No profile selected' }}</p>
 
                     <div class="mt-5 space-y-3">
@@ -182,7 +188,7 @@
                             </div>
                         @empty
                             <p class="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500 dark:bg-zinc-950 dark:text-zinc-400">
-                                No service rules available.
+                                No commission rules available.
                             </p>
                         @endforelse
                     </div>

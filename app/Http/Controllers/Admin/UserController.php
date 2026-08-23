@@ -65,9 +65,10 @@ class UserController extends Controller
             'first_name' => ['required', 'string', 'max:255'],
             'last_name' => ['required', 'string', 'max:255'],
             'department' => ['required', 'string', 'max:255', Rule::in($this->departments())],
-            'work_type' => ['nullable', Rule::in(['remote', 'site', 'part_time'])],
+            'work_type' => ['nullable', Rule::in(['remote', 'site', 'hybrid'])],
             'email' => ['required', 'email', 'unique:users,email'],
             'phone_number' => ['nullable', 'required_if:department,Sales', 'string', 'max:50'],
+            'hris_employee_id' => ['nullable', 'string', 'max:50'],
         ], [
             'role_id.exists' => 'Please choose a role that belongs to the selected department.',
         ]);
@@ -85,6 +86,7 @@ class UserController extends Controller
             'work_type'     => $validated['work_type'] ?? null,
             'email'         =>  $validated['email'],
             'phone_number' => $validated['phone_number'] ?? null,
+            'hris_employee_id' => $validated['hris_employee_id'] ?? null,
 
             // Temporary random password
             'password'      => Hash::make(Str::random(32)),
@@ -146,9 +148,10 @@ class UserController extends Controller
             'first_name' => ['required', 'string', 'max:255'],
             'last_name' => ['required', 'string', 'max:255'],
             'department' => ['required', 'string', 'max:255', Rule::in($this->departments())],
-            'work_type' => ['nullable', Rule::in(['remote', 'site', 'part_time'])],
+            'work_type' => ['nullable', Rule::in(['remote', 'site', 'hybrid'])],
             'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($user)],
             'phone_number' => ['nullable', 'required_if:department,Sales', 'string', 'max:50'],
+            'hris_employee_id' => ['nullable', 'string', 'max:50'],
             'final_permissions' => ['nullable', 'array'],
             'final_permissions.*' => ['string'],
         ]);

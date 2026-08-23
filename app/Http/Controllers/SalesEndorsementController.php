@@ -22,7 +22,7 @@ class SalesEndorsementController extends Controller
         $search = trim((string) $request->query('search', ''));
 
         $endorsements = SalesEndorsement::with(['agent', 'frankieAgent', 'brand'])
-            ->tap(fn ($query) => $this->applyEndorsementBrandScope($query, $request))
+            ->tap(fn ($query) => $this->applyEndorsementBrandScope($query, $request, ! $this->canViewAllEndorsements($request)))
             ->when(! $this->canViewAllEndorsements($request), fn ($query) => $query->where('agent_id', $request->user()->id))
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($query) use ($search) {
@@ -41,7 +41,7 @@ class SalesEndorsementController extends Controller
                 });
             })
             ->latest()
-            ->paginate(\App\Models\AppSetting::recordsPerPage())
+            ->paginate(\App\Models\AppSetting::leadsSalesRecordsPerPage())
             ->withQueryString();
 
         return view('sales-endorsements.index', [
@@ -91,7 +91,7 @@ class SalesEndorsementController extends Controller
             ? Lead::find($validated['lead_id'])
             : null;
 
-        abort_if($lead && ! $this->userCanAccessBrand($request, $lead->brand_id), 403);
+        abort_if($lead && ! $this->userCanEndorseLead($request, $lead), 403);
 
         $brandId = $lead?->brand_id ?? BrandScope::userBrandId($request->user());
         $frankieAgent = $request->boolean('has_frankie')
@@ -187,8 +187,11 @@ class SalesEndorsementController extends Controller
 
     private function leadOptions(Request $request): array
     {
-        return Lead::query()
-            ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
+        $query = Lead::query();
+
+        $this->applyLeadOptionBrandScope($query, $request);
+
+        return $query
             ->when($request->user()?->role?->name !== 'Admin', function ($query) use ($request) {
                 $query->where(function ($query) use ($request) {
                     $query->where('assigned_to', $request->user()->id)
@@ -229,15 +232,42 @@ class SalesEndorsementController extends Controller
             ->all();
     }
 
-    private function applyEndorsementBrandScope($query, Request $request): void
+    private function applyEndorsementBrandScope($query, Request $request, bool $includeOwnEndorsements = false): void
     {
+        if ($includeOwnEndorsements && ! BrandScope::canAccessAllBrands($request->user())) {
+            $query->where(function ($query) use ($request) {
+                $query->where('brand_id', $request->user()?->brand_id)
+                    ->orWhere('agent_id', $request->user()?->id);
+            });
+
+            return;
+        }
+
         BrandScope::apply($query, $request->user());
+    }
+
+    private function applyLeadOptionBrandScope($query, Request $request): void
+    {
+        if (BrandScope::canAccessAllBrands($request->user())) {
+            return;
+        }
+
+        $query->where(function ($query) use ($request) {
+            $query->where('brand_id', $request->user()?->brand_id)
+                ->orWhere('assigned_to', $request->user()?->id);
+        });
     }
 
     private function userCanAccessBrand(Request $request, ?int $brandId): bool
     {
         return BrandScope::canAccessAllBrands($request->user())
             || (int) $request->user()?->brand_id === (int) $brandId;
+    }
+
+    private function userCanEndorseLead(Request $request, Lead $lead): bool
+    {
+        return $this->userCanAccessBrand($request, $lead->brand_id)
+            || (int) $lead->assigned_to === (int) $request->user()?->id;
     }
 
     private function notifyFinanceUsers(SalesEndorsement $endorsement): void

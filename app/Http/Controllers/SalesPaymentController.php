@@ -41,7 +41,7 @@ class SalesPaymentController extends Controller
                 });
             })
             ->latest()
-            ->paginate(\App\Models\AppSetting::recordsPerPage())
+            ->paginate(\App\Models\AppSetting::leadsSalesRecordsPerPage())
             ->withQueryString();
 
         return view('sales-payments.index', [

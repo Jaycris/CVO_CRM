@@ -42,8 +42,8 @@ class CommissionProfileController extends Controller
             ->whereDate('target_month', $monthStart->toDateString())
             ->where('target_type', 'agent')
             ->whereNotNull('user_id')
-            ->get()
-            ->keyBy('user_id');
+            ->get();
+        $targets = \App\Support\SalesMtdCalculator::agentTargetRows($targets);
 
         return view('admin.commission-profiles.index', [
             'brands' => $brands,
@@ -204,6 +204,10 @@ class CommissionProfileController extends Controller
     {
         $this->ensureAdmin($request);
 
+        $request->merge([
+            'target' => $this->normalizedAmount($request->input('target')),
+        ]);
+
         $validated = $request->validate([
             'month' => ['required', 'regex:/^\d{4}-\d{2}$/'],
             'commission_profile_id' => ['nullable', Rule::exists('commission_profiles', 'id')],
@@ -288,5 +292,10 @@ class CommissionProfileController extends Controller
     private function ensureAdmin(Request $request): void
     {
         abort_unless($request->user()?->role?->name === 'Admin', 403);
+    }
+
+    private function normalizedAmount(mixed $value): mixed
+    {
+        return is_string($value) ? str_replace(',', '', $value) : $value;
     }
 }

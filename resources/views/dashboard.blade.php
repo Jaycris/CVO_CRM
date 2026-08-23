@@ -163,7 +163,7 @@
                     <p class="mt-2 text-sm text-slate-500 dark:text-zinc-400">
                         Remaining Target MTD:
                         <span class="font-bold text-rose-600 dark:text-rose-300">${{ number_format((float) $salesMtdGlobal['remaining'], 2) }}</span>.
-                        PHP total and exchange-rate details are viewable in CreatiVision HRIS.
+                        PHP commission totals use the exchange rate saved in Commission Settings.
                     </p>
                 </div>
 
@@ -209,7 +209,7 @@
             <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800 xl:col-span-2">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                        <h3 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Top 5 Sales Performance of the Month</h3>
+                        <h3 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Sales Dashboard MTD</h3>
                         <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Successful payment totals by agent.</p>
                     </div>
                     <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-400/15 dark:text-amber-200">

@@ -32,6 +32,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'work_type',
         'email',
         'phone_number',
+        'hris_employee_id',
         'service_commission_percent',
         'commission_profile_id',
         'markup_commission_percent',
