@@ -46,7 +46,8 @@ class SalesEndorsementController extends Controller
 
         return view('sales-endorsements.index', [
             'endorsements' => $endorsements,
-            'canSubmitEndorsement' => $this->userHasPermission($request, 'submit_sales_endorsement'),
+            'canSubmitEndorsement' => $this->userHasPermission($request, 'submit_sales_endorsement')
+                && (bool) $request->user()?->is_commission_eligible,
             'canDeleteEndorsements' => $this->userHasPermission($request, 'delete_sales_endorsements'),
             'isAdmin' => $request->user()?->role?->name === 'Admin',
             'search' => $search,
@@ -56,6 +57,7 @@ class SalesEndorsementController extends Controller
     public function create(Request $request): View
     {
         abort_unless($this->userHasPermission($request, 'submit_sales_endorsement'), 403);
+        abort_unless($request->user()?->is_commission_eligible, 403);
 
         return view('sales-endorsements.create', [
             'paymentOptions' => ['First Payment', 'Recurring', 'Final Payment', 'Full Payment'],
@@ -68,6 +70,7 @@ class SalesEndorsementController extends Controller
     public function store(Request $request): RedirectResponse
     {
         abort_unless($this->userHasPermission($request, 'submit_sales_endorsement'), 403);
+        abort_unless($request->user()?->is_commission_eligible, 403);
 
         $validated = $request->validate([
             'has_frankie' => ['nullable', 'boolean'],
@@ -103,6 +106,7 @@ class SalesEndorsementController extends Controller
             && (
                 (int) $frankieAgent->id === (int) $request->user()->id
                 || $frankieAgent->department !== 'Sales'
+                || ! $frankieAgent->is_commission_eligible
                 || ! $this->userCanAccessBrand($request, $frankieAgent->brand_id)
             ),
             403
@@ -217,6 +221,7 @@ class SalesEndorsementController extends Controller
             ->with(['brand', 'role'])
             ->whereNull('suspended_at')
             ->where('department', 'Sales')
+            ->where('is_commission_eligible', true)
             ->whereKeyNot($request->user()->id)
             ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
             ->orderBy('first_name')

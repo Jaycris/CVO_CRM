@@ -9,7 +9,9 @@
     @php
         $headBrand = auth()->user()?->brand;
         $headBrandName = $headBrand?->imprint_name ?? 'CreatiVision Outsourcing';
-        $headAppName = $headBrand?->crm_display_name ?: ($headBrandName === 'CreatiVision Outsourcing' ? 'CreatiVision CRM' : $headBrandName . ' CRM');
+        $headAppName = $headBrandName === 'CreatiVision Outsourcing'
+            ? 'VisionFlow | CreatiVision Outsourcing'
+            : ($headBrand?->crm_display_name ?: $headBrandName . ' CRM');
         $siteIdentityLogo = $headBrand?->site_logo_path
             ? asset('storage/' . $headBrand->site_logo_path)
             : ($headBrand?->logo_path

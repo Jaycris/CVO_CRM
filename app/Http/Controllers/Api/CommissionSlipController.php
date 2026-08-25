@@ -64,6 +64,8 @@ class CommissionSlipController extends Controller
 
         $agentTargetRows = SalesMtdCalculator::agentTargetRows($targets);
         $selectedTargets = $agentTargetRows->values();
+        $isCommissionEligible = (bool) $agent->is_commission_eligible;
+        $agentTargetAmount = $isCommissionEligible ? (float) $selectedTargets->sum('amount') : 0.0;
         $rows = SalesMtdCalculator::statementRows($activities, $agentTargetRows)
             ->where('agent_id', $agent->id)
             ->sortByDesc(fn (array $row) => $row['activity']->sold_date?->timestamp ?? 0)
@@ -74,26 +76,39 @@ class CommissionSlipController extends Controller
                 'name' => trim($agent->first_name.' '.$agent->last_name),
                 'team' => $agent->team?->name,
                 'work_type' => $this->workArrangementLabel($agent->work_type),
-                'commission_scheme' => $this->commissionScheme($agent),
-                'agent_target' => round((float) $selectedTargets->sum('amount'), 2),
+                'is_commission_eligible' => $isCommissionEligible,
+                'commission_scheme' => $this->commissionScheme($agent, $isCommissionEligible),
+                'agent_target' => round($agentTargetAmount, 2),
+                'commission_threshold_amount' => round($this->thresholdAmount($agent, $isCommissionEligible), 2),
+                'is_commission_threshold_exempt' => (bool) $agent->is_commission_threshold_exempt,
             ],
             'month' => $month->format('Y-m'),
             'hris_employee_id' => $agent->hris_employee_id,
-            'summary' => $this->summary($rows, $selectedTargets, $agent),
+            'is_commission_eligible' => $isCommissionEligible,
+            'agent_target' => round($agentTargetAmount, 2),
+            'commission_scheme' => $this->commissionScheme($agent, $isCommissionEligible),
+            'commission_threshold_amount' => round($this->thresholdAmount($agent, $isCommissionEligible), 2),
+            'is_commission_threshold_exempt' => (bool) $agent->is_commission_threshold_exempt,
+            'summary' => $this->summary($rows, $agentTargetAmount, $agent, $isCommissionEligible),
             'transactions' => $this->transactions($rows),
         ]);
     }
 
-    private function summary(Collection $rows, Collection $targets, User $agent): array
+    private function summary(Collection $rows, float $targetAmount, User $agent, bool $isCommissionEligible): array
     {
-        $targetAmount = (float) $targets->sum('amount');
         $mtd = (float) $rows->sum('amount');
 
         return [
             'mtd' => round($mtd, 2),
             'target' => round($targetAmount, 2),
             'agent_target' => round($targetAmount, 2),
-            'commission_scheme' => $this->commissionScheme($agent),
+            'is_commission_eligible' => $isCommissionEligible,
+            'commission_scheme' => $this->commissionScheme($agent, $isCommissionEligible),
+            'commission_threshold_amount' => round($this->thresholdAmount($agent, $isCommissionEligible), 2),
+            'is_commission_threshold_exempt' => (bool) $agent->is_commission_threshold_exempt,
+            'threshold_applied_amount' => round((float) $rows->sum('threshold_applied_amount'), 2),
+            'threshold_applied_service_amount' => round((float) $rows->sum('threshold_applied_service_amount'), 2),
+            'threshold_applied_markup_amount' => round((float) $rows->sum('threshold_applied_markup_amount'), 2),
             'mtd_percent' => $targetAmount > 0 ? round(($mtd / $targetAmount) * 100, 2) : 0,
             'service_commission' => round((float) $rows->sum('service_commission'), 2),
             'markup_commission' => round((float) $rows->sum('markup_commission'), 2),
@@ -122,6 +137,9 @@ class CommissionSlipController extends Controller
                     'sale_amount' => round((float) $row['sale_amount'], 2),
                     'service_amount' => round((float) $row['service_amount'], 2),
                     'markup_amount' => round((float) $row['markup_amount'], 2),
+                    'threshold_applied_amount' => round((float) ($row['threshold_applied_amount'] ?? 0), 2),
+                    'threshold_applied_service_amount' => round((float) ($row['threshold_applied_service_amount'] ?? 0), 2),
+                    'threshold_applied_markup_amount' => round((float) ($row['threshold_applied_markup_amount'] ?? 0), 2),
                     'service_commission' => round((float) $row['service_commission'], 2),
                     'markup_commission' => round((float) $row['markup_commission'], 2),
                     'usd_total' => round((float) $row['usd_total'], 2),
@@ -144,8 +162,12 @@ class CommissionSlipController extends Controller
         };
     }
 
-    private function commissionScheme(User $agent): array
+    private function commissionScheme(User $agent, bool $isCommissionEligible): ?array
     {
+        if (! $isCommissionEligible) {
+            return null;
+        }
+
         $profile = $agent->commissionProfile;
 
         return [
@@ -165,5 +187,14 @@ class CommissionSlipController extends Controller
                     ['minimum_mtd_percent' => 100, 'commission_percent' => 25],
                 ],
         ];
+    }
+
+    private function thresholdAmount(User $agent, bool $isCommissionEligible): float
+    {
+        if (! $isCommissionEligible || $agent->is_commission_threshold_exempt) {
+            return 0;
+        }
+
+        return (float) ($agent->commission_threshold_amount ?? SalesMtdCalculator::DEFAULT_SERVICE_THRESHOLD);
     }
 }

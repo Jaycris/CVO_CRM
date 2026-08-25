@@ -112,7 +112,10 @@ class AgentStatementController extends Controller
             ? User::query()
                 ->with('brand')
                 ->where(function ($query) use ($agentIds) {
-                    $query->where('department', 'Sales');
+                    $query->where(function ($query) {
+                        $query->where('department', 'Sales')
+                            ->where('is_commission_eligible', true);
+                    });
 
                     if ($agentIds->isNotEmpty()) {
                         $query->orWhereIn('id', $agentIds);

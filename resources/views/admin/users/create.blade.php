@@ -44,10 +44,14 @@
                           department: @js(old('department', '')),
                           brandId: @js((string) old('brand_id', $defaultBrandId)),
                           roleId: @js(old('role_id', '')),
+                          commissionEligible: @js((bool) old('is_commission_eligible', old('department') === 'Sales')),
                           changeDepartment() {
                               const selectedRole = this.$refs.roleSelect?.selectedOptions?.[0];
                               if (selectedRole && selectedRole.dataset.department !== this.department) {
                                   this.roleId = '';
+                              }
+                              if (this.department === 'Sales') {
+                                  this.commissionEligible = true;
                               }
                           },
                           ...window.hrisEmployeeLookup({
@@ -153,6 +157,19 @@
                         </p>
                         <x-input-error :messages="$errors->get('work_type')" class="mt-2" />
                     </div>
+
+                    <label class="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <input type="hidden" name="is_commission_eligible" value="0">
+                        <input type="checkbox"
+                               name="is_commission_eligible"
+                               value="1"
+                               x-model="commissionEligible"
+                               class="mt-1 rounded border-slate-300 text-emerald-700 focus:ring-emerald-600">
+                        <span>
+                            <span class="block text-sm font-semibold text-slate-900">Eligible for Sales Commission</span>
+                            <span class="block text-xs leading-5 text-slate-500">Allow this user to submit credited sales and appear in commission reports.</span>
+                        </span>
+                    </label>
 
                     <div>
                         <label for="email" class="mb-2 block text-sm font-medium text-slate-700">

@@ -114,11 +114,12 @@ class SalesPerformanceController extends Controller
                 'markup_commission_percent' => (float) ($credit['markup_commission_percent'] ?? $agent->markup_commission_percent ?? 50),
                 'commission_threshold_amount' => (float) ($agent->commission_threshold_amount ?? SalesMtdCalculator::DEFAULT_SERVICE_THRESHOLD),
                 'is_commission_threshold_exempt' => (bool) $agent->is_commission_threshold_exempt,
+                'is_commission_eligible' => (bool) $agent->is_commission_eligible,
                 'target' => $targetAmount,
                 'remaining' => max($targetAmount - $mtd, 0),
                 'percent' => $targetAmount > 0 ? round(($mtd / $targetAmount) * 100, 2) : 0,
             ];
-        });
+        })->filter(fn (array $row) => $row['is_commission_eligible'] || $row['mtd'] > 0)->values();
 
         $agentRows = $this->paginateCollection($agentRows, $request);
         $brands = BrandScope::canAccessAllBrands($user) ? Brand::orderBy('imprint_name')->get() : collect();

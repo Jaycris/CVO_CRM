@@ -125,6 +125,7 @@ class CommissionProfileController extends Controller
             'users.*.markup_commission_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'users.*.commission_threshold_amount' => ['nullable', 'numeric', 'min:0'],
             'users.*.is_commission_threshold_exempt' => ['nullable', 'boolean'],
+            'users.*.is_commission_eligible' => ['nullable', 'boolean'],
         ]);
 
         $monthStart = Carbon::createFromFormat('!Y-m', $validated['month'])->startOfMonth();
@@ -144,6 +145,9 @@ class CommissionProfileController extends Controller
                     'markup_commission_percent' => (float) ($config['markup_commission_percent'] ?? 50),
                     'commission_threshold_amount' => $isExempt ? 0 : (float) ($config['commission_threshold_amount'] ?? 500),
                     'is_commission_threshold_exempt' => $isExempt,
+                    'is_commission_eligible' => array_key_exists('is_commission_eligible', $config)
+                        ? (bool) $config['is_commission_eligible']
+                        : (bool) $user->is_commission_eligible,
                 ]);
 
                 SalesTarget::updateOrCreate(
@@ -215,6 +219,7 @@ class CommissionProfileController extends Controller
             'markup_commission_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'commission_threshold_amount' => ['nullable', 'numeric', 'min:0'],
             'is_commission_threshold_exempt' => ['nullable', 'boolean'],
+            'is_commission_eligible' => ['nullable', 'boolean'],
         ]);
 
         $monthStart = Carbon::createFromFormat('!Y-m', $validated['month'])->startOfMonth();
@@ -226,6 +231,7 @@ class CommissionProfileController extends Controller
                 'markup_commission_percent' => (float) ($validated['markup_commission_percent'] ?? 50),
                 'commission_threshold_amount' => $isExempt ? 0 : (float) ($validated['commission_threshold_amount'] ?? 500),
                 'is_commission_threshold_exempt' => $isExempt,
+                'is_commission_eligible' => (bool) ($validated['is_commission_eligible'] ?? false),
             ]);
 
             SalesTarget::updateOrCreate(

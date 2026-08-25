@@ -38,6 +38,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'markup_commission_percent',
         'commission_threshold_amount',
         'is_commission_threshold_exempt',
+        'is_commission_eligible',
         'profile_photo_path',
         'password',
         'password_created_at',
@@ -171,6 +172,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'markup_commission_percent' => 'decimal:2',
             'commission_threshold_amount' => 'decimal:2',
             'is_commission_threshold_exempt' => 'boolean',
+            'is_commission_eligible' => 'boolean',
             'password' => 'hashed',
         ];
     }

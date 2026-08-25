@@ -7,6 +7,7 @@
         $markupPercent = old('markup_commission_percent', $user->markup_commission_percent ?? 50);
         $thresholdAmount = old('commission_threshold_amount', $user->commission_threshold_amount ?? 500);
         $isExempt = (bool) old('is_commission_threshold_exempt', $user->is_commission_threshold_exempt);
+        $isCommissionEligible = (bool) old('is_commission_eligible', $user->is_commission_eligible);
         $currentProfile = $profiles->firstWhere('id', (int) $selectedProfileId) ?? $profiles->firstWhere('is_default', true) ?? $profiles->first();
     @endphp
 
@@ -46,7 +47,7 @@
         <div class="grid gap-6 xl:grid-cols-[1fr_360px]">
             <form method="POST"
                   action="{{ route('admin.users.commission-profile.update', $user) }}"
-                  x-data="{ editing: false, exempt: @js($isExempt) }"
+                  x-data="{ editing: false, exempt: @js($isExempt), commissionEligible: @js($isCommissionEligible) }"
                   class="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                 @csrf
                 @method('PUT')
@@ -91,6 +92,9 @@
                         <p class="mt-2 text-lg font-bold text-slate-950 dark:text-zinc-100">{{ $fullName }}</p>
                         <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
                             {{ $user->role?->name ?? 'No role' }} / {{ $user->brand?->imprint_name ?? 'CreatiVision Outsourcing' }}
+                        </p>
+                        <p class="mt-3 inline-flex rounded-full px-3 py-1 text-xs font-bold {{ $isCommissionEligible ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200' : 'bg-slate-200 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300' }}">
+                            {{ $isCommissionEligible ? 'Commission Eligible' : 'Not Commission Eligible' }}
                         </p>
                     </div>
 
@@ -157,6 +161,19 @@
                     </div>
 
                     <label class="flex items-center gap-3 rounded-2xl border border-slate-200 p-4 dark:border-zinc-800 lg:col-span-2">
+                        <input type="hidden" name="is_commission_eligible" value="0">
+                        <input type="checkbox" name="is_commission_eligible" value="1"
+                               x-model="commissionEligible"
+                               x-bind:disabled="!editing"
+                               class="rounded border-slate-300 text-[var(--brand-primary)] shadow-sm focus:ring-[var(--brand-primary)] disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950"
+                               @checked($isCommissionEligible)>
+                        <span>
+                            <span class="block font-semibold text-slate-900 dark:text-zinc-100">Eligible for Sales Commission</span>
+                            <span class="block text-sm text-slate-500 dark:text-zinc-400">If checked, this employee can submit credited sales and mirror commission setup to HRIS.</span>
+                        </span>
+                    </label>
+
+                    <label class="flex items-center gap-3 rounded-2xl border border-slate-200 p-4 dark:border-zinc-800 lg:col-span-2">
                         <input type="hidden" name="is_commission_threshold_exempt" value="0">
                         <input type="checkbox" name="is_commission_threshold_exempt" value="1"
                                x-model="exempt"
@@ -168,30 +185,42 @@
                             <span class="block text-sm text-slate-500 dark:text-zinc-400">If checked, the monthly threshold deduction will not apply to this employee.</span>
                         </span>
                     </label>
+
+                    <p x-show="!commissionEligible"
+                       x-cloak
+                       class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100 lg:col-span-2">
+                        This setup is saved, but the employee is not active for sales commission until eligibility is enabled.
+                    </p>
                 </div>
             </form>
 
             <div class="space-y-6">
                 <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                     <h2 class="text-lg font-bold text-slate-950 dark:text-zinc-100">Current Commission Rules</h2>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">{{ $currentProfile?->name ?? 'No profile selected' }}</p>
+                    @if ($isCommissionEligible)
+                        <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">{{ $currentProfile?->name ?? 'No profile selected' }}</p>
 
-                    <div class="mt-5 space-y-3">
-                        @forelse (($currentProfile?->rules ?? collect()) as $rule)
-                            <div class="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-sm dark:bg-zinc-950">
-                                <span class="font-semibold text-slate-700 dark:text-zinc-200">
-                                    {{ rtrim(rtrim(number_format($rule->minimum_mtd_percent, 2), '0'), '.') }}% MTD
-                                </span>
-                                <span class="font-bold text-emerald-700 dark:text-emerald-200">
-                                    {{ rtrim(rtrim(number_format($rule->commission_percent, 2), '0'), '.') }}%
-                                </span>
-                            </div>
-                        @empty
-                            <p class="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500 dark:bg-zinc-950 dark:text-zinc-400">
-                                No commission rules available.
-                            </p>
-                        @endforelse
-                    </div>
+                        <div class="mt-5 space-y-3">
+                            @forelse (($currentProfile?->rules ?? collect()) as $rule)
+                                <div class="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-sm dark:bg-zinc-950">
+                                    <span class="font-semibold text-slate-700 dark:text-zinc-200">
+                                        {{ rtrim(rtrim(number_format($rule->minimum_mtd_percent, 2), '0'), '.') }}% MTD
+                                    </span>
+                                    <span class="font-bold text-emerald-700 dark:text-emerald-200">
+                                        {{ rtrim(rtrim(number_format($rule->commission_percent, 2), '0'), '.') }}%
+                                    </span>
+                                </div>
+                            @empty
+                                <p class="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500 dark:bg-zinc-950 dark:text-zinc-400">
+                                    No commission rules available.
+                                </p>
+                            @endforelse
+                        </div>
+                    @else
+                        <p class="mt-5 rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600 dark:bg-zinc-950 dark:text-zinc-300">
+                            Not active for commission.
+                        </p>
+                    @endif
                 </div>
 
                 <div class="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100">

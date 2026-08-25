@@ -77,7 +77,8 @@ class SalesPerformanceMtdController extends Controller
                     'service_commission_percent' => SalesMtdCalculator::SERVICE_RATE_LOW,
                     'markup_commission_percent' => (float) ($agent->markup_commission_percent ?? 50),
                 ]);
-                $targetAmount = (float) ($target?->amount ?? 0);
+                $isCommissionEligible = (bool) $agent->is_commission_eligible;
+                $targetAmount = $isCommissionEligible ? (float) ($target?->amount ?? 0) : 0.0;
                 $mtd = (float) $credit['mtd'];
 
                 return [
@@ -93,6 +94,7 @@ class SalesPerformanceMtdController extends Controller
                         'site' => 'on-site',
                         default => null,
                     },
+                    'is_commission_eligible' => $isCommissionEligible,
                     'mtd' => round($mtd, 2),
                     'service_mtd' => round((float) $credit['service_mtd'], 2),
                     'commissionable_service_mtd' => round((float) ($credit['commissionable_service_mtd'] ?? 0), 2),
@@ -100,12 +102,14 @@ class SalesPerformanceMtdController extends Controller
                     'markup_mtd' => round((float) $credit['markup_mtd'], 2),
                     'target' => round($targetAmount, 2),
                     'agent_target' => round($targetAmount, 2),
-                    'commission_scheme' => $this->commissionScheme($agent),
+                    'commission_scheme' => $this->commissionScheme($agent, $isCommissionEligible),
                     'mtd_percent' => $targetAmount > 0 ? round(($mtd / $targetAmount) * 100, 2) : 0,
                     'remaining_target' => round(max($targetAmount - $mtd, 0), 2),
                     'service_commission_percent' => round((float) ($credit['service_commission_percent'] ?? SalesMtdCalculator::SERVICE_RATE_LOW), 2),
                     'markup_commission_percent' => round((float) ($credit['markup_commission_percent'] ?? $agent->markup_commission_percent ?? 50), 2),
-                    'commission_threshold_amount' => round((float) ($agent->commission_threshold_amount ?? SalesMtdCalculator::DEFAULT_SERVICE_THRESHOLD), 2),
+                    'commission_threshold_amount' => $isCommissionEligible
+                        ? round((float) ($agent->commission_threshold_amount ?? SalesMtdCalculator::DEFAULT_SERVICE_THRESHOLD), 2)
+                        : 0,
                     'is_commission_threshold_exempt' => (bool) $agent->is_commission_threshold_exempt,
                     'service_comm' => round((float) $credit['service_commission'], 2),
                     'markup_comm' => round((float) $credit['markup_commission'], 2),
@@ -117,6 +121,7 @@ class SalesPerformanceMtdController extends Controller
                     'net_commission' => round((float) ($credit['net_commission'] ?? 0), 2),
                 ];
             })
+            ->filter(fn (array $row) => $row['is_commission_eligible'] || $row['mtd'] > 0)
             ->values();
 
         return response()->json([
@@ -135,6 +140,7 @@ class SalesPerformanceMtdController extends Controller
                 'markup_mtd',
                 'target',
                 'agent_target',
+                'is_commission_eligible',
                 'commission_scheme',
                 'mtd_percent',
                 'service_comm',
@@ -159,8 +165,12 @@ class SalesPerformanceMtdController extends Controller
         ]);
     }
 
-    private function commissionScheme(User $agent): array
+    private function commissionScheme(User $agent, bool $isCommissionEligible): ?array
     {
+        if (! $isCommissionEligible) {
+            return null;
+        }
+
         $profile = $agent->commissionProfile;
 
         return [

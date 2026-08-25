@@ -37,6 +37,7 @@
                       department: @js(old('department', $user->department ?? '')),
                       brandId: @js((string) old('brand_id', $user->brand_id ?? $defaultBrandId)),
                       roleId: @js((string) old('role_id', $user->role_id)),
+                      commissionEligible: @js((bool) old('is_commission_eligible', $user->is_commission_eligible)),
                       selectedPermissions: @js(old('final_permissions', $effectivePermissionKeys)),
                       rolesByDepartment: @js($roles->groupBy('department')->map(fn ($departmentRoles) => $departmentRoles->map(fn ($role) => ['id' => (string) $role->id, 'name' => $role->name])->values())),
                       rolePermissionsById: @js($roles->mapWithKeys(fn ($role) => [(string) $role->id => $role->permissionRecords->pluck('key')->values()->all()])),
@@ -103,7 +104,7 @@
                     <select id="department"
                             name="department"
                             x-model="department"
-                            x-on:change="roleId = ''; selectedPermissions = []"
+                            x-on:change="roleId = ''; selectedPermissions = []; if (department === 'Sales') commissionEligible = true"
                             required
                             class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500">
                         <option value="">Select a department</option>
@@ -149,6 +150,19 @@
                     <p class="mt-2 text-xs text-slate-500">Used for Sales MTD grouping and employee records.</p>
                     <x-input-error :messages="$errors->get('work_type')" class="mt-2" />
                 </div>
+
+                <label class="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <input type="hidden" name="is_commission_eligible" value="0">
+                    <input type="checkbox"
+                           name="is_commission_eligible"
+                           value="1"
+                           x-model="commissionEligible"
+                           class="mt-1 rounded border-slate-300 text-emerald-700 focus:ring-emerald-600">
+                    <span>
+                        <span class="block text-sm font-semibold text-slate-900">Eligible for Sales Commission</span>
+                        <span class="block text-xs leading-5 text-slate-500">Allow this user to submit credited sales and appear in commission reports.</span>
+                    </span>
+                </label>
 
                 <div>
                     <label for="email" class="mb-2 block text-sm font-medium text-slate-700">Email Address <span class="text-rose-600">*</span></label>
