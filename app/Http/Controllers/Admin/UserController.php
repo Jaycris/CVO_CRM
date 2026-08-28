@@ -174,6 +174,41 @@ class UserController extends Controller
             ->with('success', 'User updated successfully.');
     }
 
+    public function resetPassword(Request $request, User $user)
+    {
+        $this->ensureAdmin();
+
+        if ($user->is($request->user())) {
+            return redirect()
+                ->route('admin.users.index')
+                ->with('error', 'You cannot reset your own password from the admin user directory.');
+        }
+
+        $expiresAt = now()->addDays(7);
+        $user->forceFill([
+            'password' => Hash::make(Str::random(32)),
+            'password_created_at' => null,
+            'invitation_expires_at' => $expiresAt,
+            'remember_token' => Str::random(60),
+        ]);
+
+        try {
+            Mail::to($user->email)->send(new UserInvitationMail($user));
+        } catch (TransportExceptionInterface $exception) {
+            report($exception);
+
+            return redirect()
+                ->route('admin.users.index')
+                ->with('error', 'Password reset was not completed because the reset email could not be sent. Please check the mail connection.');
+        }
+
+        $user->save();
+
+        return redirect()
+            ->route('admin.users.index')
+            ->with('success', "Password reset link sent to {$user->email}. The link expires in 7 days.");
+    }
+
     public function destroy(User $user)
     {
         $this->ensureAdmin();

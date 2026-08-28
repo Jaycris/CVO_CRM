@@ -54,7 +54,6 @@ class SalesPerformanceController extends Controller
             })
             ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
             ->when(! $brandId, fn ($query) => BrandScope::apply($query, $user))
-            ->when(! $canViewAllRows, fn ($query) => $query->where('id', $user?->id))
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($query) use ($search) {
                     $query->where('first_name', 'like', "%{$search}%")
@@ -119,7 +118,13 @@ class SalesPerformanceController extends Controller
                 'remaining' => max($targetAmount - $mtd, 0),
                 'percent' => $targetAmount > 0 ? round(($mtd / $targetAmount) * 100, 2) : 0,
             ];
-        })->filter(fn (array $row) => $row['is_commission_eligible'] || $row['mtd'] > 0)->values();
+        })->filter(function (array $row) use ($canViewAllRows, $user) {
+            if ($canViewAllRows) {
+                return $row['is_commission_eligible'] || $row['mtd'] > 0;
+            }
+
+            return $row['mtd'] > 0 || (int) $row['id'] === (int) $user?->id;
+        })->values();
 
         $agentRows = $this->paginateCollection($agentRows, $request);
         $brands = BrandScope::canAccessAllBrands($user) ? Brand::orderBy('imprint_name')->get() : collect();
@@ -132,6 +137,7 @@ class SalesPerformanceController extends Controller
             'brandId' => $brandId,
             'search' => $search,
             'canManageTargets' => $canManageTargets,
+            'canViewAllCommissionNumbers' => $canViewAllRows,
         ]);
     }
 

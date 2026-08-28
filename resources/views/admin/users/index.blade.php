@@ -111,6 +111,22 @@
                         </a>
 
                         <form method="POST"
+                              x-bind:action="selectedUser.resetPasswordUrl"
+                              x-on:submit="if (!hasSingleSelection() || !selectedUser.canResetPassword || !confirm('Reset this user password? A new setup link will be emailed to the user.')) { $event.preventDefault(); }">
+                            @csrf
+                            @method('PATCH')
+                            <button type="submit"
+                                    x-bind:disabled="!hasSingleSelection() || !selectedUser.canResetPassword"
+                                    x-bind:class="hasSingleSelection() && selectedUser.canResetPassword ? 'border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 dark:border-sky-400/30 dark:bg-sky-400/10 dark:text-sky-200 dark:hover:bg-sky-400/20' : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-500'"
+                                    title="Reset selected user password"
+                                    class="inline-flex h-11 w-11 items-center justify-center rounded-xl border shadow-sm">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25A3.75 3.75 0 0 0 12 1.5a3.75 3.75 0 0 0-3.75 3.75V7.5m7.5 0h-7.5m7.5 0A2.25 2.25 0 0 1 18 9.75v8.25A2.25 2.25 0 0 1 15.75 20.25h-7.5A2.25 2.25 0 0 1 6 18V9.75A2.25 2.25 0 0 1 8.25 7.5m3.75 5.25v2.25" />
+                                </svg>
+                            </button>
+                        </form>
+
+                        <form method="POST"
                               x-bind:action="selectedUser.suspendUrl"
                               x-on:submit="if (!hasSingleSelection() || !selectedUser.canSuspend || !confirm('Suspend this user? Active assigned leads will move back to Unassigned Leads.')) { $event.preventDefault(); }">
                             @csrf
@@ -172,10 +188,12 @@
                         'viewUrl' => route('admin.users.show', $user),
                         'editUrl' => route('admin.users.edit', $user),
                         'commissionProfileUrl' => route('admin.users.commission-profile.show', $user),
+                        'resetPasswordUrl' => route('admin.users.reset-password', $user),
                         'suspendUrl' => route('admin.users.suspend', $user),
                         'unsuspendUrl' => route('admin.users.unsuspend', $user),
                         'deleteUrl' => route('admin.users.destroy', $user),
                         'canDelete' => $user->id !== 1,
+                        'canResetPassword' => $user->id !== auth()->id(),
                         'canSuspend' => $user->id !== 1 && $user->id !== auth()->id() && ! $user->suspended_at,
                         'isSuspended' => ! is_null($user->suspended_at),
                     ])->values();
@@ -206,10 +224,12 @@
                                     'viewUrl' => route('admin.users.show', $user),
                                     'editUrl' => route('admin.users.edit', $user),
                                     'commissionProfileUrl' => route('admin.users.commission-profile.show', $user),
+                                    'resetPasswordUrl' => route('admin.users.reset-password', $user),
                                     'suspendUrl' => route('admin.users.suspend', $user),
                                     'unsuspendUrl' => route('admin.users.unsuspend', $user),
                                     'deleteUrl' => route('admin.users.destroy', $user),
                                     'canDelete' => $user->id !== 1,
+                                    'canResetPassword' => $user->id !== auth()->id(),
                                     'canSuspend' => $user->id !== 1 && $user->id !== auth()->id() && ! $user->suspended_at,
                                     'isSuspended' => ! is_null($user->suspended_at),
                                 ];

@@ -7,6 +7,8 @@
         $brandQuery = $brandId ? ['brand_id' => $brandId] : [];
         $money = fn ($value) => '$' . number_format((float) $value, 2);
         $peso = fn ($value) => '₱' . number_format((float) $value, 2);
+        $currentUserId = auth()->id();
+        $canViewAllCommissionNumbers = $canViewAllCommissionNumbers ?? false;
         $summaryCards = [
             ['label' => 'Global MTD', 'value' => $summary['global']['mtd'], 'hint' => 'All credited sales this month', 'tone' => 'emerald'],
             ['label' => 'Remaining Target MTD', 'value' => $summary['global']['remaining'], 'hint' => 'Remaining against global target', 'tone' => 'rose'],
@@ -177,6 +179,9 @@
                     </thead>
                     <tbody class="divide-y divide-slate-200 dark:divide-zinc-800">
                         @forelse ($agentRows as $row)
+                            @php
+                                $canViewRowCommission = $canViewAllCommissionNumbers || (int) $row['id'] === (int) $currentUserId;
+                            @endphp
                             <tr class="align-top hover:bg-slate-50/70 dark:hover:bg-zinc-800/60">
                                 <td class="sticky left-0 z-10 bg-white px-5 py-5 font-semibold text-slate-900 shadow-[1px_0_0_0_rgba(226,232,240,1)] dark:bg-zinc-900 dark:text-zinc-100 dark:shadow-[1px_0_0_0_rgba(39,39,42,1)]">
                                     {{ trim(($row['agent']->first_name ?? '') . ' ' . ($row['agent']->last_name ?? '')) ?: 'Unknown Agent' }}
@@ -221,21 +226,49 @@
                                     </div>
                                 </td>
                                 <td class="whitespace-nowrap px-5 py-5">
-                                    <span class="font-bold text-slate-900 dark:text-zinc-100">{{ $money($row['service_commission']) }}</span>
+                                    @if ($canViewRowCommission)
+                                        <span class="font-bold text-slate-900 dark:text-zinc-100">{{ $money($row['service_commission']) }}</span>
+                                    @else
+                                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">Private</span>
+                                    @endif
                                 </td>
                                 <td class="whitespace-nowrap px-5 py-5">
-                                    <span class="font-bold text-slate-900 dark:text-zinc-100">{{ $money($row['markup_commission']) }}</span>
+                                    @if ($canViewRowCommission)
+                                        <span class="font-bold text-slate-900 dark:text-zinc-100">{{ $money($row['markup_commission']) }}</span>
+                                    @else
+                                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">Private</span>
+                                    @endif
                                 </td>
-                                <td class="whitespace-nowrap px-5 py-5 font-bold text-emerald-600 dark:text-emerald-300">{{ $money($row['usd_total']) }}</td>
+                                <td class="whitespace-nowrap px-5 py-5 font-bold text-emerald-600 dark:text-emerald-300">
+                                    @if ($canViewRowCommission)
+                                        {{ $money($row['usd_total']) }}
+                                    @else
+                                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">Private</span>
+                                    @endif
+                                </td>
                                 <td class="whitespace-nowrap px-5 py-5 font-bold text-slate-900 dark:text-zinc-100">
-                                    {{ $peso($row['php_total']) }}
-                                    <p class="mt-1 text-xs font-medium text-slate-500 dark:text-zinc-400">Rate {{ number_format($row['exchange_rate'], 4) }}</p>
+                                    @if ($canViewRowCommission)
+                                        {{ $peso($row['php_total']) }}
+                                        <p class="mt-1 text-xs font-medium text-slate-500 dark:text-zinc-400">Rate {{ number_format($row['exchange_rate'], 4) }}</p>
+                                    @else
+                                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">Private</span>
+                                    @endif
                                 </td>
                                 <td class="whitespace-nowrap px-5 py-5 font-bold text-amber-700 dark:text-amber-300">
-                                    {{ $peso($row['hold_amount']) }}
-                                    <p class="mt-1 text-xs font-medium text-slate-500 dark:text-zinc-400">{{ number_format($row['card_payment_hold_percent'], 2) }}% card only</p>
+                                    @if ($canViewRowCommission)
+                                        {{ $peso($row['hold_amount']) }}
+                                        <p class="mt-1 text-xs font-medium text-slate-500 dark:text-zinc-400">{{ number_format($row['card_payment_hold_percent'], 2) }}% card only</p>
+                                    @else
+                                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">Private</span>
+                                    @endif
                                 </td>
-                                <td class="whitespace-nowrap px-5 py-5 font-bold text-emerald-600 dark:text-emerald-300">{{ $peso($row['net_commission']) }}</td>
+                                <td class="whitespace-nowrap px-5 py-5 font-bold text-emerald-600 dark:text-emerald-300">
+                                    @if ($canViewRowCommission)
+                                        {{ $peso($row['net_commission']) }}
+                                    @else
+                                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">Private</span>
+                                    @endif
+                                </td>
                             </tr>
                         @empty
                             <tr>
