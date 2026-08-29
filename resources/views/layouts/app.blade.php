@@ -6,6 +6,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
     @php
         $headBrand = auth()->user()?->brand;
         $headBrandName = $headBrand?->imprint_name ?? 'CreatiVision Outsourcing';
