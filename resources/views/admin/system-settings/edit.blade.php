@@ -105,9 +105,10 @@
                     The integration lookup uses /api/crm/health, /api/crm/employees, and /api/crm/employees/{id} automatically.
                 </div>
 
-                <div class="flex justify-end">
+                <div class="flex justify-start sm:justify-end">
                     <button type="submit"
-                            class="rounded-xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 dark:bg-emerald-600 dark:hover:bg-emerald-500 dark:ring-offset-zinc-900">
+                            class="inline-flex min-h-11 items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold shadow-sm transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 dark:ring-offset-zinc-900"
+                            style="background-color: #065f46; color: #ffffff;">
                         Save Settings
                     </button>
                 </div>
@@ -124,10 +125,12 @@
                 </div>
 
                 <form method="POST" action="{{ route('admin.system-settings.hris-api-token.regenerate') }}"
+                      class="shrink-0"
                       onsubmit="return confirm('Generate a new integration API token? The old token will stop working after this.');">
                     @csrf
                     <button type="submit"
-                            class="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 dark:bg-emerald-600 dark:hover:bg-emerald-500 dark:ring-offset-zinc-900">
+                            class="inline-flex min-h-11 w-full items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold shadow-sm transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 sm:w-auto dark:ring-offset-zinc-900"
+                            style="background-color: #065f46; color: #ffffff;">
                         Generate Token
                     </button>
                 </form>
