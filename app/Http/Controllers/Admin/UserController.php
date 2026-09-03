@@ -25,6 +25,9 @@ class UserController extends Controller
     {
         $this->ensureAdmin();
 
+        $canManageEmployeeCommissionProfiles = request()->user()?->role?->name === 'Admin'
+            || request()->user()?->hasPermission('manage_employee_commission_profiles');
+
         $users = User::with(['role', 'brand', 'team'])->withCount([
             'assignedLeads as active_assigned_leads_count' => fn ($query) => $query
                 ->whereNull('returned_at')
@@ -35,7 +38,7 @@ class UserController extends Controller
                 }),
         ])->latest()->paginate(\App\Models\AppSetting::recordsPerPage());
 
-        return view('admin.users.index', compact('users'));
+        return view('admin.users.index', compact('users', 'canManageEmployeeCommissionProfiles'));
     }
 
     public function create()

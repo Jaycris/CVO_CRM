@@ -17,7 +17,7 @@ class CommissionProfileController extends Controller
 {
     public function index(Request $request)
     {
-        $this->ensureAdmin($request);
+        $this->ensureCanManageProfiles($request);
 
         $month = preg_match('/^\d{4}-\d{2}$/', (string) $request->query('month'))
             ? (string) $request->query('month')
@@ -57,7 +57,7 @@ class CommissionProfileController extends Controller
 
     public function store(Request $request)
     {
-        $this->ensureAdmin($request);
+        $this->ensureCanManageProfiles($request);
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:commission_profiles,name'],
@@ -85,7 +85,7 @@ class CommissionProfileController extends Controller
 
     public function update(Request $request, CommissionProfile $commissionProfile)
     {
-        $this->ensureAdmin($request);
+        $this->ensureCanManageProfiles($request);
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255', Rule::unique('commission_profiles', 'name')->ignore($commissionProfile->id)],
@@ -114,7 +114,7 @@ class CommissionProfileController extends Controller
 
     public function updateAssignments(Request $request)
     {
-        $this->ensureAdmin($request);
+        $this->ensureCanManageEmployeeProfiles($request);
 
         $validated = $request->validate([
             'month' => ['required', 'regex:/^\d{4}-\d{2}$/'],
@@ -175,7 +175,7 @@ class CommissionProfileController extends Controller
 
     public function showEmployee(Request $request, User $user)
     {
-        $this->ensureAdmin($request);
+        $this->ensureCanManageEmployeeProfiles($request);
 
         $month = preg_match('/^\d{4}-\d{2}$/', (string) $request->query('month'))
             ? (string) $request->query('month')
@@ -206,7 +206,7 @@ class CommissionProfileController extends Controller
 
     public function updateEmployee(Request $request, User $user)
     {
-        $this->ensureAdmin($request);
+        $this->ensureCanManageEmployeeProfiles($request);
 
         $request->merge([
             'target' => $this->normalizedAmount($request->input('target')),
@@ -295,9 +295,22 @@ class CommissionProfileController extends Controller
         $profile->forceFill(['is_default' => true])->save();
     }
 
-    private function ensureAdmin(Request $request): void
+    private function ensureCanManageProfiles(Request $request): void
     {
-        abort_unless($request->user()?->role?->name === 'Admin', 403);
+        abort_unless(
+            $request->user()?->role?->name === 'Admin'
+            || $request->user()?->hasPermission('manage_commission_profiles'),
+            403
+        );
+    }
+
+    private function ensureCanManageEmployeeProfiles(Request $request): void
+    {
+        abort_unless(
+            $request->user()?->role?->name === 'Admin'
+            || $request->user()?->hasPermission('manage_employee_commission_profiles'),
+            403
+        );
     }
 
     private function normalizedAmount(mixed $value): mixed

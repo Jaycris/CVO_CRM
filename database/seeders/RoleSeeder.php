@@ -164,6 +164,8 @@ class RoleSeeder extends Seeder
                 'manage_sales_targets',
                 'view_agent_statements',
                 'view_all_agent_statements',
+                'manage_commission_profiles',
+                'manage_employee_commission_profiles',
                 'manage_users',
                 'manage_roles_permissions',
             ],
