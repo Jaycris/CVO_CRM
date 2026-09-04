@@ -79,7 +79,8 @@
                             <button type="submit"
                                     x-show="editing"
                                     x-cloak
-                                    class="rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white shadow-sm dark:bg-zinc-100 dark:text-zinc-950">
+                                    class="inline-flex min-h-11 items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold shadow-sm transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 dark:ring-offset-zinc-900"
+                                    style="background-color: #065f46; color: #ffffff;">
                                 Save Profile
                             </button>
                         </div>

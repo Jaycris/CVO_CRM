@@ -2,6 +2,21 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+    button[class*="bg-[var(--brand-primary)]"][class*="text-white"],
+    button[class*="bg-zinc-950"][class*="text-amber-100"],
+    button.crm-primary-action {
+        background-color: #065f46 !important;
+        color: #ffffff !important;
+    }
+
+    button[class*="bg-[var(--brand-primary)]"][class*="text-white"]:hover,
+    button[class*="bg-zinc-950"][class*="text-amber-100"]:hover,
+    button.crm-primary-action:hover {
+        filter: brightness(0.95);
+    }
+}
+
 [x-cloak] {
     display: none !important;
 }

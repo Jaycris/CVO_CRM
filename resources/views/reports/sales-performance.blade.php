@@ -304,18 +304,18 @@
                     <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <label class="block">
                             <span class="text-sm font-semibold text-slate-700 dark:text-zinc-200">Global Target</span>
-                            <input type="text" inputmode="decimal" name="global_target" value="{{ number_format((float) $summary['global']['target'], 2) }}"
-                                   class="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                            <input type="text" inputmode="decimal" name="global_target" value="{{ number_format((float) $summary['global']['target'], 2) }}" autocomplete="off" data-money-input
+                                   class="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-right text-sm font-semibold shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
                         </label>
                         <label class="block">
                             <span class="text-sm font-semibold text-slate-700 dark:text-zinc-200">Remote Target</span>
-                            <input type="text" inputmode="decimal" name="remote_target" value="{{ number_format((float) $summary['remote']['target'], 2) }}"
-                                   class="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                            <input type="text" inputmode="decimal" name="remote_target" value="{{ number_format((float) $summary['remote']['target'], 2) }}" autocomplete="off" data-money-input
+                                   class="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-right text-sm font-semibold shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
                         </label>
                         <label class="block">
                             <span class="text-sm font-semibold text-slate-700 dark:text-zinc-200">Site Target</span>
-                            <input type="text" inputmode="decimal" name="site_target" value="{{ number_format((float) $summary['site']['target'], 2) }}"
-                                   class="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                            <input type="text" inputmode="decimal" name="site_target" value="{{ number_format((float) $summary['site']['target'], 2) }}" autocomplete="off" data-money-input
+                                   class="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-right text-sm font-semibold shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
                         </label>
                     </div>
 
@@ -361,7 +361,9 @@
                     </div>
 
                     <div class="flex justify-end">
-                        <button type="submit" class="rounded-xl bg-[var(--brand-primary)] px-6 py-3 text-sm font-bold text-white shadow-sm hover:opacity-90">
+                        <button type="submit"
+                                class="inline-flex min-h-11 items-center justify-center rounded-xl px-6 py-3 text-sm font-bold shadow-sm transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 dark:ring-offset-zinc-900"
+                                style="background-color: #065f46; color: #ffffff;">
                             Save Targets
                         </button>
                     </div>
@@ -369,4 +371,30 @@
             </section>
         @endif
     </div>
+
+    <script>
+        document.querySelectorAll('[data-money-input]').forEach((input) => {
+            const formatMoney = (value, forceCents = false) => {
+                const cleaned = value.replace(/[^\d.]/g, '');
+                const [rawWhole = '', rawDecimal = ''] = cleaned.split('.');
+                const whole = rawWhole.replace(/^0+(?=\d)/, '') || '0';
+                const decimal = rawDecimal.slice(0, 2);
+                const formattedWhole = Number(whole).toLocaleString('en-US');
+
+                if (forceCents) {
+                    return `${formattedWhole}.${decimal.padEnd(2, '0')}`;
+                }
+
+                return cleaned.includes('.') ? `${formattedWhole}.${decimal}` : formattedWhole;
+            };
+
+            input.addEventListener('input', () => {
+                input.value = formatMoney(input.value);
+            });
+
+            input.addEventListener('blur', () => {
+                input.value = formatMoney(input.value, true);
+            });
+        });
+    </script>
 </x-app-layout>
