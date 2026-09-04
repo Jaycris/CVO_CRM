@@ -140,11 +140,51 @@
                         <form method="POST"
                               action="{{ route('admin.commission-profiles.update', $profile) }}"
                               x-data="{ editing: false }"
-                              class="rounded-2xl border border-slate-200 p-5 dark:border-zinc-800"
+                              class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950/40"
                               data-rule-form>
                             @csrf
                             @method('PUT')
 
+                            <div x-show="!editing" class="space-y-4">
+                                <div class="flex flex-wrap items-start justify-between gap-3">
+                                    <div>
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <h3 class="text-lg font-bold text-slate-900 dark:text-zinc-100">{{ $profile->name }}</h3>
+                                            @if ($profile->is_default)
+                                                <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-400/10 dark:text-emerald-200 dark:ring-emerald-400/30">
+                                                    Default
+                                                </span>
+                                            @endif
+                                        </div>
+                                        <p class="mt-2 text-sm leading-6 text-slate-500 dark:text-zinc-400">
+                                            {{ $profile->description ?: 'No description added.' }}
+                                        </p>
+                                    </div>
+
+                                    <button type="button"
+                                            x-on:click="editing = true"
+                                            class="rounded-xl border border-[var(--brand-primary)] px-5 py-2 text-sm font-bold text-[var(--brand-primary)] hover:bg-[var(--brand-soft)]">
+                                        Edit Profile
+                                    </button>
+                                </div>
+
+                                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                                    @foreach ($profile->rules as $rule)
+                                        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
+                                            <p class="text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Minimum MTD</p>
+                                            <p class="mt-1 text-xl font-bold text-slate-950 dark:text-zinc-100">
+                                                {{ rtrim(rtrim(number_format($rule->minimum_mtd_percent, 2), '0'), '.') }}%
+                                            </p>
+                                            <p class="mt-3 text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Commission</p>
+                                            <p class="mt-1 text-xl font-bold text-emerald-700 dark:text-emerald-200">
+                                                {{ rtrim(rtrim(number_format($rule->commission_percent, 2), '0'), '.') }}%
+                                            </p>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </div>
+
+                            <div x-show="editing" x-cloak class="space-y-4">
                             <div class="grid gap-3 md:grid-cols-[1fr_auto]">
                                 <div>
                                     <input name="name"
@@ -204,12 +244,6 @@
 
                             <div class="mt-4 flex justify-end gap-2">
                                 <button type="button"
-                                        x-show="!editing"
-                                        x-on:click="editing = true"
-                                        class="rounded-xl border border-[var(--brand-primary)] px-5 py-2 text-sm font-bold text-[var(--brand-primary)] hover:bg-[var(--brand-soft)]">
-                                    Edit Profile
-                                </button>
-                                <button type="button"
                                         x-show="editing"
                                         x-cloak
                                         x-on:click="editing = false"
@@ -230,6 +264,7 @@
                                         style="background-color: #065f46; color: #ffffff;">
                                     Save Profile
                                 </button>
+                            </div>
                             </div>
                         </form>
                     @empty
