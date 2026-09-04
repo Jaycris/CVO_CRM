@@ -126,7 +126,9 @@
                         </div>
 
                         <div class="flex justify-end">
-                            <button type="submit" class="rounded-xl bg-[var(--brand-primary)] px-5 py-3 text-sm font-bold text-white shadow-sm hover:opacity-90">
+                            <button type="submit"
+                                    class="inline-flex min-h-11 items-center justify-center rounded-xl px-5 py-3 text-sm font-bold shadow-sm transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 dark:ring-offset-zinc-900"
+                                    style="background-color: #065f46; color: #ffffff;">
                                 Create Profile
                             </button>
                         </div>
@@ -135,17 +137,34 @@
 
                 <div class="space-y-4">
                     @forelse ($profiles as $profile)
-                        <form method="POST" action="{{ route('admin.commission-profiles.update', $profile) }}" class="rounded-2xl border border-slate-200 p-5 dark:border-zinc-800" data-rule-form>
+                        <form method="POST"
+                              action="{{ route('admin.commission-profiles.update', $profile) }}"
+                              x-data="{ editing: false }"
+                              class="rounded-2xl border border-slate-200 p-5 dark:border-zinc-800"
+                              data-rule-form>
                             @csrf
                             @method('PUT')
 
                             <div class="grid gap-3 md:grid-cols-[1fr_auto]">
                                 <div>
-                                    <input name="name" value="{{ old('name', $profile->name) }}" required class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm font-bold shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
-                                    <textarea name="description" rows="2" class="mt-3 w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100" placeholder="Description">{{ old('description', $profile->description) }}</textarea>
+                                    <input name="name"
+                                           value="{{ old('name', $profile->name) }}"
+                                           required
+                                           x-bind:disabled="!editing"
+                                           class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm font-bold shadow-sm disabled:bg-slate-50 disabled:text-slate-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:disabled:bg-zinc-950 dark:disabled:text-zinc-100">
+                                    <textarea name="description"
+                                              rows="2"
+                                              x-bind:disabled="!editing"
+                                              class="mt-3 w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm disabled:bg-slate-50 disabled:text-slate-600 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:disabled:bg-zinc-950 dark:disabled:text-zinc-300"
+                                              placeholder="Description">{{ old('description', $profile->description) }}</textarea>
                                 </div>
                                 <label class="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-zinc-300">
-                                    <input type="checkbox" name="is_default" value="1" @checked($profile->is_default) class="rounded border-slate-300 text-[var(--brand-primary)] focus:ring-[var(--brand-primary)]">
+                                    <input type="checkbox"
+                                           name="is_default"
+                                           value="1"
+                                           x-bind:disabled="!editing"
+                                           @checked($profile->is_default)
+                                           class="rounded border-slate-300 text-[var(--brand-primary)] focus:ring-[var(--brand-primary)] disabled:opacity-70">
                                     Default
                                 </label>
                             </div>
@@ -155,22 +174,60 @@
                                     <div class="commission-rule-row rounded-2xl border border-slate-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950" data-rule-row>
                                         <label class="block min-w-0">
                                             <span class="mb-1 block text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Minimum MTD %</span>
-                                            <input type="number" name="rules[{{ $loop->index }}][minimum_mtd_percent]" value="{{ $rule->minimum_mtd_percent + 0 }}" min="0" step="0.01" class="w-full rounded-xl border-slate-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                                            <input type="number"
+                                                   name="rules[{{ $loop->index }}][minimum_mtd_percent]"
+                                                   value="{{ $rule->minimum_mtd_percent + 0 }}"
+                                                   min="0"
+                                                   step="0.01"
+                                                   x-bind:disabled="!editing"
+                                                   class="w-full rounded-xl border-slate-300 px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:disabled:bg-zinc-950 dark:disabled:text-zinc-100">
                                         </label>
                                         <label class="block min-w-0">
                                             <span class="mb-1 block text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Commission %</span>
-                                            <input type="number" name="rules[{{ $loop->index }}][commission_percent]" value="{{ $rule->commission_percent + 0 }}" min="0" max="100" step="0.01" class="w-full rounded-xl border-slate-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                                            <input type="number"
+                                                   name="rules[{{ $loop->index }}][commission_percent]"
+                                                   value="{{ $rule->commission_percent + 0 }}"
+                                                   min="0"
+                                                   max="100"
+                                                   step="0.01"
+                                                   x-bind:disabled="!editing"
+                                                   class="w-full rounded-xl border-slate-300 px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:disabled:bg-zinc-950 dark:disabled:text-zinc-100">
                                         </label>
-                                        <button type="button" class="commission-rule-remove rounded-xl border border-rose-200 px-4 py-3 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:border-rose-400/30 dark:hover:bg-rose-400/10" data-remove-rule>Remove</button>
+                                        <button type="button"
+                                                x-show="editing"
+                                                x-cloak
+                                                class="commission-rule-remove rounded-xl border border-rose-200 px-4 py-3 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:border-rose-400/30 dark:hover:bg-rose-400/10"
+                                                data-remove-rule>Remove</button>
                                     </div>
                                 @endforeach
                             </div>
 
                             <div class="mt-4 flex justify-end gap-2">
-                                <button type="button" class="rounded-xl border border-[var(--brand-primary)] px-4 py-2 text-sm font-bold text-[var(--brand-primary)] hover:bg-[var(--brand-soft)]" data-add-rule>
+                                <button type="button"
+                                        x-show="!editing"
+                                        x-on:click="editing = true"
+                                        class="rounded-xl border border-[var(--brand-primary)] px-5 py-2 text-sm font-bold text-[var(--brand-primary)] hover:bg-[var(--brand-soft)]">
+                                    Edit Profile
+                                </button>
+                                <button type="button"
+                                        x-show="editing"
+                                        x-cloak
+                                        x-on:click="editing = false"
+                                        class="rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                                    Cancel
+                                </button>
+                                <button type="button"
+                                        x-show="editing"
+                                        x-cloak
+                                        class="rounded-xl border border-[var(--brand-primary)] px-4 py-2 text-sm font-bold text-[var(--brand-primary)] hover:bg-[var(--brand-soft)]"
+                                        data-add-rule>
                                     + Add Rule
                                 </button>
-                                <button type="submit" class="rounded-xl bg-[var(--brand-primary)] px-5 py-2 text-sm font-bold text-white hover:opacity-90">
+                                <button type="submit"
+                                        x-show="editing"
+                                        x-cloak
+                                        class="inline-flex min-h-10 items-center justify-center rounded-xl px-5 py-2 text-sm font-bold shadow-sm transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 dark:ring-offset-zinc-900"
+                                        style="background-color: #065f46; color: #ffffff;">
                                     Save Profile
                                 </button>
                             </div>
