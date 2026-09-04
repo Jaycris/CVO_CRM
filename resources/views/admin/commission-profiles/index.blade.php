@@ -168,17 +168,23 @@
                                     </button>
                                 </div>
 
-                                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                                <div class="grid gap-3 md:grid-cols-3">
                                     @foreach ($profile->rules as $rule)
-                                        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
-                                            <p class="text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Minimum MTD</p>
-                                            <p class="mt-1 text-xl font-bold text-slate-950 dark:text-zinc-100">
-                                                {{ rtrim(rtrim(number_format($rule->minimum_mtd_percent, 2), '0'), '.') }}%
-                                            </p>
-                                            <p class="mt-3 text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Commission</p>
-                                            <p class="mt-1 text-xl font-bold text-emerald-700 dark:text-emerald-200">
-                                                {{ rtrim(rtrim(number_format($rule->commission_percent, 2), '0'), '.') }}%
-                                            </p>
+                                        <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
+                                            <div class="flex items-center justify-between gap-4">
+                                                <div>
+                                                    <p class="text-[11px] font-bold uppercase text-slate-500 dark:text-zinc-400">Minimum MTD</p>
+                                                    <p class="mt-1 text-lg font-bold text-slate-950 dark:text-zinc-100">
+                                                        {{ rtrim(rtrim(number_format($rule->minimum_mtd_percent, 2), '0'), '.') }}%
+                                                    </p>
+                                                </div>
+                                                <div class="text-right">
+                                                    <p class="text-[11px] font-bold uppercase text-slate-500 dark:text-zinc-400">Commission</p>
+                                                    <p class="mt-1 text-lg font-bold text-emerald-700 dark:text-emerald-200">
+                                                        {{ rtrim(rtrim(number_format($rule->commission_percent, 2), '0'), '.') }}%
+                                                    </p>
+                                                </div>
+                                            </div>
                                         </div>
                                     @endforeach
                                 </div>
