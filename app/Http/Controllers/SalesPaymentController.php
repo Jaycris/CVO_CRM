@@ -27,6 +27,7 @@ class SalesPaymentController extends Controller
                     $query->where('payment_method', 'like', "%{$search}%")
                         ->orWhere('sold_date', 'like', "%{$search}%")
                         ->orWhere('status', 'like', "%{$search}%")
+                        ->orWhere('amount', 'like', "%{$search}%")
                         ->orWhereHas('endorsement', function ($query) use ($search) {
                             $query->where('endorsement_code', 'like', "%{$search}%")
                                 ->orWhere('author_name', 'like', "%{$search}%")
@@ -46,11 +47,7 @@ class SalesPaymentController extends Controller
 
         return view('sales-payments.index', [
             'payments' => $payments,
-            'endorsements' => SalesEndorsement::with('agent')
-                ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
-                ->whereDoesntHave('paymentRecord')
-                ->latest()
-                ->get(),
+            'endorsements' => $this->paymentEndorsements($request),
             'paymentMethods' => $this->paymentMethods(),
             'statuses' => $this->statuses(),
             'canManagePayments' => $this->userHasPermission($request, 'manage_payment_records'),
@@ -65,6 +62,7 @@ class SalesPaymentController extends Controller
 
         $validated = $request->validate([
             'sales_endorsement_id' => ['required', 'exists:sales_endorsements,id'],
+            'amount' => ['required', 'numeric', 'min:0'],
             'payment_method' => ['required', 'in:Wire Payment,Invoice,Check Payment,Card'],
             'sold_date' => ['required', 'date'],
             'status' => ['required', 'in:Payment Success,Processing,Declined,Refund,Dispute'],
@@ -72,6 +70,12 @@ class SalesPaymentController extends Controller
 
         $endorsement = SalesEndorsement::findOrFail($validated['sales_endorsement_id']);
         abort_unless($this->userCanAccessBrand($request, $endorsement->brand_id), 403);
+
+        if ((float) $validated['amount'] > $this->remainingContractAmount($endorsement)) {
+            return back()
+                ->withErrors(['amount' => 'The payment amount cannot be greater than the remaining contract balance.'])
+                ->withInput();
+        }
 
         $payment = SalesPayment::withTrashed()
             ->firstOrNew(['sales_endorsement_id' => $validated['sales_endorsement_id']]);
@@ -108,11 +112,20 @@ class SalesPaymentController extends Controller
 
         $validated = $request->validate([
             'payment_method' => ['required', 'in:Wire Payment,Invoice,Check Payment,Card'],
+            'amount' => ['required', 'numeric', 'min:0'],
             'sold_date' => ['required', 'date'],
             'status' => ['required', 'in:Payment Success,Processing,Declined,Refund,Dispute'],
         ]);
 
         $previousStatus = $payment->status;
+        $payment->loadMissing('endorsement');
+
+        if ((float) $validated['amount'] > $this->remainingContractAmount($payment->endorsement, $payment)) {
+            return back()
+                ->withErrors(['amount' => 'The payment amount cannot be greater than the remaining contract balance.'])
+                ->withInput();
+        }
+
         $payment->update($validated);
 
         if ($this->shouldNotifyLeadCreditForStatus($validated['status']) && $previousStatus !== $validated['status']) {
@@ -242,6 +255,56 @@ class SalesPaymentController extends Controller
     {
         return BrandScope::canAccessAllBrands($request->user())
             || (int) $request->user()?->brand_id === (int) $brandId;
+    }
+
+    private function paymentEndorsements(Request $request)
+    {
+        return SalesEndorsement::with(['agent', 'service'])
+            ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
+            ->whereDoesntHave('paymentRecord')
+            ->latest()
+            ->get()
+            ->each(function (SalesEndorsement $endorsement) {
+                $endorsement->setAttribute('remaining_contract_balance', $this->remainingContractAmount($endorsement));
+            });
+    }
+
+    private function remainingContractAmount(SalesEndorsement $endorsement, ?SalesPayment $excludePayment = null): float
+    {
+        return max((float) $endorsement->amount - $this->contractPaidAmount($endorsement, $excludePayment), 0);
+    }
+
+    private function contractPaidAmount(SalesEndorsement $endorsement, ?SalesPayment $excludePayment = null): float
+    {
+        return (float) SalesPayment::query()
+            ->where('status', 'Payment Success')
+            ->when($excludePayment, fn ($query) => $query->whereKeyNot($excludePayment->id))
+            ->whereHas('endorsement', function ($query) use ($endorsement) {
+                $query->where('agent_id', $endorsement->agent_id)
+                    ->when(
+                        $endorsement->frankie_agent_id,
+                        fn ($query) => $query->where('frankie_agent_id', $endorsement->frankie_agent_id),
+                        fn ($query) => $query->whereNull('frankie_agent_id')
+                    )
+                    ->when(
+                        $endorsement->lead_id,
+                        fn ($query) => $query->where('lead_id', $endorsement->lead_id),
+                        fn ($query) => $query
+                            ->whereRaw("LOWER(TRIM(COALESCE(author_name, ''))) = ?", [$this->normalizeContractKey($endorsement->author_name)])
+                            ->whereRaw("LOWER(TRIM(COALESCE(book_title, ''))) = ?", [$this->normalizeContractKey($endorsement->book_title)])
+                    )
+                    ->when(
+                        $endorsement->service_id,
+                        fn ($query) => $query->where('service_id', $endorsement->service_id),
+                        fn ($query) => $query->whereRaw("LOWER(TRIM(COALESCE(services, ''))) = ?", [$this->normalizeContractKey($endorsement->services)])
+                    );
+            })
+            ->sum('amount');
+    }
+
+    private function normalizeContractKey(?string $value): string
+    {
+        return strtolower(trim((string) $value));
     }
 
     private function paymentMethods(): array

@@ -95,7 +95,7 @@
                                     <td class="px-6 py-4 text-slate-900 dark:text-zinc-100">{{ $agentName }}</td>
                                     <td class="px-6 py-4 text-slate-600 dark:text-zinc-300">{{ $minerName }}</td>
                                     <td class="px-6 py-4 text-slate-600 dark:text-zinc-300">{{ $verifierName }}</td>
-                                    <td class="px-6 py-4 font-semibold text-slate-900 dark:text-zinc-100">${{ number_format((float) ($endorsement?->amount ?? 0), 2) }}</td>
+                                    <td class="px-6 py-4 font-semibold text-slate-900 dark:text-zinc-100">${{ number_format((float) ($payment->amount ?? $endorsement?->amount ?? 0), 2) }}</td>
                                     <td class="px-6 py-4">
                                         <span @class([
                                             'inline-flex rounded-full px-3 py-1 text-xs font-semibold',

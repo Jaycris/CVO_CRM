@@ -29,7 +29,7 @@ class PaymentRefundNotification extends Notification
             'message' => 'Finance recorded this client as refunded.',
             'author_name' => $this->endorsement->author_name,
             'book_title' => $this->endorsement->book_title,
-            'amount' => (float) $this->endorsement->amount,
+            'amount' => (float) ($this->payment->amount ?? $this->endorsement->amount),
             'payment_method' => $this->payment->payment_method,
             'sold_date' => $this->payment->sold_date?->format('M d, Y'),
             'url' => route('sales.refunds'),

@@ -36,12 +36,67 @@
                     leadOptions: @js($leadOptions),
                     serviceName: @js(old('services', '')),
                     serviceOptions: @js($serviceOptions),
+                    paymentType: @js(old('payment', '')),
+                    totalContractAmountDisplay: '',
+                    amountToBePaidDisplay: '',
                     frankieAgentId: @js(old('frankie_agent_id', '')),
                     frankieAgentName: @js(collect($frankieAgentOptions)->firstWhere('id', (int) old('frankie_agent_id'))['name'] ?? ''),
                     frankieAgentOptions: @js($frankieAgentOptions),
                     authorDropdownOpen: false,
                     serviceDropdownOpen: false,
                     frankieDropdownOpen: false,
+                    init() {
+                        this.totalContractAmountDisplay = this.formatMoney(@js(old('amount', '')));
+                        this.amountToBePaidDisplay = this.formatMoney(@js(old('amount_to_be_paid', old('amount', ''))));
+                    },
+                    paymentNeedsChargeAmount() {
+                        return this.paymentType !== '' && this.paymentType !== 'Full Payment';
+                    },
+                    parseMoney(value) {
+                        const raw = String(value ?? '').replace(/,/g, '').replace(/[^\d.]/g, '');
+                        const [whole, ...parts] = raw.split('.');
+                        return `${whole}${parts.length ? `.${parts.join('').slice(0, 2)}` : ''}`;
+                    },
+                    moneyValue(value) {
+                        const parsed = Number.parseFloat(this.parseMoney(value));
+
+                        return Number.isFinite(parsed) ? parsed : 0;
+                    },
+                    hiddenMoneyValue(value) {
+                        const normalized = this.parseMoney(value);
+
+                        return normalized === '' ? '' : this.moneyValue(normalized).toFixed(2);
+                    },
+                    formatMoney(value) {
+                        const normalized = this.parseMoney(value);
+
+                        if (normalized === '') {
+                            return '';
+                        }
+
+                        const [whole, decimal] = normalized.split('.');
+                        const formattedWhole = Number.parseInt(whole || '0', 10).toLocaleString('en-US');
+
+                        return decimal === undefined ? formattedWhole : `${formattedWhole}.${decimal}`;
+                    },
+                    updateTotalContractAmount() {
+                        this.totalContractAmountDisplay = this.formatMoney(this.totalContractAmountDisplay);
+
+                        if (!this.paymentNeedsChargeAmount()) {
+                            this.amountToBePaidDisplay = this.totalContractAmountDisplay;
+                        }
+                    },
+                    updateAmountToBePaid() {
+                        this.amountToBePaidDisplay = this.formatMoney(this.amountToBePaidDisplay);
+                    },
+                    syncPaymentType() {
+                        if (!this.paymentNeedsChargeAmount()) {
+                            this.amountToBePaidDisplay = this.totalContractAmountDisplay;
+                            return;
+                        }
+
+                        this.amountToBePaidDisplay = this.formatMoney(@js(old('amount_to_be_paid', '0.00')));
+                    },
                     filteredLeadOptions() {
                         const search = this.authorName.trim().toLowerCase();
 
@@ -351,25 +406,46 @@
 
                     <div>
                         <label for="amount" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">
-                            Amount <span class="text-rose-600">*</span>
+                            Total Contract Amount <span class="text-rose-600">*</span>
                         </label>
-                        <input id="amount" name="amount" type="number" min="0" step="0.01" value="{{ old('amount') }}" required
+                        <input type="hidden" name="amount" x-bind:value="hiddenMoneyValue(totalContractAmountDisplay)">
+                        <input id="amount" type="text" inputmode="decimal" x-model="totalContractAmountDisplay" x-on:input="updateTotalContractAmount()" required
                                class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
                         <x-input-error :messages="$errors->get('amount')" class="mt-2" />
                     </div>
 
                     <div>
                         <label for="payment" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">
-                            Payment <span class="text-rose-600">*</span>
+                            Payment Type <span class="text-rose-600">*</span>
                         </label>
-                        <select id="payment" name="payment" required
+                        <select id="payment" name="payment" x-model="paymentType" x-on:change="syncPaymentType()" required
                                 class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
-                            <option value="">Select payment</option>
+                            <option value="">Select payment type</option>
                             @foreach ($paymentOptions as $payment)
                                 <option value="{{ $payment }}" @selected(old('payment') === $payment)>{{ $payment }}</option>
                             @endforeach
                         </select>
                         <x-input-error :messages="$errors->get('payment')" class="mt-2" />
+                    </div>
+                </div>
+
+                <div x-show="paymentNeedsChargeAmount()"
+                     x-cloak
+                     x-transition
+                     class="grid grid-cols-1 gap-5 md:grid-cols-3">
+                    <div>
+                        <label for="amount_to_be_paid" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">
+                            Amount to be Paid <span class="text-rose-600">*</span>
+                        </label>
+                        <input type="hidden" name="amount_to_be_paid" x-bind:value="hiddenMoneyValue(amountToBePaidDisplay)">
+                        <input id="amount_to_be_paid"
+                               type="text"
+                               inputmode="decimal"
+                               x-model="amountToBePaidDisplay"
+                               x-bind:required="paymentNeedsChargeAmount()"
+                               x-on:input="updateAmountToBePaid()"
+                               class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                        <x-input-error :messages="$errors->get('amount_to_be_paid')" class="mt-2" />
                     </div>
                 </div>
 

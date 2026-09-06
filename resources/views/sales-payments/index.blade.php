@@ -12,13 +12,63 @@
             endorsementDropdownOpen: false,
             selectedEndorsementId: @js(old('sales_endorsement_id', '')),
             selectedEndorsementText: '',
+            paymentAmount: '',
+            amountEditable: false,
+            selectedPaymentType: '',
+            selectedContractAmount: 0,
+            selectedRemainingBalance: 0,
             endorsementOptions: @js($endorsements->map(fn ($endorsement) => [
                 'id' => $endorsement->id,
                 'code' => $endorsement->endorsement_code,
                 'author' => $endorsement->author_name,
                 'bookTitle' => $endorsement->book_title,
                 'agent' => trim(($endorsement->agent?->first_name ?? '') . ' ' . ($endorsement->agent?->last_name ?? '')) ?: 'Unknown',
+                'paymentType' => $endorsement->payment,
+                'amountToBePaid' => number_format((float) ($endorsement->amount_to_be_paid ?? $endorsement->amount ?? 0), 2, '.', ''),
+                'totalContractAmount' => (float) ($endorsement->amount ?? 0),
+                'remainingBalance' => (float) ($endorsement->remaining_contract_balance ?? 0),
             ])->values()->all()),
+            formatCurrency(value) {
+                return Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            },
+            init() {
+                this.paymentAmount = this.formatMoneyInput(@js(old('amount', '')));
+            },
+            parseMoney(value) {
+                const raw = String(value ?? '').replace(/,/g, '').replace(/[^\d.]/g, '');
+                const [whole, ...parts] = raw.split('.');
+
+                return `${whole}${parts.length ? `.${parts.join('').slice(0, 2)}` : ''}`;
+            },
+            hiddenMoneyValue(value) {
+                const normalized = this.parseMoney(value);
+
+                if (normalized === '') {
+                    return '';
+                }
+
+                const parsed = Number.parseFloat(normalized);
+
+                return Number.isFinite(parsed) ? parsed.toFixed(2) : '';
+            },
+            formatMoneyInput(value) {
+                const normalized = this.parseMoney(value);
+
+                if (normalized === '') {
+                    return '';
+                }
+
+                const [whole, decimal] = normalized.split('.');
+                const formattedWhole = Number.parseInt(whole || '0', 10).toLocaleString('en-US');
+
+                return decimal === undefined ? formattedWhole : `${formattedWhole}.${decimal}`;
+            },
+            updatePaymentAmount() {
+                this.paymentAmount = this.formatMoneyInput(this.paymentAmount);
+            },
+            updateSelectedPaymentAmount() {
+                this.selectedPayment.amountDisplay = this.formatMoneyInput(this.selectedPayment.amountDisplay);
+            },
             filteredEndorsementOptions() {
                 const search = this.selectedEndorsementText.trim().toLowerCase();
 
@@ -31,17 +81,28 @@
                         return item.code.toLowerCase().includes(search)
                             || item.author.toLowerCase().includes(search)
                             || item.bookTitle.toLowerCase().includes(search)
-                            || item.agent.toLowerCase().includes(search);
+                            || item.agent.toLowerCase().includes(search)
+                            || String(item.paymentType || '').toLowerCase().includes(search);
                     })
                     .slice(0, 8);
             },
             selectEndorsement(endorsement) {
                 this.selectedEndorsementId = endorsement.id;
                 this.selectedEndorsementText = `${endorsement.code} - ${endorsement.author}`;
+                this.paymentAmount = this.formatMoneyInput(endorsement.amountToBePaid);
+                this.amountEditable = false;
+                this.selectedPaymentType = endorsement.paymentType;
+                this.selectedContractAmount = endorsement.totalContractAmount;
+                this.selectedRemainingBalance = endorsement.remainingBalance;
                 this.endorsementDropdownOpen = false;
             },
             clearSelectedEndorsement() {
                 this.selectedEndorsementId = '';
+                this.paymentAmount = '';
+                this.amountEditable = false;
+                this.selectedPaymentType = '';
+                this.selectedContractAmount = 0;
+                this.selectedRemainingBalance = 0;
             },
             togglePayment(payment) {
                 if (this.selectedIds.includes(payment.id)) {
@@ -52,6 +113,7 @@
                 this.selectedIds.push(payment.id);
             },
             openPaymentModal(payment) {
+                payment.amountDisplay = this.formatMoneyInput(payment.amount);
                 this.selectedPayment = payment;
                 this.paymentModalOpen = true;
             }
@@ -60,7 +122,7 @@
             <div>
                 <h1 class="text-2xl font-bold text-slate-900 dark:text-zinc-100">Payment Records</h1>
                 <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
-                    Manually add and track payment method, sold date, and payment status.
+                    Add finance-confirmed charges from sales endorsements and track payment status.
                 </p>
             </div>
 
@@ -181,6 +243,8 @@
                                 $paymentPayload = [
                                     'id' => $payment->id,
                                     'updateUrl' => route('finance.payments.update', $payment),
+                                    'amount' => old('amount', $payment->amount ?? $endorsement?->amount) ?? '',
+                                    'amountDisplay' => number_format((float) old('amount', $payment->amount ?? $endorsement?->amount ?? 0), 2),
                                     'paymentMethod' => old('payment_method', $payment->payment_method) ?? '',
                                     'soldDate' => old('sold_date', $payment->sold_date?->format('Y-m-d')) ?? '',
                                     'status' => old('status', $payment->status) ?? '',
@@ -210,7 +274,7 @@
                                 <td class="px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">
                                     <span class="line-clamp-2" title="{{ $endorsement?->book_title }}">{{ $endorsement?->book_title }}</span>
                                 </td>
-                                <td class="px-3 py-4 font-semibold leading-snug text-slate-900 dark:text-zinc-100">${{ number_format((float) ($endorsement?->amount ?? 0), 2) }}</td>
+                                <td class="px-3 py-4 font-semibold leading-snug text-slate-900 dark:text-zinc-100">${{ number_format((float) ($payment->amount ?? $endorsement?->amount ?? 0), 2) }}</td>
                                 <td class="break-words px-3 py-4 font-semibold leading-snug text-slate-700 dark:text-zinc-200">{{ $payment->payment_method }}</td>
                                 <td class="px-3 py-4 font-semibold leading-snug text-slate-700 dark:text-zinc-200">{{ $payment->sold_date?->format('M d, Y') }}</td>
                                 <td class="break-words px-3 py-4 font-semibold leading-snug text-slate-700 dark:text-zinc-200">{{ $payment->status }}</td>
@@ -247,12 +311,13 @@
         </div>
 
         @if ($canManagePayments)
+            <template x-teleport="body">
             <div x-show="createModalOpen"
                  x-cloak
                  x-transition.opacity
-                 class="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/45 p-4"
+                 class="crm-modal-backdrop fixed inset-0 z-[9998] flex items-start justify-center overflow-y-auto bg-zinc-950/60 px-4 py-20 backdrop-blur-sm sm:py-24"
                  x-on:click.self="createModalOpen = false">
-                <div class="w-full max-w-3xl rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
+                <div class="crm-modal-panel w-full max-w-3xl rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
                     <div class="flex items-start justify-between gap-4">
                         <div>
                             <h3 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Add Payment Record</h3>
@@ -313,6 +378,8 @@
                                             <span x-text="endorsement.bookTitle"></span>
                                             <span> | Agent: </span>
                                             <span x-text="endorsement.agent"></span>
+                                            <span> | </span>
+                                            <span x-text="endorsement.paymentType"></span>
                                         </span>
                                     </button>
                                 </template>
@@ -322,6 +389,27 @@
                                 </div>
                             </div>
                             <x-input-error :messages="$errors->get('sales_endorsement_id')" class="mt-2" />
+                        </label>
+
+                        <label class="block">
+                            <span class="text-sm font-semibold text-slate-700 dark:text-zinc-200">Amount <span class="text-rose-500">*</span></span>
+                            <div class="mt-2 flex items-center gap-3">
+                                <input type="hidden" name="amount" x-bind:value="hiddenMoneyValue(paymentAmount)">
+                                <input type="text"
+                                       inputmode="decimal"
+                                       x-model="paymentAmount"
+                                       x-bind:disabled="!amountEditable"
+                                       x-on:input="updatePaymentAmount()"
+                                       required
+                                       class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:disabled:bg-zinc-900 dark:disabled:text-zinc-300">
+                                <label class="flex shrink-0 items-center gap-2 rounded-xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 dark:border-zinc-700 dark:text-zinc-200">
+                                    <input type="checkbox"
+                                           x-model="amountEditable"
+                                           class="rounded border-slate-300 text-amber-600 shadow-sm focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950">
+                                    Edit
+                                </label>
+                            </div>
+                            <x-input-error :messages="$errors->get('amount')" class="mt-2" />
                         </label>
 
                         <label class="block">
@@ -344,7 +432,7 @@
                             <x-input-error :messages="$errors->get('sold_date')" class="mt-2" />
                         </label>
 
-                        <label class="block md:col-span-2">
+                        <label class="block">
                             <span class="text-sm font-semibold text-slate-700 dark:text-zinc-200">Status <span class="text-rose-500">*</span></span>
                             <select name="status"
                                     required
@@ -356,6 +444,24 @@
                             </select>
                             <x-input-error :messages="$errors->get('status')" class="mt-2" />
                         </label>
+
+                        <div x-show="selectedEndorsementId"
+                             x-cloak
+                             class="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm dark:border-zinc-800 dark:bg-zinc-950 md:col-span-2 md:grid-cols-3">
+                            <div>
+                                <p class="text-xs font-semibold uppercase text-slate-500 dark:text-zinc-400">Payment Type</p>
+                                <p class="mt-1 font-bold text-slate-900 dark:text-zinc-100" x-text="selectedPaymentType || '-'"></p>
+                            </div>
+                            <div>
+                                <p class="text-xs font-semibold uppercase text-slate-500 dark:text-zinc-400">Total Contract Amount</p>
+                                <p class="mt-1 font-bold text-slate-900 dark:text-zinc-100">$<span x-text="formatCurrency(selectedContractAmount)"></span></p>
+                            </div>
+                            <div>
+                                <p class="text-xs font-semibold uppercase text-slate-500 dark:text-zinc-400">Current Remaining Balance</p>
+                                <p class="mt-1 font-bold text-slate-900 dark:text-zinc-100">$<span x-text="formatCurrency(selectedRemainingBalance)"></span></p>
+                                <p class="mt-1 text-xs text-slate-500 dark:text-zinc-400">Updates only after Payment Success.</p>
+                            </div>
+                        </div>
 
                         <div class="flex justify-end gap-3 md:col-span-2">
                             <button type="button"
@@ -371,13 +477,15 @@
                     </form>
                 </div>
             </div>
+            </template>
 
+            <template x-teleport="body">
             <div x-show="paymentModalOpen"
                  x-cloak
                  x-transition.opacity
-                 class="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/45 p-4"
+                 class="crm-modal-backdrop fixed inset-0 z-[9998] flex items-start justify-center overflow-y-auto bg-zinc-950/60 px-4 py-20 backdrop-blur-sm sm:py-24"
                  x-on:click.self="paymentModalOpen = false">
-                <div class="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
+                <div class="crm-modal-panel w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
                     <div class="flex items-start justify-between gap-4">
                         <div>
                             <h3 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Edit Payment Record</h3>
@@ -400,6 +508,17 @@
                           class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
                         @csrf
                         @method('PUT')
+
+                        <label class="block">
+                            <span class="text-sm font-semibold text-slate-700 dark:text-zinc-200">Amount</span>
+                            <input type="hidden" name="amount" x-bind:value="hiddenMoneyValue(selectedPayment.amountDisplay)">
+                            <input type="text"
+                                   inputmode="decimal"
+                                   x-model="selectedPayment.amountDisplay"
+                                   x-on:input="updateSelectedPaymentAmount()"
+                                   required
+                                   class="mt-2 w-full rounded-xl border-slate-300 px-4 py-2 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                        </label>
 
                         <label class="block">
                             <span class="text-sm font-semibold text-slate-700 dark:text-zinc-200">Payment Method</span>
@@ -447,6 +566,7 @@
                     </form>
                 </div>
             </div>
+            </template>
         @endif
     </div>
 </x-app-layout>

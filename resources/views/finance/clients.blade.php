@@ -131,7 +131,7 @@
                                     <span class="line-clamp-2" title="{{ $endorsement?->book_title }}">{{ $endorsement?->book_title ?: '-' }}</span>
                                 </td>
                                 <td class="break-words px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">{{ $endorsement?->services ?: '-' }}</td>
-                                <td class="px-3 py-4 font-semibold leading-snug text-slate-900 dark:text-zinc-100">${{ number_format((float) ($endorsement?->amount ?? 0), 2) }}</td>
+                                <td class="px-3 py-4 font-semibold leading-snug text-slate-900 dark:text-zinc-100">${{ number_format((float) ($payment->amount ?? $endorsement?->amount ?? 0), 2) }}</td>
                                 <td class="break-words px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">{{ $payment->payment_method }}</td>
                                 <td class="px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">{{ $payment->sold_date?->format('M d, Y') ?: '-' }}</td>
                                 <td class="px-3 py-4">

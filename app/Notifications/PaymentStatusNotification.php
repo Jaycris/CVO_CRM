@@ -54,7 +54,7 @@ class PaymentStatusNotification extends Notification
             'message' => $message,
             'author_name' => $this->endorsement->author_name,
             'book_title' => $this->endorsement->book_title,
-            'amount' => (float) $this->endorsement->amount,
+            'amount' => (float) ($this->payment->amount ?? $this->endorsement->amount),
             'payment_method' => $this->payment->payment_method,
             'payment_status' => $status,
             'sold_date' => $this->payment->sold_date?->format('M d, Y'),

@@ -106,8 +106,8 @@
                             <th class="w-[11%] px-3 py-4">Author</th>
                             <th class="w-[14%] px-3 py-4">Book Title</th>
                             <th class="w-[10%] px-3 py-4">Service</th>
-                            <th class="w-[9%] px-3 py-4">Amount</th>
-                            <th class="w-[10%] px-3 py-4">Payment</th>
+                            <th class="w-[9%] px-3 py-4">Contract Amount</th>
+                            <th class="w-[10%] px-3 py-4">Payment Type</th>
                             @if ($isAdmin)
                                 <th class="w-[10%] px-3 py-4">Contact</th>
                                 <th class="w-[11%] px-3 py-4">Email</th>

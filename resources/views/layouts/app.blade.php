@@ -125,12 +125,12 @@
             width: 100vw !important;
             min-height: 100vh !important;
             min-height: 100dvh !important;
-            z-index: 1000 !important;
+            z-index: 9998 !important;
         }
 
         .crm-modal-panel {
             position: relative;
-            z-index: 1001;
+            z-index: 9999;
         }
     </style>
 </head>

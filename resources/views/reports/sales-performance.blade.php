@@ -158,7 +158,11 @@
                 </div>
             </div>
 
-            <div class="overflow-x-auto overscroll-x-contain pb-2 [scrollbar-gutter:stable]">
+            <div class="overflow-x-auto border-b border-slate-200 bg-slate-50/70 dark:border-zinc-800 dark:bg-zinc-950/60 [scrollbar-gutter:stable]" data-agent-mtd-scroll-top>
+                <div class="h-3 min-w-[1900px]" data-agent-mtd-scroll-spacer></div>
+            </div>
+
+            <div class="overflow-x-auto overscroll-x-contain pb-2 [scrollbar-gutter:stable]" data-agent-mtd-scroll-table>
                 <table class="min-w-[1900px] divide-y divide-slate-200 text-sm dark:divide-zinc-800">
                     <thead class="bg-slate-50 text-left text-xs font-bold uppercase text-slate-500 dark:bg-zinc-900/80 dark:text-zinc-400">
                         <tr>
@@ -287,11 +291,24 @@
         </section>
 
         @if ($canManageTargets)
-            <section class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
-                <h2 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Manage Monthly Targets</h2>
-                <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
-                    Set dashboard targets here. Agent target, commission profile, markup percentage, threshold, and exemption are managed in each user's commission profile.
-                </p>
+            <section class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800"
+                     x-data="{ editingTargets: false }">
+                <div class="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Manage Monthly Targets</h2>
+                        <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
+                            Set dashboard targets here. Agent target, commission profile, markup percentage, threshold, and exemption are managed in each user's commission profile.
+                        </p>
+                    </div>
+
+                    <button type="button"
+                            x-show="!editingTargets"
+                            x-on:click="editingTargets = true"
+                            class="inline-flex min-h-11 items-center justify-center rounded-xl border px-5 py-3 text-sm font-bold shadow-sm transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:ring-offset-zinc-900"
+                            style="border-color: color-mix(in srgb, var(--brand-primary) 28%, transparent); background-color: var(--brand-accent); color: var(--brand-primary); --tw-ring-color: var(--brand-primary);">
+                        Edit Targets
+                    </button>
+                </div>
 
                 <form method="POST" action="{{ route('reports.sales-performance.targets') }}" class="mt-6 space-y-6">
                     @csrf
@@ -305,17 +322,20 @@
                         <label class="block">
                             <span class="text-sm font-semibold text-slate-700 dark:text-zinc-200">Global Target</span>
                             <input type="text" inputmode="decimal" name="global_target" value="{{ number_format((float) $summary['global']['target'], 2) }}" autocomplete="off" data-money-input
-                                   class="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-right text-sm font-semibold shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                                   x-bind:disabled="!editingTargets"
+                                   class="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-right text-sm font-semibold shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:disabled:bg-zinc-900 dark:disabled:text-zinc-300">
                         </label>
                         <label class="block">
                             <span class="text-sm font-semibold text-slate-700 dark:text-zinc-200">Remote Target</span>
                             <input type="text" inputmode="decimal" name="remote_target" value="{{ number_format((float) $summary['remote']['target'], 2) }}" autocomplete="off" data-money-input
-                                   class="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-right text-sm font-semibold shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                                   x-bind:disabled="!editingTargets"
+                                   class="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-right text-sm font-semibold shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:disabled:bg-zinc-900 dark:disabled:text-zinc-300">
                         </label>
                         <label class="block">
                             <span class="text-sm font-semibold text-slate-700 dark:text-zinc-200">Site Target</span>
                             <input type="text" inputmode="decimal" name="site_target" value="{{ number_format((float) $summary['site']['target'], 2) }}" autocomplete="off" data-money-input
-                                   class="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-right text-sm font-semibold shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                                   x-bind:disabled="!editingTargets"
+                                   class="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-right text-sm font-semibold shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:disabled:bg-zinc-900 dark:disabled:text-zinc-300">
                         </label>
                     </div>
 
@@ -360,7 +380,12 @@
                         </table>
                     </div>
 
-                    <div class="flex justify-end">
+                    <div x-show="editingTargets" x-cloak class="flex justify-end gap-3">
+                        <button type="button"
+                                x-on:click="editingTargets = false"
+                                class="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800">
+                            Cancel
+                        </button>
                         <button type="submit"
                                 class="inline-flex min-h-11 items-center justify-center rounded-xl px-6 py-3 text-sm font-bold shadow-sm transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 dark:ring-offset-zinc-900"
                                 style="background-color: #065f46; color: #ffffff;">
@@ -396,5 +421,35 @@
                 input.value = formatMoney(input.value, true);
             });
         });
+
+        const agentMtdTopScroll = document.querySelector('[data-agent-mtd-scroll-top]');
+        const agentMtdTableScroll = document.querySelector('[data-agent-mtd-scroll-table]');
+        const agentMtdScrollSpacer = document.querySelector('[data-agent-mtd-scroll-spacer]');
+
+        if (agentMtdTopScroll && agentMtdTableScroll && agentMtdScrollSpacer) {
+            const table = agentMtdTableScroll.querySelector('table');
+            let isSyncingScroll = false;
+
+            const syncSpacerWidth = () => {
+                agentMtdScrollSpacer.style.width = `${table?.scrollWidth || agentMtdTableScroll.scrollWidth}px`;
+            };
+
+            const syncScroll = (source, target) => {
+                if (isSyncingScroll) {
+                    return;
+                }
+
+                isSyncingScroll = true;
+                target.scrollLeft = source.scrollLeft;
+                window.requestAnimationFrame(() => {
+                    isSyncingScroll = false;
+                });
+            };
+
+            syncSpacerWidth();
+            window.addEventListener('resize', syncSpacerWidth);
+            agentMtdTopScroll.addEventListener('scroll', () => syncScroll(agentMtdTopScroll, agentMtdTableScroll));
+            agentMtdTableScroll.addEventListener('scroll', () => syncScroll(agentMtdTableScroll, agentMtdTopScroll));
+        }
     </script>
 </x-app-layout>

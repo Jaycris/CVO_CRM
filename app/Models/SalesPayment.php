@@ -14,6 +14,7 @@ class SalesPayment extends Model
     protected $fillable = [
         'brand_id',
         'sales_endorsement_id',
+        'amount',
         'payment_method',
         'sold_date',
         'status',
@@ -22,6 +23,7 @@ class SalesPayment extends Model
     protected function casts(): array
     {
         return [
+            'amount' => 'decimal:2',
             'sold_date' => 'date',
         ];
     }

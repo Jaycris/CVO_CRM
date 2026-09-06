@@ -30,6 +30,7 @@ class SalesEndorsement extends Model
         'services',
         'service_id',
         'amount',
+        'amount_to_be_paid',
         'payment',
         'remarks',
         'contract_status',
@@ -43,6 +44,7 @@ class SalesEndorsement extends Model
             'has_frankie' => 'boolean',
             'frankie_commission_percent' => 'decimal:2',
             'amount' => 'decimal:2',
+            'amount_to_be_paid' => 'decimal:2',
             'contract_sent_at' => 'datetime',
             'contract_signed_at' => 'datetime',
         ];

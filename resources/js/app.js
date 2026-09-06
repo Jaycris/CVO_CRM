@@ -42,16 +42,17 @@ Alpine.data('datePicker', (initialValue = '', minimum = null, maximum = null) =>
         const rect = this.$refs.trigger.getBoundingClientRect();
         const width = Math.min(336, window.innerWidth - 32);
         const left = Math.max(16, Math.min(rect.left, window.innerWidth - width - 16));
-        const popupHeight = Math.min(420, window.innerHeight - 32);
-        const spaceBelow = window.innerHeight - rect.bottom - 16;
-        const spaceAbove = rect.top - 16;
-        const openAbove = spaceBelow < popupHeight && spaceAbove > spaceBelow;
-        const top = openAbove
-            ? 'auto'
-            : Math.min(rect.bottom + 8, window.innerHeight - popupHeight - 16) + 'px';
-        const bottom = openAbove
-            ? Math.max(16, window.innerHeight - rect.top + 8) + 'px'
-            : 'auto';
+        const topPadding = 80;
+        const bottomPadding = 16;
+        const preferredHeight = 420;
+        const spaceBelow = Math.max(window.innerHeight - rect.bottom - bottomPadding, 160);
+        const spaceAbove = Math.max(rect.top - topPadding, 0);
+        const openAbove = spaceBelow < preferredHeight
+            && spaceAbove > spaceBelow
+            && rect.top - preferredHeight - 8 >= topPadding;
+        const popupHeight = Math.min(preferredHeight, openAbove ? spaceAbove : spaceBelow);
+        const top = openAbove ? 'auto' : (rect.bottom + 8) + 'px';
+        const bottom = openAbove ? Math.max(bottomPadding, window.innerHeight - rect.top + 8) + 'px' : 'auto';
 
         this.popupStyle = [
             'width: ' + width + 'px',

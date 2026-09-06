@@ -124,6 +124,21 @@ class SalesPerformanceController extends Controller
             }
 
             return $row['mtd'] > 0 || (int) $row['id'] === (int) $user?->id;
+        })->sort(function (array $first, array $second) {
+            $mtdComparison = $second['mtd'] <=> $first['mtd'];
+
+            if ($mtdComparison !== 0) {
+                return $mtdComparison;
+            }
+
+            $firstName = trim(($first['agent']->first_name ?? '').' '.($first['agent']->last_name ?? ''));
+            $secondName = trim(($second['agent']->first_name ?? '').' '.($second['agent']->last_name ?? ''));
+
+            return strcasecmp($firstName, $secondName);
+        })->values()->map(function (array $row, int $index) {
+            $row['rank'] = $index + 1;
+
+            return $row;
         })->values();
 
         $agentRows = $this->paginateCollection($agentRows, $request);

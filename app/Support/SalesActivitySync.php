@@ -23,7 +23,7 @@ class SalesActivitySync
         }
 
         $lead = $endorsement->lead;
-        $amount = (float) ($endorsement->amount ?? 0);
+        $amount = (float) ($payment->amount ?? $endorsement->amount ?? 0);
         $frankiePercent = ($endorsement->has_frankie && $endorsement->frankie_agent_id)
             ? (float) ($endorsement->frankie_commission_percent ?? AppSetting::get('frankie_commission_percent', 50))
             : 0.0;

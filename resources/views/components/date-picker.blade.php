@@ -45,7 +45,7 @@
          x-on:resize.window="updatePosition()"
          x-on:scroll.window="updatePosition()"
          x-bind:style="popupStyle"
-         class="fixed z-[9999] w-[21rem] rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+         class="fixed z-[10000] w-[21rem] rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
          role="dialog"
          aria-label="Choose date">
         <div class="flex items-center justify-between gap-3">

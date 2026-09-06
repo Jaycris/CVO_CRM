@@ -176,9 +176,25 @@
                             </button>
                         </form>
 
-                        <input type="text"
-                               placeholder="Search users..."
-                               class="w-72 rounded-xl border-slate-300 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500">
+                        <form method="GET" action="{{ route('admin.users.index') }}" class="flex flex-wrap items-center gap-2">
+                            <input type="search"
+                                   name="search"
+                                   value="{{ $search }}"
+                                   placeholder="Search users..."
+                                   class="w-72 rounded-xl border-slate-300 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500">
+
+                            <button type="submit"
+                                    class="rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-amber-100 shadow-sm hover:bg-black dark:bg-amber-400 dark:text-zinc-950">
+                                Search
+                            </button>
+
+                            @if ($search !== '')
+                                <a href="{{ route('admin.users.index') }}"
+                                   class="rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                                    Clear
+                                </a>
+                            @endif
+                        </form>
                     </div>
                 </div>
             </div>

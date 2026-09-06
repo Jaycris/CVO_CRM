@@ -21,12 +21,13 @@ use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 class UserController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $this->ensureAdmin();
 
-        $canManageEmployeeCommissionProfiles = request()->user()?->role?->name === 'Admin'
-            || request()->user()?->hasPermission('manage_employee_commission_profiles');
+        $search = trim((string) $request->query('search', ''));
+        $canManageEmployeeCommissionProfiles = $request->user()?->role?->name === 'Admin'
+            || $request->user()?->hasPermission('manage_employee_commission_profiles');
 
         $users = User::with(['role', 'brand', 'team'])->withCount([
             'assignedLeads as active_assigned_leads_count' => fn ($query) => $query
@@ -36,9 +37,27 @@ class UserController extends Controller
                     $query->whereNull('sales_stage')
                         ->orWhereIn('sales_stage', ['pipeline', 'prospect', 'scheduled_callback']);
                 }),
-        ])->latest()->paginate(\App\Models\AppSetting::recordsPerPage());
+        ])
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($query) use ($search) {
+                    $query->where('first_name', 'like', "%{$search}%")
+                        ->orWhere('last_name', 'like', "%{$search}%")
+                        ->orWhereRaw("concat(first_name, ' ', last_name) like ?", ["%{$search}%"])
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('phone_number', 'like', "%{$search}%")
+                        ->orWhere('department', 'like', "%{$search}%")
+                        ->orWhere('work_type', 'like', "%{$search}%")
+                        ->orWhere('hris_employee_id', 'like', "%{$search}%")
+                        ->orWhereHas('role', fn ($query) => $query->where('name', 'like', "%{$search}%"))
+                        ->orWhereHas('brand', fn ($query) => $query->where('imprint_name', 'like', "%{$search}%"))
+                        ->orWhereHas('team', fn ($query) => $query->where('name', 'like', "%{$search}%"));
+                });
+            })
+            ->latest()
+            ->paginate(\App\Models\AppSetting::recordsPerPage())
+            ->withQueryString();
 
-        return view('admin.users.index', compact('users', 'canManageEmployeeCommissionProfiles'));
+        return view('admin.users.index', compact('users', 'canManageEmployeeCommissionProfiles', 'search'));
     }
 
     public function create()

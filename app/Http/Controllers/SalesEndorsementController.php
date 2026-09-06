@@ -11,6 +11,7 @@ use App\Notifications\SalesEndorsementSubmittedNotification;
 use App\Support\BrandScope;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class SalesEndorsementController extends Controller
@@ -60,7 +61,7 @@ class SalesEndorsementController extends Controller
         abort_unless($request->user()?->is_commission_eligible, 403);
 
         return view('sales-endorsements.create', [
-            'paymentOptions' => ['First Payment', 'Recurring', 'Final Payment', 'Full Payment'],
+            'paymentOptions' => $this->paymentOptions(),
             'serviceOptions' => $this->serviceOptions($request),
             'leadOptions' => $this->leadOptions($request),
             'frankieAgentOptions' => $this->frankieAgentOptions($request),
@@ -86,9 +87,20 @@ class SalesEndorsementController extends Controller
             'isbn' => ['required', 'string', 'max:255'],
             'services' => ['required', 'string', 'max:255'],
             'amount' => ['required', 'numeric', 'min:0'],
-            'payment' => ['required', 'in:First Payment,Recurring,Final Payment,Full Payment'],
+            'amount_to_be_paid' => ['nullable', 'required_unless:payment,Full Payment', 'numeric', 'min:0'],
+            'payment' => ['required', Rule::in($this->acceptedPaymentOptions())],
             'remarks' => ['nullable', 'string', 'max:2000'],
         ]);
+
+        $validated['amount_to_be_paid'] = $validated['payment'] === 'Full Payment'
+            ? $validated['amount']
+            : ($validated['amount_to_be_paid'] ?? $validated['amount']);
+
+        if ((float) $validated['amount_to_be_paid'] > (float) $validated['amount']) {
+            return back()
+                ->withErrors(['amount_to_be_paid' => 'The amount to be paid cannot be greater than the total contract amount.'])
+                ->withInput();
+        }
 
         $lead = isset($validated['lead_id'])
             ? Lead::find($validated['lead_id'])
@@ -320,5 +332,20 @@ class SalesEndorsementController extends Controller
                     || $user->hasPermission('view_contract_records')
                 )
             );
+    }
+
+    private function paymentOptions(): array
+    {
+        return ['Full Payment', 'Installment Payment', 'Recurring Payment', 'Final Payment'];
+    }
+
+    private function acceptedPaymentOptions(): array
+    {
+        return [
+            ...$this->paymentOptions(),
+            'First Payment',
+            'Second Payment',
+            'Recurring',
+        ];
     }
 }

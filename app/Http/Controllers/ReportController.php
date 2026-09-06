@@ -88,7 +88,7 @@ class ReportController extends Controller
                     'count' => '$' . number_format(
                         (float) $payments
                             ->where('status', 'Payment Success')
-                            ->sum(fn (SalesPayment $payment) => (float) ($payment->endorsement?->amount ?? 0)),
+                            ->sum(fn (SalesPayment $payment) => (float) ($payment->amount ?? $payment->endorsement?->amount ?? 0)),
                         2
                     ),
                     'hint' => 'From successful payments',
@@ -369,7 +369,7 @@ class ReportController extends Controller
                     'book_title' => $endorsement?->book_title ?: '-',
                     'agent' => $agentName,
                     'status' => $payment->status ?: '-',
-                    'amount' => (float) ($endorsement?->amount ?? 0),
+                    'amount' => (float) ($payment->amount ?? $endorsement?->amount ?? 0),
                 ];
             })->sortByDesc(fn (array $row) => $row['date']?->timestamp ?? 0)->values();
         }

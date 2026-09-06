@@ -231,8 +231,10 @@ class SalesMtdCalculator
                         $activity->id ?? 0
                     ))
                     ->values();
-                $servicePrice = self::servicePriceForActivity($orderedActivities->first(), $servicePricesByName);
-                $remainingService = $servicePrice > 0 ? $servicePrice : null;
+                $firstActivity = $orderedActivities->first();
+                $servicePrice = self::servicePriceForActivity($firstActivity, $servicePricesByName);
+                $priorPaidAmount = self::priorPackagePaidAmount($firstActivity, $servicePricesByName);
+                $remainingService = $servicePrice > 0 ? max($servicePrice - $priorPaidAmount, 0) : null;
 
                 $orderedActivities->each(function (SalesActivity $activity) use (&$splits, &$remainingService) {
                     $saleAmount = max((float) $activity->amount, 0);
@@ -269,6 +271,36 @@ class SalesMtdCalculator
             $clientKey,
             $serviceKey,
         ]);
+    }
+
+    private static function priorPackagePaidAmount(?SalesActivity $activity, array $servicePricesByName): float
+    {
+        if (! $activity?->sold_date || self::servicePriceForActivity($activity, $servicePricesByName) <= 0) {
+            return 0.0;
+        }
+
+        return (float) SalesActivity::query()
+            ->where('payment_status', 'Payment Success')
+            ->whereDate('sold_date', '<', $activity->sold_date->toDateString())
+            ->where('agent_id', $activity->agent_id)
+            ->when(
+                $activity->frankie_agent_id,
+                fn ($query) => $query->where('frankie_agent_id', $activity->frankie_agent_id),
+                fn ($query) => $query->whereNull('frankie_agent_id')
+            )
+            ->when(
+                $activity->lead_id,
+                fn ($query) => $query->where('lead_id', $activity->lead_id),
+                fn ($query) => $query
+                    ->whereRaw("LOWER(TRIM(COALESCE(author_name, ''))) = ?", [self::normalizeKey($activity->author_name)])
+                    ->whereRaw("LOWER(TRIM(COALESCE(book_title, ''))) = ?", [self::normalizeKey($activity->book_title)])
+            )
+            ->when(
+                $activity->service_id,
+                fn ($query) => $query->where('service_id', $activity->service_id),
+                fn ($query) => $query->whereRaw("LOWER(TRIM(COALESCE(service_name, ''))) = ?", [self::normalizeKey($activity->service_name)])
+            )
+            ->sum('amount');
     }
 
     private static function servicePriceForActivity(?SalesActivity $activity, array $servicePricesByName): float
