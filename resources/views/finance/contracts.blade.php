@@ -41,7 +41,7 @@
         @endif
 
         <div class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800"
-             x-data="{ selectedIds: [], endorseModalOpen: false }">
+             x-data="{ selectedIds: [], endorseModalOpen: false, attachModalOpen: false, selectedContract: null }">
             <div class="border-b border-slate-200 px-6 py-4 dark:border-zinc-800">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <h2 class="font-semibold text-slate-900 dark:text-zinc-100">Contract Directory</h2>
@@ -159,16 +159,17 @@
                                            x-on:change="$event.target.checked ? selectedIds = Array.from(new Set([...selectedIds, ...@js($visibleContractIds)])) : selectedIds = selectedIds.filter((id) => !@js($visibleContractIds).includes(id))">
                                 </th>
                             @endif
-                            <th class="w-[10%] px-3 py-4">Brand</th>
-                            <th class="w-[10%] px-3 py-4">Agent</th>
-                            <th class="w-[12%] px-3 py-4">Author</th>
-                            <th class="w-[16%] px-3 py-4">Book Title</th>
-                            <th class="w-[11%] px-3 py-4">Service</th>
-                            <th class="w-[9%] px-3 py-4">Amount</th>
-                            <th class="w-[9%] px-3 py-4">Contract</th>
-                            <th class="w-[10%] px-3 py-4">Production</th>
-                            <th class="w-[9%] px-3 py-4">Sent</th>
-                            <th class="w-[10%] px-3 py-4">Signed</th>
+                            <th class="w-[9%] px-3 py-4">Brand</th>
+                            <th class="w-[9%] px-3 py-4">Agent</th>
+                            <th class="w-[10%] px-3 py-4">Author</th>
+                            <th class="w-[13%] px-3 py-4">Book Title</th>
+                            <th class="w-[10%] px-3 py-4">Service</th>
+                            <th class="w-[8%] px-3 py-4">Amount</th>
+                            <th class="w-[8%] px-3 py-4">Contract</th>
+                            <th class="w-[12%] px-3 py-4">Contract File</th>
+                            <th class="w-[9%] px-3 py-4">Production</th>
+                            <th class="w-[8%] px-3 py-4">Sent</th>
+                            <th class="w-[9%] px-3 py-4">Signed</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-200 dark:divide-zinc-800">
@@ -221,6 +222,58 @@
                                     </span>
                                 </td>
                                 <td class="px-3 py-4">
+                                    @if ($endorsement->contract_file_path)
+                                        <div class="space-y-2" x-on:click.stop>
+                                            <a href="{{ route('finance.contracts.attachment.download', $endorsement) }}"
+                                               class="block truncate text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline dark:text-emerald-300"
+                                               title="{{ $endorsement->contract_file_name }}">
+                                                {{ \Illuminate\Support\Str::limit($endorsement->contract_file_name ?: 'Attached contract', 24) }}
+                                            </a>
+
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                @if ($canManageContracts)
+                                                    <button type="button"
+                                                            x-on:click="selectedContract = {
+                                                                name: @js($endorsement->endorsement_code . ' - ' . $endorsement->author_name),
+                                                                fileName: @js($endorsement->contract_file_name),
+                                                                attachUrl: @js(route('finance.contracts.attachment.store', $endorsement))
+                                                            }; attachModalOpen = true"
+                                                            class="text-[11px] font-semibold text-slate-500 hover:text-emerald-700 dark:text-zinc-400 dark:hover:text-emerald-300">
+                                                        Replace
+                                                    </button>
+
+                                                    <form method="POST"
+                                                          action="{{ route('finance.contracts.attachment.destroy', $endorsement) }}"
+                                                          x-on:submit="if (!confirm('Remove this attached contract file?')) { $event.preventDefault(); }">
+                                                        @csrf
+                                                        @method('DELETE')
+                                                        <input type="hidden" name="status" value="{{ $status }}">
+                                                        <button type="submit"
+                                                                class="text-[11px] font-semibold text-rose-600 hover:text-rose-700 dark:text-rose-300">
+                                                            Remove
+                                                        </button>
+                                                    </form>
+                                                @endif
+                                            </div>
+                                        </div>
+                                    @elseif ($canManageContracts)
+                                        <button type="button"
+                                                x-on:click.stop="selectedContract = {
+                                                    name: @js($endorsement->endorsement_code . ' - ' . $endorsement->author_name),
+                                                    fileName: null,
+                                                    attachUrl: @js(route('finance.contracts.attachment.store', $endorsement))
+                                                }; attachModalOpen = true"
+                                                class="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 shadow-sm hover:bg-emerald-100 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200 dark:hover:bg-emerald-400/20">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94a3 3 0 1 1 4.243 4.243L8.552 18.32a1.5 1.5 0 1 1-2.121-2.121l9.192-9.193" />
+                                            </svg>
+                                            Attach
+                                        </button>
+                                    @else
+                                        <span class="text-slate-400 dark:text-zinc-500">No file</span>
+                                    @endif
+                                </td>
+                                <td class="px-3 py-4">
                                     @if ($endorsement->productionProject)
                                         <span class="rounded-full bg-sky-100 px-2 py-1 text-[11px] font-semibold text-sky-700 dark:bg-sky-400/15 dark:text-sky-200">
                                             {{ str($endorsement->productionProject->tracker_type)->title() }}
@@ -236,7 +289,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="{{ $canSelectContracts ? 11 : 10 }}" class="px-6 py-16 text-center text-sm text-slate-500 dark:text-zinc-400">
+                                <td colspan="{{ $canSelectContracts ? 12 : 11 }}" class="px-6 py-16 text-center text-sm text-slate-500 dark:text-zinc-400">
                                     No contract records yet.
                                 </td>
                             </tr>
@@ -248,6 +301,69 @@
             @if ($endorsements->hasPages())
                 <div class="border-t border-slate-200 px-5 py-3 dark:border-zinc-800">
                     {{ $endorsements->links() }}
+                </div>
+            @endif
+
+            @if ($canManageContracts)
+                <div x-show="attachModalOpen"
+                     x-cloak
+                     x-transition.opacity
+                     class="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/45 p-4"
+                     x-on:click.self="attachModalOpen = false">
+                    <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <h3 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Attach Contract</h3>
+                                <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
+                                    <span x-text="selectedContract?.name"></span>
+                                </p>
+                            </div>
+
+                            <button type="button"
+                                    x-on:click="attachModalOpen = false"
+                                    class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-800">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <form method="POST"
+                              enctype="multipart/form-data"
+                              x-bind:action="selectedContract?.attachUrl"
+                              class="mt-6 space-y-5">
+                            @csrf
+                            <input type="hidden" name="status" value="{{ $status }}">
+
+                            <template x-if="selectedContract?.fileName">
+                                <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200">
+                                    Current file: <span class="font-semibold" x-text="selectedContract.fileName"></span>
+                                </div>
+                            </template>
+
+                            <label class="block">
+                                <span class="text-sm font-semibold text-slate-700 dark:text-zinc-200">Contract File</span>
+                                <input type="file"
+                                       name="contract_file"
+                                       required
+                                       accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                       class="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm text-slate-700 shadow-sm file:mr-4 file:rounded-lg file:border-0 file:bg-emerald-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-emerald-700 hover:file:bg-emerald-100 focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:file:bg-emerald-400/10 dark:file:text-emerald-200">
+                                <span class="mt-2 block text-xs text-slate-500 dark:text-zinc-400">Accepted files: PDF, Word, JPG, or PNG. Max 10 MB.</span>
+                            </label>
+
+                            <div class="flex justify-end gap-3">
+                                <button type="button"
+                                        x-on:click="attachModalOpen = false"
+                                        class="rounded-xl px-5 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                                    Cancel
+                                </button>
+                                <button type="submit"
+                                        class="rounded-xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 dark:bg-emerald-400 dark:text-zinc-950 dark:hover:bg-emerald-300">
+                                    Save Contract
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             @endif
 

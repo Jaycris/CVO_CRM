@@ -36,6 +36,9 @@ class SalesEndorsement extends Model
         'contract_status',
         'contract_sent_at',
         'contract_signed_at',
+        'contract_file_path',
+        'contract_file_name',
+        'contract_file_uploaded_at',
     ];
 
     protected function casts(): array
@@ -47,6 +50,7 @@ class SalesEndorsement extends Model
             'amount_to_be_paid' => 'decimal:2',
             'contract_sent_at' => 'datetime',
             'contract_signed_at' => 'datetime',
+            'contract_file_uploaded_at' => 'datetime',
         ];
     }
 

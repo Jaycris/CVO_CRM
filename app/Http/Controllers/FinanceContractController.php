@@ -9,7 +9,9 @@ use App\Notifications\ProductionProjectsEndorsedNotification;
 use App\Support\BrandScope;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FinanceContractController extends Controller
 {
@@ -134,6 +136,70 @@ class FinanceContractController extends Controller
         return redirect()
             ->route('finance.contracts.index', ['status' => $validated['status'] ?? 'all'])
             ->with('success', 'Selected contract record(s) deleted successfully.');
+    }
+
+    public function attach(Request $request, SalesEndorsement $endorsement): RedirectResponse
+    {
+        abort_unless($this->userHasPermission($request, 'manage_contract_records'), 403);
+        abort_unless($this->userCanAccessBrand($request, $endorsement->brand_id), 403);
+
+        $validated = $request->validate([
+            'contract_file' => ['required', 'file', 'mimes:pdf,doc,docx,jpg,jpeg,png', 'max:10240'],
+            'status' => ['nullable', 'in:all,sent,signed'],
+        ]);
+
+        if ($endorsement->contract_file_path) {
+            Storage::disk('local')->delete($endorsement->contract_file_path);
+        }
+
+        $file = $validated['contract_file'];
+        $path = $file->store("contracts/{$endorsement->id}", 'local');
+
+        $endorsement->update([
+            'contract_file_path' => $path,
+            'contract_file_name' => $file->getClientOriginalName(),
+            'contract_file_uploaded_at' => now(),
+        ]);
+
+        return redirect()
+            ->route('finance.contracts.index', ['status' => $validated['status'] ?? 'all'])
+            ->with('success', 'Contract file attached successfully.');
+    }
+
+    public function download(Request $request, SalesEndorsement $endorsement): StreamedResponse
+    {
+        abort_unless($this->userHasPermission($request, 'view_contract_records'), 403);
+        abort_unless($this->userCanAccessBrand($request, $endorsement->brand_id), 403);
+        abort_unless($endorsement->contract_file_path && Storage::disk('local')->exists($endorsement->contract_file_path), 404);
+
+        return Storage::disk('local')->download(
+            $endorsement->contract_file_path,
+            $endorsement->contract_file_name ?: "contract-{$endorsement->endorsement_code}.pdf"
+        );
+    }
+
+    public function removeAttachment(Request $request, SalesEndorsement $endorsement): RedirectResponse
+    {
+        abort_unless($this->userHasPermission($request, 'manage_contract_records'), 403);
+        abort_unless($this->userCanAccessBrand($request, $endorsement->brand_id), 403);
+
+        $validated = $request->validate([
+            'status' => ['nullable', 'in:all,sent,signed'],
+        ]);
+
+        if ($endorsement->contract_file_path) {
+            Storage::disk('local')->delete($endorsement->contract_file_path);
+        }
+
+        $endorsement->update([
+            'contract_file_path' => null,
+            'contract_file_name' => null,
+            'contract_file_uploaded_at' => null,
+        ]);
+
+        return redirect()
+            ->route('finance.contracts.index', ['status' => $validated['status'] ?? 'all'])
+            ->with('success', 'Contract file removed successfully.');
     }
 
     public function endorseToProduction(Request $request): RedirectResponse

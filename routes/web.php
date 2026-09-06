@@ -353,6 +353,9 @@ Route::middleware('auth')->group(function () {
     Route::put('/finance/contracts', [FinanceContractController::class, 'bulkUpdate'])->name('finance.contracts.bulk-update');
     Route::post('/finance/contracts/endorse-production', [FinanceContractController::class, 'endorseToProduction'])->name('finance.contracts.endorse-production');
     Route::delete('/finance/contracts', [FinanceContractController::class, 'bulkDestroy'])->name('finance.contracts.bulk-destroy');
+    Route::post('/finance/contracts/{endorsement}/attachment', [FinanceContractController::class, 'attach'])->name('finance.contracts.attachment.store');
+    Route::get('/finance/contracts/{endorsement}/attachment', [FinanceContractController::class, 'download'])->name('finance.contracts.attachment.download');
+    Route::delete('/finance/contracts/{endorsement}/attachment', [FinanceContractController::class, 'removeAttachment'])->name('finance.contracts.attachment.destroy');
     Route::put('/finance/contracts/{endorsement}', [FinanceContractController::class, 'update'])->name('finance.contracts.update');
     Route::get('/production/tasks', [ProductionProjectController::class, 'tasks'])->name('production.tasks.index');
     Route::get('/production/tasks/completed', [ProductionProjectController::class, 'completedTasks'])->name('production.tasks.completed');
