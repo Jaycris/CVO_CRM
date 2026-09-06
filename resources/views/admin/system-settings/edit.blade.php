@@ -120,7 +120,7 @@
                 <div>
                     <h2 class="text-lg font-semibold text-slate-900 dark:text-zinc-100">Integration Commission API</h2>
                     <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
-                        Paste this URL and token in the connected system so it can request commission slips from the CRM.
+                        Paste these URLs and token in PHREMS so it can mirror commission setup and request commission slips from the CRM.
                     </p>
                 </div>
 
@@ -138,7 +138,7 @@
 
             <div class="mt-5">
                 <label for="commission_slip_api_url" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">
-                    API URL
+                    Commission Slip API URL
                 </label>
                 <div class="flex flex-col gap-3 sm:flex-row">
                     <input id="commission_slip_api_url"
@@ -152,6 +152,27 @@
                         Copy
                     </button>
                 </div>
+            </div>
+
+            <div class="mt-5">
+                <label for="sales_performance_mtd_api_url" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">
+                    Sales Performance MTD API URL
+                </label>
+                <div class="flex flex-col gap-3 sm:flex-row">
+                    <input id="sales_performance_mtd_api_url"
+                           type="text"
+                           readonly
+                           value="{{ $salesPerformanceMtdApiUrl }}"
+                           class="min-w-0 flex-1 rounded-xl border-slate-300 px-4 py-3 font-mono text-xs shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                    <button type="button"
+                            onclick="navigator.clipboard.writeText(document.getElementById('sales_performance_mtd_api_url').value); this.textContent = 'Copied'; setTimeout(() => this.textContent = 'Copy', 1500);"
+                            class="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[var(--brand-primary)] focus:ring-offset-2 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:ring-offset-zinc-900">
+                        Copy
+                    </button>
+                </div>
+                <p class="mt-2 text-sm text-slate-500 dark:text-zinc-400">
+                    PHREMS calls this with ?month=YYYY-MM to mirror hris_employee_id, commission eligibility, commission scheme, and agent targets.
+                </p>
             </div>
 
             <div class="mt-5">
@@ -171,7 +192,7 @@
                     </button>
                 </div>
                 <p class="mt-2 text-sm text-slate-500 dark:text-zinc-400">
-                    The connected system can send this as a Bearer token or the supported integration token header.
+                    PHREMS can send this as a Bearer token or with the X-HRIS-Token header.
                 </p>
             </div>
 

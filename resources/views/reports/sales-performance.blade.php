@@ -437,7 +437,7 @@
             const updateFloatingScroll = () => {
                 const rect = agentMtdTableScroll.getBoundingClientRect();
                 const hasHorizontalOverflow = agentMtdTableScroll.scrollWidth > agentMtdTableScroll.clientWidth;
-                const tableIsVisible = rect.top < window.innerHeight - 24 && rect.bottom > 96;
+                const tableIsVisible = rect.top < window.innerHeight - 96 && rect.bottom > window.innerHeight - 72;
 
                 if (!hasHorizontalOverflow || !tableIsVisible) {
                     agentMtdBottomScroll.classList.add('hidden');

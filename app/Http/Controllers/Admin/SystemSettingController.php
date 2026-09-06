@@ -23,6 +23,7 @@ class SystemSettingController extends Controller
             'hrisBaseUrl' => AppSetting::hrisBaseUrl(),
             'hrisCrmLookupToken' => AppSetting::hrisCrmLookupToken(),
             'commissionSlipApiUrl' => route('api.hris.commission-slip'),
+            'salesPerformanceMtdApiUrl' => route('api.hris.sales-performance-mtd'),
         ]);
     }
 
