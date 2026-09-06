@@ -279,7 +279,7 @@
                 </table>
             </div>
 
-            <div class="sticky bottom-0 z-30 overflow-x-auto border-t border-slate-200 bg-slate-50/95 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95 [scrollbar-gutter:stable]" data-agent-mtd-scroll-bottom>
+            <div class="fixed bottom-0 z-[60] hidden overflow-x-auto border-t border-slate-200 bg-slate-50/95 shadow-[0_-8px_20px_rgba(15,23,42,0.08)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95 [scrollbar-gutter:stable]" data-agent-mtd-scroll-bottom>
                 <div class="h-4 min-w-[1900px]" data-agent-mtd-scroll-spacer></div>
             </div>
 
@@ -434,6 +434,24 @@
                 agentMtdScrollSpacer.style.width = `${table?.scrollWidth || agentMtdTableScroll.scrollWidth}px`;
             };
 
+            const updateFloatingScroll = () => {
+                const rect = agentMtdTableScroll.getBoundingClientRect();
+                const hasHorizontalOverflow = agentMtdTableScroll.scrollWidth > agentMtdTableScroll.clientWidth;
+                const tableIsVisible = rect.top < window.innerHeight - 24 && rect.bottom > 96;
+
+                if (!hasHorizontalOverflow || !tableIsVisible) {
+                    agentMtdBottomScroll.classList.add('hidden');
+                    return;
+                }
+
+                const left = Math.max(rect.left, 0);
+                const width = Math.min(rect.width, window.innerWidth - left);
+
+                agentMtdBottomScroll.style.left = `${left}px`;
+                agentMtdBottomScroll.style.width = `${width}px`;
+                agentMtdBottomScroll.classList.remove('hidden');
+            };
+
             const syncScroll = (source, target) => {
                 if (isSyncingScroll) {
                     return;
@@ -447,7 +465,12 @@
             };
 
             syncSpacerWidth();
-            window.addEventListener('resize', syncSpacerWidth);
+            updateFloatingScroll();
+            window.addEventListener('resize', () => {
+                syncSpacerWidth();
+                updateFloatingScroll();
+            });
+            window.addEventListener('scroll', updateFloatingScroll, { passive: true });
             agentMtdBottomScroll.addEventListener('scroll', () => syncScroll(agentMtdBottomScroll, agentMtdTableScroll));
             agentMtdTableScroll.addEventListener('scroll', () => syncScroll(agentMtdTableScroll, agentMtdBottomScroll));
         }
