@@ -158,11 +158,7 @@
                 </div>
             </div>
 
-            <div class="overflow-x-auto border-b border-slate-200 bg-slate-50/70 dark:border-zinc-800 dark:bg-zinc-950/60 [scrollbar-gutter:stable]" data-agent-mtd-scroll-top>
-                <div class="h-3 min-w-[1900px]" data-agent-mtd-scroll-spacer></div>
-            </div>
-
-            <div class="overflow-x-auto overscroll-x-contain pb-2 [scrollbar-gutter:stable]" data-agent-mtd-scroll-table>
+            <div class="overflow-x-auto overscroll-x-contain [scrollbar-gutter:stable]" data-agent-mtd-scroll-table>
                 <table class="min-w-[1900px] divide-y divide-slate-200 text-sm dark:divide-zinc-800">
                     <thead class="bg-slate-50 text-left text-xs font-bold uppercase text-slate-500 dark:bg-zinc-900/80 dark:text-zinc-400">
                         <tr>
@@ -281,6 +277,10 @@
                         @endforelse
                     </tbody>
                 </table>
+            </div>
+
+            <div class="sticky bottom-0 z-30 overflow-x-auto border-t border-slate-200 bg-slate-50/95 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95 [scrollbar-gutter:stable]" data-agent-mtd-scroll-bottom>
+                <div class="h-4 min-w-[1900px]" data-agent-mtd-scroll-spacer></div>
             </div>
 
             @if ($agentRows->hasPages())
@@ -422,11 +422,11 @@
             });
         });
 
-        const agentMtdTopScroll = document.querySelector('[data-agent-mtd-scroll-top]');
+        const agentMtdBottomScroll = document.querySelector('[data-agent-mtd-scroll-bottom]');
         const agentMtdTableScroll = document.querySelector('[data-agent-mtd-scroll-table]');
         const agentMtdScrollSpacer = document.querySelector('[data-agent-mtd-scroll-spacer]');
 
-        if (agentMtdTopScroll && agentMtdTableScroll && agentMtdScrollSpacer) {
+        if (agentMtdBottomScroll && agentMtdTableScroll && agentMtdScrollSpacer) {
             const table = agentMtdTableScroll.querySelector('table');
             let isSyncingScroll = false;
 
@@ -448,8 +448,8 @@
 
             syncSpacerWidth();
             window.addEventListener('resize', syncSpacerWidth);
-            agentMtdTopScroll.addEventListener('scroll', () => syncScroll(agentMtdTopScroll, agentMtdTableScroll));
-            agentMtdTableScroll.addEventListener('scroll', () => syncScroll(agentMtdTableScroll, agentMtdTopScroll));
+            agentMtdBottomScroll.addEventListener('scroll', () => syncScroll(agentMtdBottomScroll, agentMtdTableScroll));
+            agentMtdTableScroll.addEventListener('scroll', () => syncScroll(agentMtdTableScroll, agentMtdBottomScroll));
         }
     </script>
 </x-app-layout>
