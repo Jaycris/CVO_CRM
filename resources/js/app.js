@@ -40,19 +40,26 @@ Alpine.data('datePicker', (initialValue = '', minimum = null, maximum = null) =>
         if (!this.open || !this.$refs.trigger) return;
 
         const rect = this.$refs.trigger.getBoundingClientRect();
-        const width = Math.min(336, window.innerWidth - 32);
-        const left = Math.max(16, Math.min(rect.left, window.innerWidth - width - 16));
-        const topPadding = 80;
+        const modalPanel = this.$refs.trigger.closest('.crm-modal-panel');
+        const bounds = modalPanel
+            ? modalPanel.getBoundingClientRect()
+            : { top: 0, right: window.innerWidth, bottom: window.innerHeight, left: 0 };
+        const leftBoundary = Math.max(16, bounds.left + 16);
+        const rightBoundary = Math.min(window.innerWidth - 16, bounds.right - 16);
+        const width = Math.min(336, window.innerWidth - 32, Math.max(240, rightBoundary - leftBoundary));
+        const left = Math.max(leftBoundary, Math.min(rect.left, rightBoundary - width));
+        const topPadding = modalPanel ? Math.max(16, bounds.top + 16) : 80;
         const bottomPadding = 16;
         const preferredHeight = 420;
-        const spaceBelow = Math.max(window.innerHeight - rect.bottom - bottomPadding, 160);
-        const spaceAbove = Math.max(rect.top - topPadding, 0);
+        const bottomBoundary = modalPanel ? Math.min(window.innerHeight - 16, bounds.bottom - 16) : window.innerHeight - bottomPadding;
+        const spaceBelow = Math.max(bottomBoundary - rect.bottom - 8, 160);
+        const spaceAbove = Math.max(rect.top - topPadding - 8, 0);
         const openAbove = spaceBelow < preferredHeight
             && spaceAbove > spaceBelow
-            && rect.top - preferredHeight - 8 >= topPadding;
+            && rect.top - Math.min(preferredHeight, spaceAbove) - 8 >= topPadding;
         const popupHeight = Math.min(preferredHeight, openAbove ? spaceAbove : spaceBelow);
-        const top = openAbove ? 'auto' : (rect.bottom + 8) + 'px';
-        const bottom = openAbove ? Math.max(bottomPadding, window.innerHeight - rect.top + 8) + 'px' : 'auto';
+        const top = openAbove ? Math.max(topPadding, rect.top - popupHeight - 8) + 'px' : (rect.bottom + 8) + 'px';
+        const bottom = 'auto';
 
         this.popupStyle = [
             'width: ' + width + 'px',
