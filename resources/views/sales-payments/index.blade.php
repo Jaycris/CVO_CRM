@@ -315,7 +315,7 @@
             <div x-show="createModalOpen"
                  x-cloak
                  x-transition.opacity
-                 class="crm-modal-backdrop fixed inset-0 z-[9998] flex items-start justify-center overflow-y-auto bg-zinc-950/60 px-4 py-20 backdrop-blur-sm sm:py-24"
+                 class="crm-modal-backdrop fixed inset-0 z-[9998] flex items-center justify-center overflow-y-auto bg-zinc-950/60 p-4 backdrop-blur-sm"
                  x-on:click.self="createModalOpen = false">
                 <div class="crm-modal-panel w-full max-w-3xl rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
                     <div class="flex items-start justify-between gap-4">
@@ -427,7 +427,7 @@
 
                         <label class="block">
                             <span class="text-sm font-semibold text-slate-700 dark:text-zinc-200">Sold Date <span class="text-rose-500">*</span></span>
-                            <x-date-picker name="sold_date" :value="old('sold_date')" required
+                            <x-date-picker name="sold_date" :value="old('sold_date')" :teleport="false" required
                                            class="mt-2 w-full rounded-xl border-slate-300 px-4 py-2 text-sm shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100" />
                             <x-input-error :messages="$errors->get('sold_date')" class="mt-2" />
                         </label>
@@ -483,7 +483,7 @@
             <div x-show="paymentModalOpen"
                  x-cloak
                  x-transition.opacity
-                 class="crm-modal-backdrop fixed inset-0 z-[9998] flex items-start justify-center overflow-y-auto bg-zinc-950/60 px-4 py-20 backdrop-blur-sm sm:py-24"
+                 class="crm-modal-backdrop fixed inset-0 z-[9998] flex items-center justify-center overflow-y-auto bg-zinc-950/60 p-4 backdrop-blur-sm"
                  x-on:click.self="paymentModalOpen = false">
                 <div class="crm-modal-panel w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
                     <div class="flex items-start justify-between gap-4">
@@ -535,7 +535,7 @@
 
                         <label class="block">
                             <span class="text-sm font-semibold text-slate-700 dark:text-zinc-200">Sold Date</span>
-                            <x-date-picker name="sold_date" x-model="selectedPayment.soldDate" required
+                            <x-date-picker name="sold_date" x-model="selectedPayment.soldDate" :teleport="false" required
                                            class="mt-2 w-full rounded-xl border-slate-300 px-4 py-2 text-sm shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100" />
                         </label>
 

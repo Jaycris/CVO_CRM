@@ -6,6 +6,7 @@
     'placeholder' => 'Select a date',
     'min' => null,
     'max' => null,
+    'teleport' => true,
 ])
 
 @php
@@ -36,7 +37,9 @@
         </svg>
     </button>
 
-    <template x-teleport="body">
+    @if ($teleport)
+        <template x-teleport="body">
+    @endif
     <div x-show="open"
          x-cloak
          x-transition.opacity
@@ -44,8 +47,12 @@
          x-on:keydown.escape.window="close()"
          x-on:resize.window="updatePosition()"
          x-on:scroll.window="updatePosition()"
+         @if ($teleport)
          x-bind:style="popupStyle"
          class="fixed z-[10050] w-[21rem] rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+         @else
+         class="absolute bottom-full left-0 z-[10020] mb-2 max-h-[24rem] w-[21rem] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+         @endif
          role="dialog"
          aria-label="Choose date">
         <div class="flex items-center justify-between gap-3">
@@ -91,5 +98,7 @@
             </button>
         </div>
     </div>
-    </template>
+    @if ($teleport)
+        </template>
+    @endif
 </div>
