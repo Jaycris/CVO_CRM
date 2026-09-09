@@ -6,6 +6,7 @@
     @php
         $money = fn ($value) => '$' . number_format((float) $value, 2);
         $peso = fn ($value) => '₱' . number_format((float) $value, 2);
+        $isAdmin = auth()->user()?->role?->name === 'Admin';
         $showBrandColumn = $canViewAll || auth()->user()?->department !== 'Sales';
         $statementColumnCount = $showBrandColumn ? 14 : 13;
     @endphp
@@ -180,7 +181,9 @@
                                 <td class="whitespace-nowrap px-4 py-3 text-xs">{{ $money($row['markup_amount']) }}</td>
                                 <td class="whitespace-nowrap px-4 py-3 text-xs">
                                     {{ $money($row['service_commission']) }}
-                                    <span class="block text-xs text-slate-400">{{ number_format($row['service_commission_percent'], 2) }}%</span>
+                                    @if ($isAdmin)
+                                        <span class="block text-xs text-slate-400">{{ number_format($row['service_commission_percent'], 2) }}%</span>
+                                    @endif
                                     @if (($row['threshold_applied_amount'] ?? 0) > 0)
                                         <span class="block text-xs font-semibold text-amber-600 dark:text-amber-300">After threshold</span>
                                     @endif

@@ -8,6 +8,7 @@
         $money = fn ($value) => '$' . number_format((float) $value, 2);
         $peso = fn ($value) => '₱' . number_format((float) $value, 2);
         $currentUserId = auth()->id();
+        $isAdmin = auth()->user()?->role?->name === 'Admin';
         $canViewAllCommissionNumbers = $canViewAllCommissionNumbers ?? false;
         $summaryCards = [
             ['label' => 'Global MTD', 'value' => $summary['global']['mtd'], 'hint' => 'All credited sales this month', 'tone' => 'emerald'],
@@ -228,6 +229,11 @@
                                 <td class="whitespace-nowrap px-5 py-5">
                                     @if ($canViewRowCommission)
                                         <span class="font-bold text-slate-900 dark:text-zinc-100">{{ $money($row['service_commission']) }}</span>
+                                        @if ($isAdmin)
+                                            <p class="mt-1 text-xs font-semibold text-slate-400 dark:text-zinc-500">
+                                                {{ number_format($row['service_commission_percent'], 2) }}%
+                                            </p>
+                                        @endif
                                     @else
                                         <span class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">Private</span>
                                     @endif
