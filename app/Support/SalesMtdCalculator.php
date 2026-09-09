@@ -356,9 +356,9 @@ class SalesMtdCalculator
                     ))
                     ->values();
 
-                $serviceMtd = (float) $agentRows->sum('service_amount');
+                $totalMtd = (float) $agentRows->sum('amount');
                 $targetAmount = (float) ($agentTargetRows->get($agentId)?->amount ?? 0);
-                $serviceRate = self::serviceRateFor($serviceMtd, $targetAmount, $agentRows->first()['commission_profile'] ?? null);
+                $serviceRate = self::serviceRateFor($totalMtd, $targetAmount, $agentRows->first()['commission_profile'] ?? null);
                 $remainingThreshold = self::serviceThreshold($agentRows->first()['agent'] ?? null);
 
                 return $agentRows->map(function (array $row) use (&$remainingThreshold, $serviceRate, $exchangeRate) {
@@ -473,11 +473,19 @@ class SalesMtdCalculator
 
     private static function cardPaymentHoldAmount(?string $paymentMethod, float $phpTotal, float $holdPercent): float
     {
-        if ($paymentMethod !== 'Card' || $phpTotal <= 0 || $holdPercent <= 0) {
+        if (! self::isCardPaymentMethod($paymentMethod) || $phpTotal <= 0 || $holdPercent <= 0) {
             return 0.0;
         }
 
         return round($phpTotal * ($holdPercent / 100), 2);
+    }
+
+    private static function isCardPaymentMethod(?string $paymentMethod): bool
+    {
+        $normalizedMethod = strtolower(trim((string) $paymentMethod));
+
+        return str_contains($normalizedMethod, 'card')
+            || str_contains($normalizedMethod, 'invoice');
     }
 
     private static function teamMtd(Collection $creditRows, string $workType): float
