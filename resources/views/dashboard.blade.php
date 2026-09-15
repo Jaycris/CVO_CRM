@@ -167,7 +167,10 @@
                     </p>
                 </div>
 
-                <div class="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+                <div @class([
+                    'mt-5 grid grid-cols-1 gap-4',
+                    'lg:grid-cols-2 2xl:grid-cols-3' => $salesMtdBrandSnapshots->count() > 1,
+                ])>
                     @forelse ($salesMtdBrandSnapshots as $snapshot)
                         @php
                             $brand = $snapshot['brand'];
