@@ -108,7 +108,7 @@
                             <th class="w-[10%] px-3 py-4">Service</th>
                             <th class="w-[9%] px-3 py-4">Contract Amount</th>
                             <th class="w-[10%] px-3 py-4">Payment Type</th>
-                            @if ($isAdmin)
+                            @if ($canViewSensitiveEndorsementDetails)
                                 <th class="w-[10%] px-3 py-4">Contact</th>
                                 <th class="w-[11%] px-3 py-4">Email</th>
                                 <th class="w-[9%] px-3 py-4">ISBN</th>
@@ -169,7 +169,7 @@
                                 <td class="break-words px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">{{ $endorsement->services }}</td>
                                 <td class="px-3 py-4 font-semibold leading-snug text-slate-900 dark:text-zinc-100">${{ number_format((float) $endorsement->amount, 2) }}</td>
                                 <td class="break-words px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">{{ $endorsement->payment }}</td>
-                                @if ($isAdmin)
+                                @if ($canViewSensitiveEndorsementDetails)
                                     <td class="break-words px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">{{ $endorsement->contact_number }}</td>
                                     <td class="px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">
                                         <span class="block truncate" title="{{ $endorsement->email }}">{{ $endorsement->email }}</span>
@@ -180,7 +180,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="{{ ($isAdmin ? 12 : 9) + ($canDeleteEndorsements ? 1 : 0) }}" class="px-6 py-16 text-center text-sm text-slate-500 dark:text-zinc-400">
+                                <td colspan="{{ ($canViewSensitiveEndorsementDetails ? 12 : 9) + ($canDeleteEndorsements ? 1 : 0) }}" class="px-6 py-16 text-center text-sm text-slate-500 dark:text-zinc-400">
                                     No sales endorsements yet.
                                 </td>
                             </tr>

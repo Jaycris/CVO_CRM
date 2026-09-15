@@ -51,6 +51,7 @@ class SalesEndorsementController extends Controller
                 && (bool) $request->user()?->is_commission_eligible,
             'canDeleteEndorsements' => $this->userHasPermission($request, 'delete_sales_endorsements'),
             'isAdmin' => $request->user()?->role?->name === 'Admin',
+            'canViewSensitiveEndorsementDetails' => $this->canViewSensitiveEndorsementDetails($request),
             'search' => $search,
         ]);
     }
@@ -186,6 +187,17 @@ class SalesEndorsementController extends Controller
     {
         return $request->user()?->role?->name === 'Admin'
             || $request->user()?->role?->name === 'Finance Officer'
+            || $request->user()?->hasPermission('view_all_sales_endorsements')
+            || $request->user()?->hasPermission('view_payment_records')
+            || $request->user()?->hasPermission('view_finance_clients')
+            || $request->user()?->hasPermission('view_contract_records');
+    }
+
+    private function canViewSensitiveEndorsementDetails(Request $request): bool
+    {
+        return $request->user()?->role?->name === 'Admin'
+            || $request->user()?->role?->name === 'Finance Officer'
+            || $request->user()?->role?->name === 'General Manager'
             || $request->user()?->hasPermission('view_all_sales_endorsements')
             || $request->user()?->hasPermission('view_payment_records')
             || $request->user()?->hasPermission('view_finance_clients')
