@@ -52,6 +52,23 @@
                         <x-input-error :messages="$errors->get('crm_display_name')" class="mt-2" />
                     </div>
 
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
+                        <input type="hidden" name="is_sales_brand" value="0">
+                        <label class="flex items-start gap-3 text-sm font-semibold text-slate-800 dark:text-zinc-100">
+                            <input type="checkbox"
+                                   name="is_sales_brand"
+                                   value="1"
+                                   @checked((string) old('is_sales_brand', '1') === '1')
+                                   class="mt-1 rounded border-slate-300 text-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950">
+                            <span>
+                                Include in Sales Reporting
+                                <span class="mt-1 block text-xs font-normal text-slate-500 dark:text-zinc-400">
+                                    Shows this brand in Sales Dashboard MTD targets and the Home sales snapshot.
+                                </span>
+                            </span>
+                        </label>
+                    </div>
+
                     <div>
                         <label for="description" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">Description</label>
                         <textarea id="description"
@@ -137,10 +154,11 @@
                         <thead class="bg-slate-50 text-[11px] uppercase leading-tight text-slate-500 dark:bg-zinc-950 dark:text-zinc-400">
                             <tr>
                                 <th class="w-[12%] px-5 py-4">Logo</th>
-                                <th class="w-[20%] px-5 py-4">Imprint Name</th>
-                                <th class="w-[14%] px-5 py-4">Theme</th>
-                                <th class="w-[24%] px-5 py-4">Description</th>
-                                <th class="w-[20%] px-5 py-4">Address</th>
+                                <th class="w-[18%] px-5 py-4">Imprint Name</th>
+                                <th class="w-[12%] px-5 py-4">Theme</th>
+                                <th class="w-[14%] px-5 py-4">Sales</th>
+                                <th class="w-[20%] px-5 py-4">Description</th>
+                                <th class="w-[14%] px-5 py-4">Address</th>
                                 <th class="w-[10%] px-5 py-4 text-right">Action</th>
                             </tr>
                         </thead>
@@ -172,6 +190,17 @@
                                                      class="h-6 w-6 rounded object-contain ring-1 ring-slate-200 dark:ring-zinc-700">
                                             @endif
                                         </div>
+                                    </td>
+                                    <td class="px-5 py-4">
+                                        @if ($brand->is_sales_brand)
+                                            <span class="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-400/10 dark:text-emerald-200 dark:ring-emerald-400/30">
+                                                Sales brand
+                                            </span>
+                                        @else
+                                            <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500 ring-1 ring-slate-200 dark:bg-zinc-800 dark:text-zinc-300 dark:ring-zinc-700">
+                                                Hidden from sales
+                                            </span>
+                                        @endif
                                     </td>
                                     <td class="break-words px-5 py-4 text-slate-600 dark:text-zinc-300">{{ $brand->description ?: '-' }}</td>
                                     <td class="break-words px-5 py-4 text-slate-600 dark:text-zinc-300">{{ $brand->address ?: '-' }}</td>
@@ -227,6 +256,23 @@
                                                                placeholder="Example: Inkspire Media House CRM"
                                                                class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
                                                         <p class="mt-2 text-xs text-slate-500 dark:text-zinc-400">Shown in the browser tab after users log in.</p>
+                                                    </div>
+
+                                                    <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
+                                                        <input type="hidden" name="is_sales_brand" value="0">
+                                                        <label class="flex items-start gap-3 text-sm font-semibold text-slate-800 dark:text-zinc-100">
+                                                            <input type="checkbox"
+                                                                   name="is_sales_brand"
+                                                                   value="1"
+                                                                   @checked((string) old('is_sales_brand', $brand->is_sales_brand ? '1' : '0') === '1')
+                                                                   class="mt-1 rounded border-slate-300 text-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950">
+                                                            <span>
+                                                                Include in Sales Reporting
+                                                                <span class="mt-1 block text-xs font-normal text-slate-500 dark:text-zinc-400">
+                                                                    Shows this brand in Sales Dashboard MTD targets and the Home sales snapshot.
+                                                                </span>
+                                                            </span>
+                                                        </label>
                                                     </div>
 
                                                     <div>
@@ -313,7 +359,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="6" class="px-6 py-16 text-center text-sm text-slate-500 dark:text-zinc-400">
+                                    <td colspan="7" class="px-6 py-16 text-center text-sm text-slate-500 dark:text-zinc-400">
                                         No brands yet.
                                     </td>
                                 </tr>

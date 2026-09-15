@@ -146,37 +146,100 @@
 
         @php
             $salesMtdGlobal = $salesMtdSummary['global'] ?? ['mtd' => 0, 'target' => 0, 'remaining' => 0, 'percent' => 0];
+            $salesMtdBrandSnapshots = $salesMtdBrandSnapshots ?? collect();
+            $isAdminDashboard = auth()->user()?->role?->name === 'Admin';
         @endphp
 
         <section class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
-            <div class="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                    <p class="text-sm font-semibold uppercase tracking-wide text-[var(--brand-primary)] dark:text-[var(--brand-accent)]">
-                        Sales MTD Snapshot
-                    </p>
-                    <h3 class="mt-2 text-2xl font-bold text-slate-900 dark:text-zinc-100">
+            @if ($isAdminDashboard)
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <p class="text-sm font-semibold uppercase tracking-wide text-[var(--brand-primary)] dark:text-[var(--brand-accent)]">
+                            Sales MTD Snapshot by Brand
+                        </p>
+                        <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
+                            Only brands marked for sales reporting are shown here.
+                        </p>
+                    </div>
+                    <p class="text-sm font-bold text-slate-900 dark:text-zinc-100">
                         ${{ number_format((float) $salesMtdGlobal['mtd'], 2) }}
-                        <span class="text-base font-semibold text-slate-500 dark:text-zinc-400">
-                            of ${{ number_format((float) $salesMtdGlobal['target'], 2) }} target
-                        </span>
-                    </h3>
-                    <p class="mt-2 text-sm text-slate-500 dark:text-zinc-400">
-                        Remaining Target MTD:
-                        <span class="font-bold text-rose-600 dark:text-rose-300">${{ number_format((float) $salesMtdGlobal['remaining'], 2) }}</span>.
-                        PHP commission totals use the exchange rate saved in Commission Settings.
+                        <span class="font-semibold text-slate-500 dark:text-zinc-400">total MTD</span>
                     </p>
                 </div>
 
-                <div class="w-full lg:max-w-md">
-                    <div class="flex justify-between text-sm font-semibold text-slate-600 dark:text-zinc-300">
-                        <span>Global MTD Progress</span>
-                        <span>{{ number_format((float) $salesMtdGlobal['percent'], 2) }}%</span>
+                <div class="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+                    @forelse ($salesMtdBrandSnapshots as $snapshot)
+                        @php
+                            $brand = $snapshot['brand'];
+                            $brandSummary = $snapshot['summary'] ?? ['mtd' => 0, 'target' => 0, 'remaining' => 0, 'percent' => 0];
+                        @endphp
+
+                        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
+                            <div class="flex items-start justify-between gap-3">
+                                <div>
+                                    <p class="font-bold text-slate-900 dark:text-zinc-100">{{ $brand->imprint_name }}</p>
+                                    <p class="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">Sales brand</p>
+                                </div>
+                                <span class="text-sm font-bold text-slate-900 dark:text-zinc-100">
+                                    {{ number_format((float) $brandSummary['percent'], 2) }}%
+                                </span>
+                            </div>
+
+                            <h3 class="mt-4 text-2xl font-bold text-slate-900 dark:text-zinc-100">
+                                ${{ number_format((float) $brandSummary['mtd'], 2) }}
+                            </h3>
+                            <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
+                                of ${{ number_format((float) $brandSummary['target'], 2) }} target
+                            </p>
+
+                            <div class="mt-4 h-3 overflow-hidden rounded-full bg-white dark:bg-zinc-800">
+                                <div class="h-3 rounded-full bg-[var(--brand-primary)] transition-all" style="width: {{ min((float) $brandSummary['percent'], 100) }}%;"></div>
+                            </div>
+
+                            <p class="mt-3 text-sm text-slate-500 dark:text-zinc-400">
+                                Remaining:
+                                <span class="font-bold text-rose-600 dark:text-rose-300">${{ number_format((float) $brandSummary['remaining'], 2) }}</span>
+                            </p>
+                        </div>
+                    @empty
+                        <div class="rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">
+                            No brands are marked for sales reporting yet.
+                        </div>
+                    @endforelse
+                </div>
+            @else
+                <div class="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                        <p class="text-sm font-semibold uppercase tracking-wide text-[var(--brand-primary)] dark:text-[var(--brand-accent)]">
+                            Sales MTD Snapshot
+                        </p>
+                        <p class="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">
+                            {{ $dashboardBrandName ?? 'All Brands' }}
+                        </p>
+                        <h3 class="mt-2 text-2xl font-bold text-slate-900 dark:text-zinc-100">
+                            ${{ number_format((float) $salesMtdGlobal['mtd'], 2) }}
+                            <span class="text-base font-semibold text-slate-500 dark:text-zinc-400">
+                                of ${{ number_format((float) $salesMtdGlobal['target'], 2) }} target
+                            </span>
+                        </h3>
+                        <p class="mt-2 text-sm text-slate-500 dark:text-zinc-400">
+                            Remaining Target MTD:
+                            <span class="font-bold text-rose-600 dark:text-rose-300">${{ number_format((float) $salesMtdGlobal['remaining'], 2) }}</span>.
+                            PHP commission totals use the exchange rate saved in Commission Settings.
+                        </p>
                     </div>
-                    <div class="mt-3 h-4 overflow-hidden rounded-full bg-slate-100 dark:bg-zinc-800">
-                        <div class="h-4 rounded-full bg-[var(--brand-primary)] transition-all" style="width: {{ min((float) $salesMtdGlobal['percent'], 100) }}%;"></div>
+
+                    <div class="w-full lg:max-w-md">
+                        <div class="flex justify-between text-sm font-semibold text-slate-600 dark:text-zinc-300">
+                            <span>Global MTD Progress</span>
+                            <span>{{ number_format((float) $salesMtdGlobal['percent'], 2) }}%</span>
+                        </div>
+                        <div class="mt-3 h-4 overflow-hidden rounded-full bg-slate-100 dark:bg-zinc-800">
+                            <div class="h-4 rounded-full bg-[var(--brand-primary)] transition-all" style="width: {{ min((float) $salesMtdGlobal['percent'], 100) }}%;"></div>
+                        </div>
                     </div>
                 </div>
-            </div>
+            @endif
         </section>
 
         <div class="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">

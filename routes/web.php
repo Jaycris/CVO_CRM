@@ -18,6 +18,7 @@ use App\Http\Controllers\SalesActivityController;
 use App\Http\Controllers\AgentStatementController;
 use App\Http\Controllers\SalesPerformanceController;
 use App\Http\Controllers\ServiceCatalogController;
+use App\Models\Brand;
 use App\Models\CalendarTodo;
 use App\Models\DashboardBanner;
 use App\Models\Lead;
@@ -200,7 +201,24 @@ Route::get('/dashboard', function () {
         || $user?->hasPermission('manage_sales_targets');
     $includeOwnCreditsAcrossBrands = ! BrandScope::canAccessAllBrands($user)
         && $departmentName === 'Sales';
-    $salesMtdSummary = SalesMtdCalculator::summary($user, now(), null, $includeOwnCreditsAcrossBrands);
+    $dashboardBrandId = $isAdmin ? null : BrandScope::userBrandId($user);
+    $dashboardBrandName = $dashboardBrandId
+        ? Brand::query()->whereKey($dashboardBrandId)->value('imprint_name')
+        : ($isAdmin ? 'Sales Brands' : 'All Brands');
+    $salesMtdSummary = SalesMtdCalculator::summary($user, now(), $dashboardBrandId, $includeOwnCreditsAcrossBrands, $isAdmin && ! $dashboardBrandId);
+    $salesMtdBrandSnapshots = collect();
+
+    if ($isAdmin) {
+        $salesMtdBrandSnapshots = Brand::query()
+            ->where('is_sales_brand', true)
+            ->orderBy('imprint_name')
+            ->get()
+            ->map(fn (Brand $brand) => [
+                'brand' => $brand,
+                'summary' => SalesMtdCalculator::summary($user, now(), $brand->id, false)['global'],
+            ]);
+    }
+
     $agentCredits = $salesMtdSummary['agentCredits'];
 
     if (! $canViewAllMtdRows && $user) {
@@ -227,7 +245,7 @@ Route::get('/dashboard', function () {
 
     $currentMonthTotal = (float) $salesMtdSummary['global']['mtd'];
     $lastMonth = now()->subMonthNoOverflow();
-    $lastMonthTotal = (float) SalesMtdCalculator::summary($user, $lastMonth, null, $includeOwnCreditsAcrossBrands)['global']['mtd'];
+    $lastMonthTotal = (float) SalesMtdCalculator::summary($user, $lastMonth, $dashboardBrandId, $includeOwnCreditsAcrossBrands, $isAdmin && ! $dashboardBrandId)['global']['mtd'];
 
     $highestMonthlyTotal = max($currentMonthTotal, $lastMonthTotal, 1);
     $monthlySalesComparison = [
@@ -276,6 +294,8 @@ Route::get('/dashboard', function () {
         'topSalesPerformance',
         'monthlySalesComparison',
         'salesMtdSummary',
+        'dashboardBrandName',
+        'salesMtdBrandSnapshots',
         'recentNotes',
         'upcomingCalendarTodos',
         'dashboardBanners'

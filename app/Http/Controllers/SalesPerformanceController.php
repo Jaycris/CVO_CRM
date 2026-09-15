@@ -31,12 +31,19 @@ class SalesPerformanceController extends Controller
         abort_unless($canViewDashboard, 403);
 
         $month = $this->monthFromRequest($request);
-        $brandId = BrandScope::canAccessAllBrands($user) ? $request->integer('brand_id') ?: null : null;
+        $isAdmin = $user?->role?->name === 'Admin';
+        $salesBrands = $isAdmin
+            ? Brand::query()->where('is_sales_brand', true)->orderBy('imprint_name')->get()
+            : collect();
+        $requestedBrandId = $request->integer('brand_id') ?: null;
+        $brandId = $isAdmin
+            ? ($salesBrands->contains('id', $requestedBrandId) ? $requestedBrandId : null)
+            : BrandScope::userBrandId($user);
         $search = trim((string) $request->query('search', ''));
         $includeOwnCreditsAcrossBrands = ! BrandScope::canAccessAllBrands($user)
             && $user?->department === 'Sales'
             && ! $brandId;
-        $summary = SalesMtdCalculator::summary($user, $month, $brandId, $includeOwnCreditsAcrossBrands);
+        $summary = SalesMtdCalculator::summary($user, $month, $brandId, $includeOwnCreditsAcrossBrands, $isAdmin && ! $brandId);
         $visibleAgentIds = $summary['agentCredits']->keys()
             ->merge($summary['agentTargets']->keys())
             ->filter()
@@ -53,6 +60,7 @@ class SalesPerformanceController extends Controller
                 }
             })
             ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
+            ->when($isAdmin && ! $brandId, fn ($query) => $query->whereHas('brand', fn ($query) => $query->where('is_sales_brand', true)))
             ->when(! $brandId, fn ($query) => BrandScope::apply($query, $user))
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($query) use ($search) {
@@ -142,12 +150,16 @@ class SalesPerformanceController extends Controller
         })->values();
 
         $agentRows = $this->paginateCollection($agentRows, $request);
-        $brands = BrandScope::canAccessAllBrands($user) ? Brand::orderBy('imprint_name')->get() : collect();
+        $brands = $salesBrands;
+        $brandContextName = $brandId
+            ? Brand::query()->whereKey($brandId)->value('imprint_name')
+            : 'All Brands';
 
         return view('reports.sales-performance', [
             'summary' => $summary,
             'agentRows' => $agentRows,
             'brands' => $brands,
+            'brandContextName' => $brandContextName,
             'month' => $month,
             'brandId' => $brandId,
             'search' => $search,
@@ -176,8 +188,12 @@ class SalesPerformanceController extends Controller
 
         $month = Carbon::createFromFormat('!Y-m', $validated['month'])->startOfMonth();
         $brandId = BrandScope::canAccessAllBrands($request->user())
-            ? ($validated['brand_id'] ?? BrandScope::userBrandId($request->user()))
+            ? ($validated['brand_id'] ?? null)
             : BrandScope::userBrandId($request->user());
+
+        if ($brandId && BrandScope::canAccessAllBrands($request->user())) {
+            abort_unless(Brand::query()->whereKey($brandId)->where('is_sales_brand', true)->exists(), 422);
+        }
 
         foreach ([
             'global' => $validated['global_target'] ?? 0,
@@ -198,10 +214,10 @@ class SalesPerformanceController extends Controller
         }
 
         return redirect()
-            ->route('reports.sales-performance.index', [
+            ->route('reports.sales-performance.index', array_filter([
                 'month' => $month->format('Y-m'),
                 'brand_id' => $brandId,
-            ])
+            ], fn ($value) => $value !== null && $value !== ''))
             ->with('status', 'Sales targets updated successfully.');
     }
 

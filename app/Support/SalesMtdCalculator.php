@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\AppSetting;
+use App\Models\Brand;
 use App\Models\CommissionProfile;
 use App\Models\SalesActivity;
 use App\Models\SalesTarget;
@@ -21,11 +22,14 @@ class SalesMtdCalculator
 
     private static ?bool $commissionProfilesEnabled = null;
 
-    public static function summary(?User $user, CarbonInterface $month, ?int $brandId = null, bool $includeUserCreditsAcrossBrands = false): array
+    public static function summary(?User $user, CarbonInterface $month, ?int $brandId = null, bool $includeUserCreditsAcrossBrands = false, bool $salesBrandsOnly = false): array
     {
         $monthStart = $month->copy()->startOfMonth();
         $monthEnd = $month->copy()->endOfMonth();
         $activityRelations = ['service'];
+        $salesBrandIds = $salesBrandsOnly && ! $brandId
+            ? Brand::query()->where('is_sales_brand', true)->pluck('id')->all()
+            : [];
 
         if (self::commissionProfilesEnabled()) {
             $activityRelations[] = 'agent.commissionProfile.rules';
@@ -40,6 +44,15 @@ class SalesMtdCalculator
             ->where('payment_status', 'Payment Success')
             ->whereBetween('sold_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
             ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
+            ->when($salesBrandsOnly && ! $brandId, function ($query) use ($salesBrandIds) {
+                if ($salesBrandIds === []) {
+                    $query->whereRaw('1 = 0');
+
+                    return;
+                }
+
+                $query->whereIn('brand_id', $salesBrandIds);
+            })
             ->when(! $brandId && $user, function ($query) use ($user, $includeUserCreditsAcrossBrands) {
                 $thisUserId = $user->id;
 
@@ -66,6 +79,15 @@ class SalesMtdCalculator
         $targets = SalesTarget::query()
             ->whereDate('target_month', $monthStart->toDateString())
             ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
+            ->when($salesBrandsOnly && ! $brandId, function ($query) use ($salesBrandIds) {
+                $query->where(function ($query) use ($salesBrandIds) {
+                    $query->whereNull('brand_id');
+
+                    if ($salesBrandIds !== []) {
+                        $query->orWhereIn('brand_id', $salesBrandIds);
+                    }
+                });
+            })
             ->when(! $brandId && $user, function ($query) use ($user, $includeUserCreditsAcrossBrands, $activityBrandIds) {
                 if ($includeUserCreditsAcrossBrands) {
                     $query->where(function ($query) use ($user, $activityBrandIds) {
@@ -113,10 +135,11 @@ class SalesMtdCalculator
                 'commission_profile_name' => (string) ($rows->last()['commission_profile_name'] ?? 'Default Service Tiers'),
             ]);
 
+        $dashboardTargets = self::dashboardTargetRows($targets, $brandId, $user);
         $globalMtd = $creditRows->sum('amount');
-        $globalTarget = (float) $targets->where('target_type', 'global')->sum('amount');
-        $remoteTarget = (float) $targets->where('target_type', 'remote')->sum('amount');
-        $siteTarget = (float) $targets->where('target_type', 'site')->sum('amount');
+        $globalTarget = (float) $dashboardTargets->where('target_type', 'global')->sum('amount');
+        $remoteTarget = (float) $dashboardTargets->where('target_type', 'remote')->sum('amount');
+        $siteTarget = (float) $dashboardTargets->where('target_type', 'site')->sum('amount');
 
         $remoteMtd = self::teamMtd($creditRows, 'remote');
         $siteMtd = self::teamMtd($creditRows, 'site') + self::teamMtd($creditRows, 'hybrid');
@@ -420,6 +443,23 @@ class SalesMtdCalculator
 
                 return $currentBrandRow ?: $rows->sortByDesc('id')->first();
             });
+    }
+
+    private static function dashboardTargetRows(Collection $targets, ?int $brandId, ?User $user): Collection
+    {
+        $dashboardTargets = $targets
+            ->whereNull('user_id')
+            ->values();
+
+        if ($brandId || ! BrandScope::canAccessAllBrands($user)) {
+            return $dashboardTargets;
+        }
+
+        $allBrandTargets = $dashboardTargets
+            ->whereNull('brand_id')
+            ->values();
+
+        return $allBrandTargets->isNotEmpty() ? $allBrandTargets : $dashboardTargets;
     }
 
     private static function serviceRateFor(float $serviceMtd, float $targetAmount, ?CommissionProfile $profile = null): float

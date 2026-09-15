@@ -30,7 +30,7 @@
             <div>
                 <h1 class="text-2xl font-bold text-slate-900 dark:text-zinc-100">Sales Dashboard MTD</h1>
                 <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
-                    Track monthly credited sales, targets, and remaining target amounts.
+                    Track monthly credited sales, targets, and remaining target amounts for {{ $brandContextName ?? 'All Brands' }}.
                 </p>
             </div>
         </div>
@@ -304,6 +304,9 @@
                         <h2 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Manage Monthly Targets</h2>
                         <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
                             Set dashboard targets here. Agent target, commission profile, markup percentage, threshold, and exemption are managed in each user's commission profile.
+                        </p>
+                        <p class="mt-2 text-xs font-bold uppercase tracking-wide text-[var(--brand-primary)] dark:text-[var(--brand-accent)]">
+                            {{ $brandContextName ?? 'All Brands' }}
                         </p>
                     </div>
 

@@ -18,7 +18,15 @@ class Brand extends Model
         'primary_color',
         'accent_color',
         'site_logo_path',
+        'is_sales_brand',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'is_sales_brand' => 'boolean',
+        ];
+    }
 
     public function users()
     {

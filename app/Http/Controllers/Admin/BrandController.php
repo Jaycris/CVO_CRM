@@ -37,6 +37,7 @@ class BrandController extends Controller
             'accent_color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'site_logo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,ico', 'max:1024'],
+            'is_sales_brand' => ['nullable', 'boolean'],
         ]);
 
         Brand::create([
@@ -48,6 +49,7 @@ class BrandController extends Controller
             'primary_color' => $validated['primary_color'],
             'accent_color' => $validated['accent_color'],
             'site_logo_path' => $request->file('site_logo')?->store('brand-site-logos', 'public'),
+            'is_sales_brand' => $request->boolean('is_sales_brand'),
         ]);
 
         return redirect()
@@ -68,6 +70,7 @@ class BrandController extends Controller
             'accent_color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'site_logo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,ico', 'max:1024'],
+            'is_sales_brand' => ['nullable', 'boolean'],
         ]);
 
         $logoPath = $brand->logo_path;
@@ -98,6 +101,7 @@ class BrandController extends Controller
             'primary_color' => $validated['primary_color'],
             'accent_color' => $validated['accent_color'],
             'site_logo_path' => $siteLogoPath,
+            'is_sales_brand' => $request->boolean('is_sales_brand'),
         ]);
 
         return redirect()
