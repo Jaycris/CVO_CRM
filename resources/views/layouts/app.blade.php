@@ -1464,7 +1464,11 @@
                 const target = selectedTour.target;
                 title.textContent = selectedTour.title;
                 body.textContent = selectedTour.body;
-                dismissButton.textContent = selectedTour.step === 'icon' || !nextUrl ? 'Got it' : 'Next';
+                const hasDisposeActionStep = visibleTours.some((config) => config.step === 'icon');
+                const hasDirectoryStep = visibleTours.some((config) => config.step === 'directory');
+                const shouldNavigateToDirectory = selectedTour.step === 'sidebar' && !hasDisposeActionStep;
+                const shouldNavigateToAction = selectedTour.step === 'directory' && hasDisposeActionStep && nextUrl;
+                dismissButton.textContent = shouldNavigateToDirectory || shouldNavigateToAction ? 'Next' : 'Got it';
                 openButton.classList.toggle('hidden', selectedTour.step !== 'sidebar');
 
                 const markTourSeen = () => {
@@ -1485,14 +1489,20 @@
                 };
 
                 const dismissTour = () => {
-                    if (selectedTour.step === 'sidebar' && nextUrl) {
-                        localStorage.setItem(storageKey, 'icon');
+                    if (shouldNavigateToDirectory) {
+                        if (openButton.href && !hasDirectoryStep) {
+                            localStorage.setItem(storageKey, 'directory');
+                            panel.classList.add('hidden');
+                            window.location.href = openButton.href;
+                            return;
+                        }
+
+                        markTourSeen();
                         panel.classList.add('hidden');
-                        window.location.href = nextUrl;
                         return;
                     }
 
-                    if (selectedTour.step === 'directory' && nextUrl) {
+                    if (shouldNavigateToAction) {
                         localStorage.setItem(storageKey, 'icon');
                         panel.classList.add('hidden');
                         window.location.href = nextUrl;
