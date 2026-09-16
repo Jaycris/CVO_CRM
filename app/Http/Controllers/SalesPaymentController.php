@@ -10,6 +10,7 @@ use App\Support\BrandScope;
 use App\Support\SalesActivitySync;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\View\View;
 
 class SalesPaymentController extends Controller
@@ -60,19 +61,32 @@ class SalesPaymentController extends Controller
     {
         abort_unless($this->userHasPermission($request, 'manage_payment_records'), 403);
 
-        $validated = $request->validate([
+        $validator = Validator::make($request->all(), [
             'sales_endorsement_id' => ['required', 'exists:sales_endorsements,id'],
             'amount' => ['required', 'numeric', 'min:0'],
             'payment_method' => ['required', 'in:Wire Payment,Invoice,Check Payment,Card'],
             'sold_date' => ['required', 'date'],
             'status' => ['required', 'in:Payment Success,Processing,Declined,Refund,Dispute'],
+        ], [
+            'sales_endorsement_id.required' => 'Please choose a sales endorsement from the dropdown.',
+            'amount.required' => 'Please enter the payment amount.',
+            'payment_method.required' => 'Please choose the payment method.',
+            'sold_date.required' => 'Please choose the sold date.',
+            'status.required' => 'Please choose the payment status.',
         ]);
 
+        if ($validator->fails()) {
+            return $this->redirectToPaymentForm()
+                ->withErrors($validator)
+                ->withInput();
+        }
+
+        $validated = $validator->validated();
         $endorsement = SalesEndorsement::findOrFail($validated['sales_endorsement_id']);
         abort_unless($this->userCanAccessBrand($request, $endorsement->brand_id), 403);
 
         if ((float) $validated['amount'] > $this->remainingContractAmount($endorsement)) {
-            return back()
+            return $this->redirectToPaymentForm()
                 ->withErrors(['amount' => 'The payment amount cannot be greater than the remaining contract balance.'])
                 ->withInput();
         }
@@ -100,8 +114,7 @@ class SalesPaymentController extends Controller
 
         $this->notifySalesAgentPaymentStatus($payment);
 
-        return redirect()
-            ->route('finance.payments.index')
+        return redirect(route('finance.payments.index') . '#payment-feedback')
             ->with('success', 'Payment record added successfully.');
     }
 
@@ -168,6 +181,12 @@ class SalesPaymentController extends Controller
     {
         return $request->user()?->role?->name === 'Admin'
             || (bool) $request->user()?->hasPermission($permission);
+    }
+
+    private function redirectToPaymentForm(): RedirectResponse
+    {
+        return redirect(route('finance.payments.index') . '#payment-feedback')
+            ->with('open_payment_form', true);
     }
 
     private function userCanReceiveNotification($user, string $permission): bool

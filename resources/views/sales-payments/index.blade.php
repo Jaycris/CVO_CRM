@@ -8,7 +8,9 @@
             selectedIds: [],
             selectedPayment: {},
             paymentModalOpen: false,
-            createModalOpen: false,
+            createModalOpen: @js(session('open_payment_form') || $errors->any()),
+            paymentCreateSubmitting: false,
+            createClientError: '',
             endorsementDropdownOpen: false,
             selectedEndorsementId: @js(old('sales_endorsement_id', '')),
             selectedEndorsementText: '',
@@ -33,6 +35,17 @@
             },
             init() {
                 this.paymentAmount = this.formatMoneyInput(@js(old('amount', '')));
+
+                if (this.selectedEndorsementId) {
+                    const endorsement = this.endorsementOptions.find((item) => String(item.id) === String(this.selectedEndorsementId));
+
+                    if (endorsement) {
+                        this.selectedEndorsementText = `${endorsement.code} - ${endorsement.author}`;
+                        this.selectedPaymentType = endorsement.paymentType;
+                        this.selectedContractAmount = endorsement.totalContractAmount;
+                        this.selectedRemainingBalance = endorsement.remainingBalance;
+                    }
+                }
             },
             parseMoney(value) {
                 const raw = String(value ?? '').replace(/,/g, '').replace(/[^\d.]/g, '');
@@ -136,15 +149,33 @@
         </div>
 
         @if (session('success'))
-            <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200">
+            <div id="payment-feedback"
+                 tabindex="-1"
+                 class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 outline-none dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200">
                 {{ session('success') }}
             </div>
         @endif
 
         @if ($errors->any())
-            <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 dark:border-rose-400/30 dark:bg-rose-400/10 dark:text-rose-200">
-                Please check the form and try again.
+            <div id="payment-feedback"
+                 tabindex="-1"
+                 class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 outline-none dark:border-rose-400/30 dark:bg-rose-400/10 dark:text-rose-200">
+                <p>Please check the form and try again.</p>
+                <ul class="mt-2 list-disc space-y-1 pl-5">
+                    @foreach ($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
             </div>
+        @endif
+
+        @if (session('success') || $errors->any())
+            <script>
+                window.requestAnimationFrame(() => {
+                    document.getElementById('payment-feedback')?.focus({ preventScroll: true });
+                    document.getElementById('payment-feedback')?.scrollIntoView({ block: 'start' });
+                });
+            </script>
         @endif
 
         <div class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
@@ -336,8 +367,17 @@
                         </button>
                     </div>
 
-                    <form method="POST" action="{{ route('finance.payments.store') }}" class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <form method="POST"
+                          action="{{ route('finance.payments.store') }}"
+                          x-on:submit="createClientError = ''; if (!selectedEndorsementId) { createClientError = 'Please choose a sales endorsement from the dropdown.'; $event.preventDefault(); return; } paymentCreateSubmitting = true"
+                          class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
                         @csrf
+
+                        <div x-show="createClientError"
+                             x-cloak
+                             x-text="createClientError"
+                             class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 dark:border-rose-400/30 dark:bg-rose-400/10 dark:text-rose-200 md:col-span-2">
+                        </div>
 
                         <label class="relative block md:col-span-2" x-on:click.outside="endorsementDropdownOpen = false">
                             <span class="text-sm font-semibold text-slate-700 dark:text-zinc-200">Sales Endorsement <span class="text-rose-500">*</span></span>
@@ -471,8 +511,10 @@
                                 Cancel
                             </button>
                             <button type="submit"
+                                    x-bind:disabled="paymentCreateSubmitting"
                                     class="rounded-xl bg-zinc-950 px-5 py-3 text-sm font-semibold text-amber-100 shadow-sm hover:bg-black dark:bg-amber-400 dark:text-zinc-950">
-                                Save Payment
+                                <span x-show="!paymentCreateSubmitting">Save Payment</span>
+                                <span x-show="paymentCreateSubmitting" x-cloak>Saving...</span>
                             </button>
                         </div>
                     </form>
