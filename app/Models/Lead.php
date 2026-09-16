@@ -44,6 +44,10 @@ class Lead extends Model
         'sales_stage_updated_at',
         'archived_at',
         'archived_by',
+        'disposed_at',
+        'disposed_by',
+        'dispose_reason',
+        'dispose_notes',
         'lead_generation_stage',
         'verification_assigned_to',
     ];
@@ -66,6 +70,7 @@ class Lead extends Model
             'returned_at' => 'datetime',
             'sales_stage_updated_at' => 'datetime',
             'archived_at' => 'datetime',
+            'disposed_at' => 'datetime',
         ];
     }
 
@@ -107,6 +112,11 @@ class Lead extends Model
     public function archivedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'archived_by');
+    }
+
+    public function disposedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'disposed_by');
     }
 
     public function assignmentHistories(): HasMany

@@ -6,6 +6,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
     @php
         $headBrand = auth()->user()?->brand;
@@ -53,15 +54,23 @@
         }
 
         button[class*="border-amber"],
-        a[class*="border-amber"],
         label[class*="border-amber"] {
             border-color: var(--brand-border) !important;
             color: var(--brand-primary) !important;
         }
 
+        a[class*="border-amber"] {
+            border-color: var(--brand-border) !important;
+            color: var(--brand-primary) !important;
+        }
+
         button[class*="bg-amber-50"],
-        a[class*="bg-amber-50"],
         label[class*="bg-amber-50"] {
+            background-color: var(--brand-soft) !important;
+            color: var(--brand-primary) !important;
+        }
+
+        a[class*="bg-amber-50"] {
             background-color: var(--brand-soft) !important;
             color: var(--brand-primary) !important;
         }
@@ -73,8 +82,11 @@
         }
 
         button[class*="text-amber-700"],
+        button[class*="text-amber-800"] {
+            color: var(--brand-primary) !important;
+        }
+
         a[class*="text-amber-700"],
-        button[class*="text-amber-800"],
         a[class*="text-amber-800"] {
             color: var(--brand-primary) !important;
         }
@@ -136,7 +148,7 @@
 </head>
 
 <body class="bg-slate-50 font-sans text-slate-900 dark:bg-zinc-950 dark:text-zinc-100"
-      style="--brand-primary: {{ $headBrand?->primary_color ?? '#00563f' }}; --brand-accent: {{ $headBrand?->accent_color ?? '#d1fae5' }};">
+      style="--brand-primary: {{ $headBrand?->primary_color ?? '#00563f' }}; --brand-accent: {{ $headBrand?->accent_color ?? '#d1fae5' }}; --brand-text: {{ $headBrand?->text_color ?? '#111827' }}; --brand-button-text: {{ $headBrand?->button_text_color ?? $headBrand?->primary_color ?? '#00563f' }};">
     <div x-data="{ pageLoading: false }"
          x-init="
             document.addEventListener('submit', (event) => {
@@ -255,10 +267,12 @@
                 };
             $brandPrimaryColor = $currentBrand?->primary_color ?? ($currentBrandName === 'CreatiVision Outsourcing' ? '#065f46' : '#d97706');
             $brandAccentColor = $currentBrand?->accent_color ?? ($currentBrandName === 'CreatiVision Outsourcing' ? '#d1fae5' : '#fef3c7');
+            $brandTextColor = $currentBrand?->text_color ?? '#111827';
+            $brandButtonTextColor = $currentBrand?->button_text_color ?? $brandPrimaryColor;
         @endphp
 
         <aside class="fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-slate-200 bg-[#f6f7fb] dark:border-zinc-800 dark:bg-zinc-950"
-               style="--brand-primary: {{ $brandPrimaryColor }}; --brand-accent: {{ $brandAccentColor }}; --brand-active-dark-bg: color-mix(in srgb, {{ $brandPrimaryColor }} 22%, transparent);">
+               style="--brand-primary: {{ $brandPrimaryColor }}; --brand-accent: {{ $brandAccentColor }}; --brand-text: {{ $brandTextColor }}; --brand-button-text: {{ $brandButtonTextColor }}; --brand-active-dark-bg: color-mix(in srgb, {{ $brandPrimaryColor }} 22%, transparent);">
             <div class="shrink-0 border-b border-slate-200 px-5 pb-5 pt-5 dark:border-zinc-800">
                 <a href="{{ route('dashboard') }}" class="block">
                     @if ($currentBrandLogo)
@@ -287,6 +301,11 @@
                 $canViewArchivedLeads = $isAdmin || auth()->user()->hasPermission('view_archived_leads');
                 $canViewAssignedLeads = $isAdmin || auth()->user()->hasPermission('view_assigned_leads');
                 $canViewAssignedLeadsMonitor = $isAdmin || auth()->user()->hasPermission('view_assigned_leads_monitor');
+                $canViewDisposedLeads = $isAdmin
+                    || auth()->user()->hasPermission('return_leads')
+                    || auth()->user()->hasPermission('move_sales_stage')
+                    || auth()->user()->hasPermission('view_archived_leads')
+                    || auth()->user()->hasPermission('view_all_leads');
                 $canSelfMineAndWorkLeads = ! $isAdmin && $departmentName === 'Sales' && auth()->user()->hasPermission('self_mine_work_leads');
                 $canViewSoldMinedLeads = $isAdmin || auth()->user()->hasPermission('view_sold_mined_leads');
                 $canViewVerifiedSoldLeads = ! $isAdmin && $roleName === 'Verifier' && auth()->user()->hasPermission('view_verified_sold_leads');
@@ -301,7 +320,8 @@
                     || $canViewAssignedLeads
                     || $canViewAssignedLeadsMonitor
                     || $canViewReturnedLeads
-                    || $canViewArchivedLeads;
+                    || $canViewArchivedLeads
+                    || $canViewDisposedLeads;
                 $canViewFlatLeadsMenu = $canViewAnyLeadPage && ! $isAdmin && in_array($departmentName, ['Lead Generation', 'Sales'], true);
                 $canViewLeadsDropdown = $canViewAnyLeadPage && ! $canViewFlatLeadsMenu;
                 $canViewSales = $isAdmin || auth()->user()->hasPermission('view_sales');
@@ -374,21 +394,21 @@
                 );
                 $reportsActive = request()->routeIs('reports.*');
                 $sidebarLink = fn (bool $active) => $active
-                    ? 'flex items-center gap-3 rounded-lg bg-[var(--brand-accent)] px-3 py-2 text-sm font-semibold text-[var(--brand-primary)] dark:bg-[var(--brand-active-dark-bg)] dark:text-[var(--brand-accent)]'
+                    ? 'flex items-center gap-3 rounded-lg bg-[var(--brand-accent)] px-3 py-2 text-sm font-semibold text-[var(--brand-text)] dark:bg-[var(--brand-active-dark-bg)] dark:text-[var(--brand-accent)]'
                     : 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-white dark:text-zinc-300 dark:hover:bg-zinc-900';
 
                 $sidebarIcon = fn (bool $active) => $active
-                    ? 'text-[var(--brand-primary)] dark:text-[var(--brand-accent)]'
+                    ? 'text-[var(--brand-text)] dark:text-[var(--brand-accent)]'
                     : 'text-slate-500 dark:text-zinc-500';
 
                 $sidebarSubLink = fn (bool $active) => $active
-                    ? 'block rounded-lg bg-[var(--brand-accent)] px-3 py-2 text-sm font-semibold text-[var(--brand-primary)] dark:bg-[var(--brand-active-dark-bg)] dark:text-[var(--brand-accent)]'
+                    ? 'block rounded-lg bg-[var(--brand-accent)] px-3 py-2 text-sm font-semibold text-[var(--brand-text)] dark:bg-[var(--brand-active-dark-bg)] dark:text-[var(--brand-accent)]'
                     : 'block rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-white dark:text-zinc-400 dark:hover:bg-zinc-900';
             @endphp
 
             <nav class="min-h-0 flex-1 overflow-y-auto px-3 pb-6"
                  x-data="{
-                    leadBadgeCounts: { unassigned: 0, returned: 0, archived: 0 },
+                    leadBadgeCounts: { unassigned: 0, returned: 0, archived: 0, disposed: 0 },
                     productionBadgeCounts: { new_endorsed_projects: 0 },
                     refreshLeadBadgeCounts() {
                         fetch('{{ route('leads.sidebar-counts') }}', { headers: { 'Accept': 'application/json' } })
@@ -397,6 +417,7 @@
                                 unassigned: data.unassigned || 0,
                                 returned: data.returned || 0,
                                 archived: data.archived || 0,
+                                disposed: data.disposed || 0,
                             })
                             .catch(() => {});
                     },
@@ -538,6 +559,18 @@
                                         <span>Archived Leads</span>
                                         <span x-show="leadBadgeCounts.archived > 0"
                                               x-text="leadBadgeCounts.archived"
+                                              class="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-bold text-rose-600 dark:bg-rose-400/15 dark:text-rose-300"></span>
+                                    </span>
+                                </a>
+                            @endif
+                            @if ($canViewDisposedLeads)
+                                <a href="{{ route('leads.disposed') }}"
+                                   data-feature-tour="disposed-leads"
+                                   class="{{ $sidebarSubLink(request()->routeIs('leads.disposed')) }}">
+                                    <span class="flex items-center justify-between gap-2">
+                                        <span>Disposed Leads</span>
+                                        <span x-show="leadBadgeCounts.disposed > 0"
+                                              x-text="leadBadgeCounts.disposed"
                                               class="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-bold text-rose-600 dark:bg-rose-400/15 dark:text-rose-300"></span>
                                     </span>
                                 </a>
@@ -702,6 +735,23 @@
                                     <span>Archived Leads</span>
                                     <span x-show="leadBadgeCounts.archived > 0"
                                           x-text="leadBadgeCounts.archived"
+                                          class="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-bold text-rose-600 dark:bg-rose-400/15 dark:text-rose-300"></span>
+                                </span>
+                            </a>
+                        @endif
+
+                        @if ($canViewDisposedLeads)
+                            <a href="{{ route('leads.disposed') }}"
+                               data-feature-tour="disposed-leads"
+                               class="{{ $sidebarLink(request()->routeIs('leads.disposed')) }} mt-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ $sidebarIcon(request()->routeIs('leads.disposed')) }}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5h10.5M9 7.5V6a3 3 0 0 1 6 0v1.5m-7.5 0 .75 11.25A2.25 2.25 0 0 0 10.5 21h3a2.25 2.25 0 0 0 2.25-2.25L16.5 7.5" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 11.25v5.25m3-5.25v5.25" />
+                                </svg>
+                                <span class="flex flex-1 items-center justify-between gap-2">
+                                    <span>Disposed Leads</span>
+                                    <span x-show="leadBadgeCounts.disposed > 0"
+                                          x-text="leadBadgeCounts.disposed"
                                           class="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-bold text-rose-600 dark:bg-rose-400/15 dark:text-rose-300"></span>
                                 </span>
                             </a>
@@ -1233,7 +1283,7 @@
                                      style="box-shadow: 0 0 0 1px {{ $brandPrimaryColor }};">
                             @else
                                 <div class="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold"
-                                     style="background-color: {{ $brandAccentColor }}; color: {{ $brandPrimaryColor }}; box-shadow: 0 0 0 1px {{ $brandPrimaryColor }};">
+                                     style="background-color: {{ $brandAccentColor }}; color: {{ $brandButtonTextColor }}; box-shadow: 0 0 0 1px {{ $brandPrimaryColor }};">
                                     {{ strtoupper(substr(auth()->user()->first_name ?? 'U', 0, 1)) }}
                                 </div>
                             @endif
@@ -1266,7 +1316,7 @@
                                              style="box-shadow: 0 0 0 1px {{ $brandPrimaryColor }};">
                                     @else
                                         <div class="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold"
-                                             style="background-color: {{ $brandAccentColor }}; color: {{ $brandPrimaryColor }}; box-shadow: 0 0 0 1px {{ $brandPrimaryColor }};">
+                                             style="background-color: {{ $brandAccentColor }}; color: {{ $brandButtonTextColor }}; box-shadow: 0 0 0 1px {{ $brandPrimaryColor }};">
                                             {{ strtoupper(substr(auth()->user()->first_name ?? 'U', 0, 1)) }}
                                         </div>
                                     @endif
@@ -1308,5 +1358,190 @@
             </footer>
         </main>
     </div>
+
+    @if ($canViewDisposedLeads)
+        @php
+            $disposedLeadsTourKey = 'disposed-leads-v1';
+            $disposedLeadsTourSeen = \Illuminate\Support\Facades\Schema::hasTable('feature_tour_views')
+                && \Illuminate\Support\Facades\DB::table('feature_tour_views')
+                    ->where('user_id', auth()->id())
+                    ->where('feature_key', $disposedLeadsTourKey)
+                    ->exists();
+            $disposeTourDirectoryUrl = request()->routeIs('leads.*', 'sales.*') && ! request()->routeIs('leads.disposed', 'leads.archived')
+                ? url()->current()
+                : ($showNewLeadsLink
+                    ? route('leads.new')
+                    : ($canViewSales
+                        ? route('sales.prospect')
+                        : ($canViewAllLeads ? route('leads.index') : null)));
+        @endphp
+    @endif
+
+    @if ($canViewDisposedLeads && ! $disposedLeadsTourSeen)
+        <div data-feature-tour-panel
+             data-feature-tour-key="disposed-leads-v1-user-{{ auth()->id() }}"
+             data-feature-tour-complete-url="{{ route('feature-tours.seen', $disposedLeadsTourKey) }}"
+             data-feature-tour-target="disposed-leads"
+             @if ($disposeTourDirectoryUrl) data-feature-tour-next-url="{{ $disposeTourDirectoryUrl }}" @endif
+             x-data="{ open: false }"
+             x-cloak
+             class="fixed inset-0 z-[10000] hidden">
+            <div class="absolute inset-0"></div>
+            <div data-feature-tour-spotlight class="pointer-events-none absolute rounded-2xl ring-4 ring-white shadow-[0_0_0_9999px_rgba(15,23,42,0.72)]"></div>
+            <div data-feature-tour-card class="absolute max-w-sm rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-700">
+                <p class="text-xs font-bold uppercase tracking-wide text-[var(--brand-primary)] dark:text-[var(--brand-accent)]">New Feature</p>
+                <h2 data-feature-tour-title class="mt-2 text-lg font-bold text-slate-900 dark:text-zinc-100">Disposed Leads</h2>
+                <p data-feature-tour-body class="mt-2 text-sm leading-6 text-slate-600 dark:text-zinc-300">
+                    Leads that can no longer be worked, such as no answer or invalid contact, can now be moved here instead of staying in active sales lists.
+                </p>
+                <div class="mt-4 flex flex-wrap items-center justify-end gap-2">
+                    <button type="button"
+                            data-feature-tour-dismiss
+                            class="rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                        Got it
+                    </button>
+                    <a href="{{ route('leads.disposed') }}"
+                       data-feature-tour-open
+                       class="rounded-xl bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:brightness-95">
+                        Open Disposed Leads
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            (() => {
+                const panel = document.querySelector('[data-feature-tour-panel]');
+                const storageKey = panel?.dataset.featureTourKey;
+                const nextUrl = panel?.dataset.featureTourNextUrl;
+                const completeUrl = panel?.dataset.featureTourCompleteUrl;
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+
+                if (!panel || !storageKey) {
+                    return;
+                }
+
+                const savedStep = localStorage.getItem(storageKey);
+                const tourTargets = [
+                    {
+                        name: 'dispose-leads-action',
+                        step: 'icon',
+                        title: 'Dispose selected leads',
+                        body: 'After selecting one or more leads, use this trash icon to move leads out of active calling when they are no longer workable.',
+                    },
+                    {
+                        name: 'disposed-leads-directory',
+                        step: 'directory',
+                        title: 'Disposed Leads Directory',
+                        body: 'This page keeps disposed leads out of active calling lists while keeping the records available for review.',
+                    },
+                    {
+                        name: 'disposed-leads',
+                        step: 'sidebar',
+                        title: 'Disposed Leads',
+                        body: 'Leads that can no longer be worked, such as no answer or invalid contact, can now be moved here instead of staying in active sales lists.',
+                    },
+                ];
+                const visibleTours = tourTargets
+                    .map((config) => ({ ...config, target: document.querySelector(`[data-feature-tour="${config.name}"]`) }))
+                    .filter((config) => config.target && config.target.getClientRects().length > 0);
+                const selectedTour = (savedStep && savedStep !== 'seen'
+                    ? visibleTours.find((config) => config.step === savedStep)
+                    : visibleTours.find((config) => config.step === 'icon'))
+                    || visibleTours.find((config) => config.step === 'sidebar')
+                    || visibleTours[0];
+                const spotlight = panel.querySelector('[data-feature-tour-spotlight]');
+                const card = panel.querySelector('[data-feature-tour-card]');
+                const title = panel.querySelector('[data-feature-tour-title]');
+                const body = panel.querySelector('[data-feature-tour-body]');
+                const dismissButton = panel.querySelector('[data-feature-tour-dismiss]');
+                const openButton = panel.querySelector('[data-feature-tour-open]');
+
+                if (!selectedTour || !spotlight || !card || !title || !body || !dismissButton || !openButton) {
+                    return;
+                }
+
+                const target = selectedTour.target;
+                title.textContent = selectedTour.title;
+                body.textContent = selectedTour.body;
+                dismissButton.textContent = selectedTour.step === 'icon' || !nextUrl ? 'Got it' : 'Next';
+                openButton.classList.toggle('hidden', selectedTour.step !== 'sidebar');
+
+                const markTourSeen = () => {
+                    localStorage.setItem(storageKey, 'seen');
+
+                    if (!completeUrl || !csrfToken) {
+                        return;
+                    }
+
+                    fetch(completeUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                        },
+                        keepalive: true,
+                    }).catch(() => {});
+                };
+
+                const dismissTour = () => {
+                    if (selectedTour.step === 'sidebar' && nextUrl) {
+                        localStorage.setItem(storageKey, 'icon');
+                        panel.classList.add('hidden');
+                        window.location.href = nextUrl;
+                        return;
+                    }
+
+                    if (selectedTour.step === 'directory' && nextUrl) {
+                        localStorage.setItem(storageKey, 'icon');
+                        panel.classList.add('hidden');
+                        window.location.href = nextUrl;
+                        return;
+                    }
+
+                    markTourSeen();
+                    panel.classList.add('hidden');
+                };
+
+                const placeTour = () => {
+                    const rect = target.getBoundingClientRect();
+                    const padding = 8;
+                    const top = Math.max(rect.top - padding, 12);
+                    const left = Math.max(rect.left - padding, 12);
+                    const width = rect.width + padding * 2;
+                    const height = rect.height + padding * 2;
+
+                    spotlight.style.top = `${top}px`;
+                    spotlight.style.left = `${left}px`;
+                    spotlight.style.width = `${width}px`;
+                    spotlight.style.height = `${height}px`;
+
+                    const cardWidth = 360;
+                    const gap = 18;
+                    const besideLeft = left + width + gap;
+                    const fitsRight = besideLeft + cardWidth < window.innerWidth - 16;
+
+                    card.style.width = `${Math.min(cardWidth, window.innerWidth - 32)}px`;
+                    card.style.left = `${fitsRight ? besideLeft : Math.max(16, left)}px`;
+                    card.style.top = `${Math.min(Math.max(16, top), window.innerHeight - card.offsetHeight - 16)}px`;
+                };
+
+                window.requestAnimationFrame(() => {
+                    target.scrollIntoView({ block: 'center', inline: 'nearest' });
+                    window.requestAnimationFrame(() => {
+                        panel.classList.remove('hidden');
+                        placeTour();
+                    });
+                });
+
+                window.addEventListener('resize', placeTour);
+                window.addEventListener('scroll', placeTour, { passive: true });
+                panel.querySelector('[data-feature-tour-dismiss]')?.addEventListener('click', dismissTour);
+                panel.querySelector('[data-feature-tour-open]')?.addEventListener('click', () => {
+                    localStorage.setItem(storageKey, 'directory');
+                });
+            })();
+        </script>
+    @endif
 </body>
 </html>

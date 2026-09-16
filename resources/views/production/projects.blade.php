@@ -283,6 +283,7 @@
                                 $brandName = $brand?->imprint_name ?? 'CreatiVision';
                                 $brandPrimary = $brand?->primary_color ?: '#065f46';
                                 $brandAccent = $brand?->accent_color ?: '#d1fae5';
+                                $brandButtonText = $brand?->button_text_color ?: $brandPrimary;
                                 $agentName = trim(($endorsement?->agent?->first_name ?? '') . ' ' . ($endorsement?->agent?->last_name ?? '')) ?: 'Unknown';
                                 $fulfillmentName = trim(($project->fulfillmentOfficer?->first_name ?? '') . ' ' . ($project->fulfillmentOfficer?->last_name ?? '')) ?: 'Unassigned';
                                 $address = trim(collect([$endorsement?->street_name, $endorsement?->city_state, $endorsement?->zip_code])->filter()->implode(', '));
@@ -345,7 +346,7 @@
                                 </td>
                                 <td class="px-3 py-4">
                                     <span class="inline-flex max-w-[8rem] items-center rounded-full px-2.5 py-1 text-[11px] font-semibold leading-tight"
-                                          style="background-color: {{ $brandAccent }}; color: {{ $brandPrimary }};"
+                                          style="background-color: {{ $brandAccent }}; color: {{ $brandButtonText }};"
                                           title="{{ $brandName }}">
                                         {{ \Illuminate\Support\Str::limit($brandName, 18) }}
                                     </span>

@@ -59,7 +59,7 @@
                             <div class="min-w-0">
                                 <div class="flex flex-wrap items-center gap-2">
                                     <h2 class="text-lg font-bold text-slate-900 dark:text-zinc-100">{{ $service->name }}</h2>
-                                    <span class="rounded-full px-3 py-1 text-xs font-semibold" style="background-color: var(--brand-accent); color: var(--brand-primary);">
+                                    <span class="rounded-full px-3 py-1 text-xs font-semibold" style="background-color: var(--brand-accent); color: var(--brand-button-text);">
                                         {{ $service->category }}
                                     </span>
                                     <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 dark:bg-zinc-800 dark:text-zinc-300">

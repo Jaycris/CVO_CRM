@@ -314,7 +314,7 @@
                             x-show="!editingTargets"
                             x-on:click="editingTargets = true"
                             class="inline-flex min-h-11 items-center justify-center rounded-xl border px-5 py-3 text-sm font-bold shadow-sm transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:ring-offset-zinc-900"
-                            style="border-color: color-mix(in srgb, var(--brand-primary) 28%, transparent); background-color: var(--brand-accent); color: var(--brand-primary); --tw-ring-color: var(--brand-primary);">
+                            style="border-color: color-mix(in srgb, var(--brand-primary) 28%, transparent); background-color: var(--brand-accent); color: var(--brand-button-text); --tw-ring-color: var(--brand-primary);">
                         Edit Targets
                     </button>
                 </div>

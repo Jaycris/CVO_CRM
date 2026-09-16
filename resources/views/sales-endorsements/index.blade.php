@@ -87,33 +87,33 @@
                 </div>
             </div>
 
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto overscroll-x-contain [scrollbar-gutter:stable]" data-sales-endorsements-scroll-table>
                 @php $visibleEndorsementIds = $endorsements->pluck('id')->values(); @endphp
-                <table class="w-full table-fixed text-left text-xs">
+                <table class="min-w-[1760px] text-left text-xs">
                     <thead class="bg-slate-50 text-[11px] uppercase leading-tight text-slate-500 dark:bg-zinc-950 dark:text-zinc-400">
                         <tr>
                             @if ($canDeleteEndorsements)
-                                <th class="w-[4%] px-3 py-4">
+                                <th class="w-14 px-3 py-4">
                                     <input type="checkbox"
                                            class="rounded border-slate-300 text-amber-600 shadow-sm focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950"
                                            x-bind:checked="@js($visibleEndorsementIds).length > 0 && @js($visibleEndorsementIds).every((id) => selectedIds.includes(id))"
                                            x-on:change="$event.target.checked ? selectedIds = Array.from(new Set([...selectedIds, ...@js($visibleEndorsementIds)])) : selectedIds = selectedIds.filter((id) => !@js($visibleEndorsementIds).includes(id))">
                                 </th>
                             @endif
-                            <th class="w-[12%] px-3 py-4">SE ID</th>
-                            <th class="w-[10%] px-3 py-4">Brand</th>
-                            <th class="w-[11%] px-3 py-4">Agent</th>
-                            <th class="w-[11%] px-3 py-4">Author</th>
-                            <th class="w-[14%] px-3 py-4">Book Title</th>
-                            <th class="w-[10%] px-3 py-4">Service</th>
-                            <th class="w-[9%] px-3 py-4">Contract Amount</th>
-                            <th class="w-[10%] px-3 py-4">Payment Type</th>
+                            <th class="min-w-32 px-3 py-4">SE ID</th>
+                            <th class="min-w-48 px-3 py-4">Brand</th>
+                            <th class="min-w-36 px-3 py-4">Agent</th>
+                            <th class="min-w-36 px-3 py-4">Author</th>
+                            <th class="min-w-44 px-3 py-4">Book Title</th>
+                            <th class="min-w-40 px-3 py-4">Service</th>
+                            <th class="min-w-32 px-3 py-4">Contract Amount</th>
+                            <th class="min-w-32 px-3 py-4">Payment Type</th>
                             @if ($canViewSensitiveEndorsementDetails)
-                                <th class="w-[10%] px-3 py-4">Contact</th>
-                                <th class="w-[11%] px-3 py-4">Email</th>
-                                <th class="w-[9%] px-3 py-4">ISBN</th>
+                                <th class="min-w-36 px-3 py-4">Contact</th>
+                                <th class="min-w-44 px-3 py-4">Email</th>
+                                <th class="min-w-32 px-3 py-4">ISBN</th>
                             @endif
-                            <th class="w-[10%] px-3 py-4">Submitted</th>
+                            <th class="min-w-32 px-3 py-4">Submitted</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-200 dark:divide-zinc-800">
@@ -123,6 +123,7 @@
                                 $brandName = $brand?->imprint_name ?? 'CreatiVision';
                                 $brandPrimary = $brand?->primary_color ?: '#065f46';
                                 $brandAccent = $brand?->accent_color ?: '#d1fae5';
+                                $brandButtonText = $brand?->button_text_color ?: $brandPrimary;
                             @endphp
                             <tr @if ($canDeleteEndorsements)
                                     x-on:click="selectedIds.includes({{ $endorsement->id }}) ? selectedIds = selectedIds.filter((id) => id !== {{ $endorsement->id }}) : selectedIds.push({{ $endorsement->id }})"
@@ -143,10 +144,10 @@
                                     {{ $endorsement->endorsement_code }}
                                 </td>
                                 <td class="px-3 py-4">
-                                    <span class="inline-flex max-w-[8rem] items-center rounded-full px-2.5 py-1 text-[11px] font-semibold leading-tight"
-                                          style="background-color: {{ $brandAccent }}; color: {{ $brandPrimary }};"
+                                    <span class="inline-flex max-w-[11rem] items-center rounded-full px-3 py-1.5 text-[11px] font-semibold leading-tight"
+                                          style="background-color: {{ $brandAccent }}; color: {{ $brandButtonText }};"
                                           title="{{ $brandName }}">
-                                        {{ \Illuminate\Support\Str::limit($brandName, 18) }}
+                                        {{ \Illuminate\Support\Str::limit($brandName, 28) }}
                                     </span>
                                 </td>
                                 <td class="break-words px-3 py-4">
@@ -189,6 +190,10 @@
                 </table>
             </div>
 
+            <div class="fixed bottom-0 z-[60] hidden overflow-x-auto border-t border-slate-200 bg-slate-50/95 shadow-[0_-8px_20px_rgba(15,23,42,0.08)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95 [scrollbar-gutter:stable]" data-sales-endorsements-scroll-bottom>
+                <div class="h-4 min-w-[1760px]" data-sales-endorsements-scroll-spacer></div>
+            </div>
+
             @if ($endorsements->hasPages())
                 <div class="border-t border-slate-200 px-5 py-3 dark:border-zinc-800">
                     {{ $endorsements->links() }}
@@ -196,4 +201,59 @@
             @endif
         </div>
     </div>
+
+    <script>
+        const salesEndorsementsBottomScroll = document.querySelector('[data-sales-endorsements-scroll-bottom]');
+        const salesEndorsementsTableScroll = document.querySelector('[data-sales-endorsements-scroll-table]');
+        const salesEndorsementsScrollSpacer = document.querySelector('[data-sales-endorsements-scroll-spacer]');
+
+        if (salesEndorsementsBottomScroll && salesEndorsementsTableScroll && salesEndorsementsScrollSpacer) {
+            const table = salesEndorsementsTableScroll.querySelector('table');
+            let isSyncingSalesEndorsementScroll = false;
+
+            const syncSalesEndorsementsSpacerWidth = () => {
+                salesEndorsementsScrollSpacer.style.width = `${table?.scrollWidth || salesEndorsementsTableScroll.scrollWidth}px`;
+            };
+
+            const updateSalesEndorsementsFloatingScroll = () => {
+                const rect = salesEndorsementsTableScroll.getBoundingClientRect();
+                const hasHorizontalOverflow = salesEndorsementsTableScroll.scrollWidth > salesEndorsementsTableScroll.clientWidth;
+                const tableIsVisible = rect.top < window.innerHeight - 96 && rect.bottom > window.innerHeight - 72;
+
+                if (!hasHorizontalOverflow || !tableIsVisible) {
+                    salesEndorsementsBottomScroll.classList.add('hidden');
+                    return;
+                }
+
+                const left = Math.max(rect.left, 0);
+                const width = Math.min(rect.width, window.innerWidth - left);
+
+                salesEndorsementsBottomScroll.style.left = `${left}px`;
+                salesEndorsementsBottomScroll.style.width = `${width}px`;
+                salesEndorsementsBottomScroll.classList.remove('hidden');
+            };
+
+            const syncSalesEndorsementsScroll = (source, target) => {
+                if (isSyncingSalesEndorsementScroll) {
+                    return;
+                }
+
+                isSyncingSalesEndorsementScroll = true;
+                target.scrollLeft = source.scrollLeft;
+                window.requestAnimationFrame(() => {
+                    isSyncingSalesEndorsementScroll = false;
+                });
+            };
+
+            syncSalesEndorsementsSpacerWidth();
+            updateSalesEndorsementsFloatingScroll();
+            window.addEventListener('resize', () => {
+                syncSalesEndorsementsSpacerWidth();
+                updateSalesEndorsementsFloatingScroll();
+            });
+            window.addEventListener('scroll', updateSalesEndorsementsFloatingScroll, { passive: true });
+            salesEndorsementsBottomScroll.addEventListener('scroll', () => syncSalesEndorsementsScroll(salesEndorsementsBottomScroll, salesEndorsementsTableScroll));
+            salesEndorsementsTableScroll.addEventListener('scroll', () => syncSalesEndorsementsScroll(salesEndorsementsTableScroll, salesEndorsementsBottomScroll));
+        }
+    </script>
 </x-app-layout>

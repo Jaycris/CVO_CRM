@@ -222,7 +222,7 @@
                                     </td>
                                     <td class="break-words px-5 py-4">
                                         <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold"
-                                              style="background-color: {{ $service->brand?->accent_color ?? '#d1fae5' }}; color: {{ $service->brand?->primary_color ?? '#065f46' }};">
+                                              style="background-color: {{ $service->brand?->accent_color ?? '#d1fae5' }}; color: {{ $service->brand?->button_text_color ?? $service->brand?->primary_color ?? '#065f46' }};">
                                             {{ $service->brand?->imprint_name ?? 'CreatiVision' }}
                                         </span>
                                     </td>

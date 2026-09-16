@@ -98,17 +98,32 @@
                         <x-input-error :messages="$errors->get('logo')" class="mt-2" />
                     </div>
 
-                    <div class="grid grid-cols-2 gap-3">
+                    <div class="grid gap-3 sm:grid-cols-2">
                         <div>
                             <label for="primary_color" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">
                                 Primary Color <span class="text-rose-600">*</span>
                             </label>
-                            <input id="primary_color"
-                                   name="primary_color"
-                                   type="color"
-                                   value="{{ old('primary_color', '#d97706') }}"
-                                   required
-                                   class="h-12 w-full rounded-xl border border-slate-300 bg-white p-1 shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950">
+                            <div x-data="{ color: @js(strtoupper(old('primary_color', '#d97706'))) }"
+                                 class="flex h-12 overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm focus-within:border-amber-500 focus-within:ring-1 focus-within:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950">
+                                <label class="relative flex w-14 shrink-0 cursor-pointer items-center justify-center border-r border-slate-200 bg-slate-50 dark:border-zinc-700 dark:bg-zinc-900" title="Pick primary color">
+                                    <span class="h-7 w-7 rounded-lg ring-1 ring-slate-300 dark:ring-zinc-700"
+                                          x-bind:style="`background-color: ${/^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#D97706'}`"></span>
+                                    <input type="color"
+                                           x-bind:value="/^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#D97706'"
+                                           x-on:input="color = $event.target.value.toUpperCase()"
+                                           class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                           aria-label="Pick primary color">
+                                </label>
+                                <input id="primary_color"
+                                       name="primary_color"
+                                       type="text"
+                                       x-model="color"
+                                       x-on:blur="color = color.startsWith('#') ? color.toUpperCase() : `#${color.toUpperCase()}`"
+                                       placeholder="#D97706"
+                                       pattern="#[0-9A-Fa-f]{6}"
+                                       required
+                                       class="h-full min-w-0 flex-1 border-0 bg-transparent px-4 text-sm font-semibold uppercase shadow-none focus:ring-0 dark:text-zinc-100">
+                            </div>
                             <x-input-error :messages="$errors->get('primary_color')" class="mt-2" />
                         </div>
 
@@ -116,13 +131,84 @@
                             <label for="accent_color" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">
                                 Accent Color <span class="text-rose-600">*</span>
                             </label>
-                            <input id="accent_color"
-                                   name="accent_color"
-                                   type="color"
-                                   value="{{ old('accent_color', '#fef3c7') }}"
-                                   required
-                                   class="h-12 w-full rounded-xl border border-slate-300 bg-white p-1 shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950">
+                            <div x-data="{ color: @js(strtoupper(old('accent_color', '#fef3c7'))) }"
+                                 class="flex h-12 overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm focus-within:border-amber-500 focus-within:ring-1 focus-within:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950">
+                                <label class="relative flex w-14 shrink-0 cursor-pointer items-center justify-center border-r border-slate-200 bg-slate-50 dark:border-zinc-700 dark:bg-zinc-900" title="Pick accent color">
+                                    <span class="h-7 w-7 rounded-lg ring-1 ring-slate-300 dark:ring-zinc-700"
+                                          x-bind:style="`background-color: ${/^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#FEF3C7'}`"></span>
+                                    <input type="color"
+                                           x-bind:value="/^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#FEF3C7'"
+                                           x-on:input="color = $event.target.value.toUpperCase()"
+                                           class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                           aria-label="Pick accent color">
+                                </label>
+                                <input id="accent_color"
+                                       name="accent_color"
+                                       type="text"
+                                       x-model="color"
+                                       x-on:blur="color = color.startsWith('#') ? color.toUpperCase() : `#${color.toUpperCase()}`"
+                                       placeholder="#FEF3C7"
+                                       pattern="#[0-9A-Fa-f]{6}"
+                                       required
+                                       class="h-full min-w-0 flex-1 border-0 bg-transparent px-4 text-sm font-semibold uppercase shadow-none focus:ring-0 dark:text-zinc-100">
+                            </div>
                             <x-input-error :messages="$errors->get('accent_color')" class="mt-2" />
+                        </div>
+
+                        <div>
+                            <label for="text_color" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">
+                                Text Color <span class="text-rose-600">*</span>
+                            </label>
+                            <div x-data="{ color: @js(strtoupper(old('text_color', '#111827'))) }"
+                                 class="flex h-12 overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm focus-within:border-amber-500 focus-within:ring-1 focus-within:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950">
+                                <label class="relative flex w-14 shrink-0 cursor-pointer items-center justify-center border-r border-slate-200 bg-slate-50 dark:border-zinc-700 dark:bg-zinc-900" title="Pick text color">
+                                    <span class="h-7 w-7 rounded-lg ring-1 ring-slate-300 dark:ring-zinc-700"
+                                          x-bind:style="`background-color: ${/^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#111827'}`"></span>
+                                    <input type="color"
+                                           x-bind:value="/^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#111827'"
+                                           x-on:input="color = $event.target.value.toUpperCase()"
+                                           class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                           aria-label="Pick text color">
+                                </label>
+                                <input id="text_color"
+                                       name="text_color"
+                                       type="text"
+                                       x-model="color"
+                                       x-on:blur="color = color.startsWith('#') ? color.toUpperCase() : `#${color.toUpperCase()}`"
+                                       placeholder="#111827"
+                                       pattern="#[0-9A-Fa-f]{6}"
+                                       required
+                                       class="h-full min-w-0 flex-1 border-0 bg-transparent px-4 text-sm font-semibold uppercase shadow-none focus:ring-0 dark:text-zinc-100">
+                            </div>
+                            <x-input-error :messages="$errors->get('text_color')" class="mt-2" />
+                        </div>
+
+                        <div>
+                            <label for="button_text_color" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">
+                                Button Text Color <span class="text-rose-600">*</span>
+                            </label>
+                            <div x-data="{ color: @js(strtoupper(old('button_text_color', '#d97706'))) }"
+                                 class="flex h-12 overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm focus-within:border-amber-500 focus-within:ring-1 focus-within:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950">
+                                <label class="relative flex w-14 shrink-0 cursor-pointer items-center justify-center border-r border-slate-200 bg-slate-50 dark:border-zinc-700 dark:bg-zinc-900" title="Pick button text color">
+                                    <span class="h-7 w-7 rounded-lg ring-1 ring-slate-300 dark:ring-zinc-700"
+                                          x-bind:style="`background-color: ${/^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#D97706'}`"></span>
+                                    <input type="color"
+                                           x-bind:value="/^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#D97706'"
+                                           x-on:input="color = $event.target.value.toUpperCase()"
+                                           class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                           aria-label="Pick button text color">
+                                </label>
+                                <input id="button_text_color"
+                                       name="button_text_color"
+                                       type="text"
+                                       x-model="color"
+                                       x-on:blur="color = color.startsWith('#') ? color.toUpperCase() : `#${color.toUpperCase()}`"
+                                       placeholder="#D97706"
+                                       pattern="#[0-9A-Fa-f]{6}"
+                                       required
+                                       class="h-full min-w-0 flex-1 border-0 bg-transparent px-4 text-sm font-semibold uppercase shadow-none focus:ring-0 dark:text-zinc-100">
+                            </div>
+                            <x-input-error :messages="$errors->get('button_text_color')" class="mt-2" />
                         </div>
                     </div>
 
@@ -184,6 +270,8 @@
                                         <div class="flex items-center gap-2">
                                             <span class="h-6 w-6 rounded-full ring-1 ring-slate-200 dark:ring-zinc-700" style="background-color: {{ $brand->primary_color ?? '#d97706' }}"></span>
                                             <span class="h-6 w-6 rounded-full ring-1 ring-slate-200 dark:ring-zinc-700" style="background-color: {{ $brand->accent_color ?? '#fef3c7' }}"></span>
+                                            <span class="h-6 w-6 rounded-full ring-1 ring-slate-200 dark:ring-zinc-700" style="background-color: {{ $brand->text_color ?? '#111827' }}"></span>
+                                            <span class="h-6 w-6 rounded-full ring-1 ring-slate-200 dark:ring-zinc-700" style="background-color: {{ $brand->button_text_color ?? '#d97706' }}"></span>
                                             @if ($brand->site_logo_path)
                                                 <img src="{{ asset('storage/' . $brand->site_logo_path) }}?v={{ $brand->updated_at?->timestamp }}"
                                                      alt="{{ $brand->imprint_name }} site icon"
@@ -302,27 +390,109 @@
                                                                class="w-full cursor-pointer rounded-xl border border-slate-300 px-4 py-3 text-sm shadow-sm file:mr-4 file:cursor-pointer file:rounded-lg file:border-0 file:bg-zinc-950 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-amber-100 hover:border-amber-400 hover:bg-amber-50/40 file:hover:bg-amber-700 focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:file:bg-amber-400 dark:file:text-zinc-950 dark:hover:border-amber-400 dark:hover:bg-amber-400/10 dark:file:hover:bg-amber-300">
                                                     </div>
 
-                                                    <div class="grid grid-cols-2 gap-3">
+                                                    <div class="grid gap-3 sm:grid-cols-2">
                                                         <div>
                                                             <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">
                                                                 Primary Color <span class="text-rose-600">*</span>
                                                             </label>
-                                                            <input name="primary_color"
-                                                                   type="color"
-                                                                   value="{{ old('primary_color', $brand->primary_color ?? '#d97706') }}"
-                                                                   required
-                                                                   class="h-12 w-full rounded-xl border border-slate-300 bg-white p-1 shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950">
+                                                            <div x-data="{ color: @js(strtoupper(old('primary_color', $brand->primary_color ?? '#d97706'))) }"
+                                                                 class="flex h-12 overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm focus-within:border-amber-500 focus-within:ring-1 focus-within:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950">
+                                                                <label class="relative flex w-14 shrink-0 cursor-pointer items-center justify-center border-r border-slate-200 bg-slate-50 dark:border-zinc-700 dark:bg-zinc-900" title="Pick primary color">
+                                                                    <span class="h-7 w-7 rounded-lg ring-1 ring-slate-300 dark:ring-zinc-700"
+                                                                          x-bind:style="`background-color: ${/^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#D97706'}`"></span>
+                                                                    <input type="color"
+                                                                           x-bind:value="/^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#D97706'"
+                                                                           x-on:input="color = $event.target.value.toUpperCase()"
+                                                                           class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                                                           aria-label="Pick primary color">
+                                                                </label>
+                                                                <input name="primary_color"
+                                                                       type="text"
+                                                                       x-model="color"
+                                                                       x-on:blur="color = color.startsWith('#') ? color.toUpperCase() : `#${color.toUpperCase()}`"
+                                                                       placeholder="#D97706"
+                                                                       pattern="#[0-9A-Fa-f]{6}"
+                                                                       required
+                                                                       class="h-full min-w-0 flex-1 border-0 bg-transparent px-4 text-sm font-semibold uppercase shadow-none focus:ring-0 dark:text-zinc-100">
+                                                            </div>
                                                         </div>
 
                                                         <div>
                                                             <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">
                                                                 Accent Color <span class="text-rose-600">*</span>
                                                             </label>
-                                                            <input name="accent_color"
-                                                                   type="color"
-                                                                   value="{{ old('accent_color', $brand->accent_color ?? '#fef3c7') }}"
-                                                                   required
-                                                                   class="h-12 w-full rounded-xl border border-slate-300 bg-white p-1 shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950">
+                                                            <div x-data="{ color: @js(strtoupper(old('accent_color', $brand->accent_color ?? '#fef3c7'))) }"
+                                                                 class="flex h-12 overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm focus-within:border-amber-500 focus-within:ring-1 focus-within:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950">
+                                                                <label class="relative flex w-14 shrink-0 cursor-pointer items-center justify-center border-r border-slate-200 bg-slate-50 dark:border-zinc-700 dark:bg-zinc-900" title="Pick accent color">
+                                                                    <span class="h-7 w-7 rounded-lg ring-1 ring-slate-300 dark:ring-zinc-700"
+                                                                          x-bind:style="`background-color: ${/^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#FEF3C7'}`"></span>
+                                                                    <input type="color"
+                                                                           x-bind:value="/^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#FEF3C7'"
+                                                                           x-on:input="color = $event.target.value.toUpperCase()"
+                                                                           class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                                                           aria-label="Pick accent color">
+                                                                </label>
+                                                                <input name="accent_color"
+                                                                       type="text"
+                                                                       x-model="color"
+                                                                       x-on:blur="color = color.startsWith('#') ? color.toUpperCase() : `#${color.toUpperCase()}`"
+                                                                       placeholder="#FEF3C7"
+                                                                       pattern="#[0-9A-Fa-f]{6}"
+                                                                       required
+                                                                       class="h-full min-w-0 flex-1 border-0 bg-transparent px-4 text-sm font-semibold uppercase shadow-none focus:ring-0 dark:text-zinc-100">
+                                                            </div>
+                                                        </div>
+
+                                                        <div>
+                                                            <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">
+                                                                Text Color <span class="text-rose-600">*</span>
+                                                            </label>
+                                                            <div x-data="{ color: @js(strtoupper(old('text_color', $brand->text_color ?? '#111827'))) }"
+                                                                 class="flex h-12 overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm focus-within:border-amber-500 focus-within:ring-1 focus-within:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950">
+                                                                <label class="relative flex w-14 shrink-0 cursor-pointer items-center justify-center border-r border-slate-200 bg-slate-50 dark:border-zinc-700 dark:bg-zinc-900" title="Pick text color">
+                                                                    <span class="h-7 w-7 rounded-lg ring-1 ring-slate-300 dark:ring-zinc-700"
+                                                                          x-bind:style="`background-color: ${/^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#111827'}`"></span>
+                                                                    <input type="color"
+                                                                           x-bind:value="/^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#111827'"
+                                                                           x-on:input="color = $event.target.value.toUpperCase()"
+                                                                           class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                                                           aria-label="Pick text color">
+                                                                </label>
+                                                                <input name="text_color"
+                                                                       type="text"
+                                                                       x-model="color"
+                                                                       x-on:blur="color = color.startsWith('#') ? color.toUpperCase() : `#${color.toUpperCase()}`"
+                                                                       placeholder="#111827"
+                                                                       pattern="#[0-9A-Fa-f]{6}"
+                                                                       required
+                                                                       class="h-full min-w-0 flex-1 border-0 bg-transparent px-4 text-sm font-semibold uppercase shadow-none focus:ring-0 dark:text-zinc-100">
+                                                            </div>
+                                                        </div>
+
+                                                        <div>
+                                                            <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">
+                                                                Button Text Color <span class="text-rose-600">*</span>
+                                                            </label>
+                                                            <div x-data="{ color: @js(strtoupper(old('button_text_color', $brand->button_text_color ?? '#d97706'))) }"
+                                                                 class="flex h-12 overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm focus-within:border-amber-500 focus-within:ring-1 focus-within:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950">
+                                                                <label class="relative flex w-14 shrink-0 cursor-pointer items-center justify-center border-r border-slate-200 bg-slate-50 dark:border-zinc-700 dark:bg-zinc-900" title="Pick button text color">
+                                                                    <span class="h-7 w-7 rounded-lg ring-1 ring-slate-300 dark:ring-zinc-700"
+                                                                          x-bind:style="`background-color: ${/^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#D97706'}`"></span>
+                                                                    <input type="color"
+                                                                           x-bind:value="/^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#D97706'"
+                                                                           x-on:input="color = $event.target.value.toUpperCase()"
+                                                                           class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                                                           aria-label="Pick button text color">
+                                                                </label>
+                                                                <input name="button_text_color"
+                                                                       type="text"
+                                                                       x-model="color"
+                                                                       x-on:blur="color = color.startsWith('#') ? color.toUpperCase() : `#${color.toUpperCase()}`"
+                                                                       placeholder="#D97706"
+                                                                       pattern="#[0-9A-Fa-f]{6}"
+                                                                       required
+                                                                       class="h-full min-w-0 flex-1 border-0 bg-transparent px-4 text-sm font-semibold uppercase shadow-none focus:ring-0 dark:text-zinc-100">
+                                                            </div>
                                                         </div>
                                                     </div>
 

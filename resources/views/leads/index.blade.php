@@ -19,6 +19,7 @@
             $canReassignTeamLeads = $isAdmin || auth()->user()->hasPermission('reassign_team_leads');
             $canUnassignTeamLeads = $isAdmin || auth()->user()->hasPermission('unassign_team_leads');
             $canArchiveLead = ! $isAssignedAgentReadOnly && ($isAdmin || auth()->user()->hasPermission('archive_leads'));
+            $canDisposeLead = ! $isAssignedAgentReadOnly && ($isAdmin || auth()->user()->hasPermission('return_leads') || auth()->user()->hasPermission('move_sales_stage'));
             $canVerifyLead = ! $isAssignedAgentReadOnly && ($isAdmin || auth()->user()->hasPermission('verify_leads'));
             $showSalesWorkflowActions = ! $isAssignedAgentReadOnly
                 && ($isAdmin || auth()->user()->hasPermission('move_sales_stage') || auth()->user()->hasPermission('return_leads'))
@@ -32,6 +33,8 @@
             $showSendReturnedBackAction = ($isAdmin || auth()->user()->hasPermission('send_returned_leads_back')) && $currentViewMode === 'returned';
             $showArchiveAction = $canArchiveLead && $currentViewMode !== 'archived';
             $showRestoreAction = $canArchiveLead && $currentViewMode === 'archived';
+            $showDisposeAction = $canDisposeLead && ! in_array($currentViewMode, ['archived', 'disposed'], true);
+            $showRestoreDisposedAction = $canDisposeLead && $currentViewMode === 'disposed';
             $isSalesPage = str_starts_with($currentViewMode, 'sales_');
             $isTeamLeadsPage = $currentViewMode === 'sales_team_leads';
             $canOpenAssignModal = $canAssignLead || ($isTeamLeadsPage && $canReassignTeamLeads);
@@ -105,11 +108,14 @@
             @endforeach
         </div>
 
-        <div class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800"
+        <div @if ($currentViewMode === 'disposed') data-feature-tour="disposed-leads-directory" @endif
+             class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800"
              x-data="{
                 detailsModalOpen: false,
                 assignModalOpen: false,
                 workflowModalOpen: false,
+                returnModalOpen: false,
+                disposeModalOpen: false,
                 selectedLead: {},
                 selectedLeadIds: [],
                 selectedEditUrl: '',
@@ -260,6 +266,45 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 6h3m-3 12h3" />
                                 </svg>
                             </button>
+                            @endif
+
+                            @if ($showDisposeAction)
+                                <button type="button"
+                                        data-feature-tour="dispose-leads-action"
+                                        x-on:click="if (hasSelection()) disposeModalOpen = true"
+                                        x-bind:disabled="!hasSelection()"
+                                        x-bind:class="hasSelection() ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-400/30 dark:bg-rose-400/10 dark:text-rose-200 dark:hover:bg-rose-400/20' : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-500'"
+                                        title="Dispose selected leads"
+                                        class="inline-flex h-10 w-10 items-center justify-center rounded-xl border shadow-sm">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5h10.5M9 7.5V6a3 3 0 0 1 6 0v1.5m-7.5 0 .75 11.25A2.25 2.25 0 0 0 10.5 21h3a2.25 2.25 0 0 0 2.25-2.25L16.5 7.5" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 11.25v5.25m3-5.25v5.25" />
+                                    </svg>
+                                </button>
+                            @endif
+
+                            @if ($showRestoreDisposedAction)
+                                <form method="POST"
+                                      action="{{ route('leads.restore-disposed') }}"
+                                      x-on:submit="if (!hasSelection() || !confirm('Restore selected disposed leads?')) { $event.preventDefault(); }">
+                                    @csrf
+                                    <input type="hidden" name="return_to" value="{{ request()->fullUrl() }}">
+
+                                    <template x-for="leadId in selectedLeadIds" :key="`restore-disposed-${leadId}`">
+                                        <input type="hidden" name="lead_ids[]" :value="leadId">
+                                    </template>
+
+                                    <button type="submit"
+                                            x-bind:disabled="!hasSelection()"
+                                            x-bind:class="hasSelection() ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200 dark:hover:bg-emerald-400/20' : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-500'"
+                                            title="Restore selected disposed leads"
+                                            class="inline-flex h-10 w-10 items-center justify-center rounded-xl border shadow-sm">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 14.25 4.5 9.75 9 5.25" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 9.75h10.75A4.75 4.75 0 0 1 20 14.5v.25A4.75 4.75 0 0 1 15.25 19.5H12" />
+                                        </svg>
+                                    </button>
+                                </form>
                             @endif
 
                             @if ($canVerifyLead)
@@ -432,6 +477,10 @@
                                                 'returnedAt' => $lead->returned_at?->format('M d, Y h:i A') ?: '-',
                                                 'returnNotes' => $lead->return_notes ?: '-',
                                                 'archivedAt' => $lead->archived_at?->format('M d, Y h:i A') ?: '-',
+                                                'disposedBy' => $lead->disposedBy ? trim($lead->disposedBy->first_name . ' ' . $lead->disposedBy->last_name) : '-',
+                                                'disposedAt' => $lead->disposed_at?->format('M d, Y h:i A') ?: '-',
+                                                'disposeReason' => $lead->dispose_reason ?: '-',
+                                                'disposeNotes' => $lead->dispose_notes ?: '-',
                                             ]); detailsModalOpen = true"
                                             title="View lead details"
                                             class="block max-w-full text-left font-semibold leading-snug text-slate-900 hover:text-amber-700 dark:text-zinc-100 dark:hover:text-amber-300">
@@ -667,21 +716,28 @@
 
                             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                 <button type="submit" name="sales_stage" value="pipeline"
-                                        class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:border-amber-200 hover:bg-amber-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:border-amber-400/30 dark:hover:bg-amber-400/10">
+                                        class="rounded-xl border border-[var(--brand-border)] bg-[var(--brand-soft)] px-4 py-3 text-left text-sm font-semibold text-[var(--brand-button-text)] hover:bg-[var(--brand-soft-strong)] dark:border-[var(--brand-accent)]/30 dark:bg-[var(--brand-active-dark-bg)] dark:text-[var(--brand-accent)] dark:hover:bg-[var(--brand-active-dark-bg)]">
                                     Pipeline
                                 </button>
                                 <button type="submit" name="sales_stage" value="prospect"
-                                        class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:border-amber-200 hover:bg-amber-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:border-amber-400/30 dark:hover:bg-amber-400/10">
+                                        class="rounded-xl border border-[var(--brand-border)] bg-[var(--brand-soft)] px-4 py-3 text-left text-sm font-semibold text-[var(--brand-button-text)] hover:bg-[var(--brand-soft-strong)] dark:border-[var(--brand-accent)]/30 dark:bg-[var(--brand-active-dark-bg)] dark:text-[var(--brand-accent)] dark:hover:bg-[var(--brand-active-dark-bg)]">
                                     Prospect
                                 </button>
                                 <button type="submit" name="sales_stage" value="scheduled_callback"
-                                        class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:border-amber-200 hover:bg-amber-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:border-amber-400/30 dark:hover:bg-amber-400/10">
+                                        class="rounded-xl border border-[var(--brand-border)] bg-[var(--brand-soft)] px-4 py-3 text-left text-sm font-semibold text-[var(--brand-button-text)] hover:bg-[var(--brand-soft-strong)] dark:border-[var(--brand-accent)]/30 dark:bg-[var(--brand-active-dark-bg)] dark:text-[var(--brand-accent)] dark:hover:bg-[var(--brand-active-dark-bg)]">
                                     Scheduled Callback
                                 </button>
                                 <button type="submit" name="sales_stage" value="sold"
                                         class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-left text-sm font-semibold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200 dark:hover:bg-emerald-400/20">
                                     Sold
                                 </button>
+                                @if ($showReturnLeadAction && $showSalesWorkflowActions)
+                                    <button type="button"
+                                            x-on:click="returnModalOpen = true; workflowModalOpen = false"
+                                            class="rounded-xl border border-[var(--brand-border)] bg-[var(--brand-soft)] px-4 py-3 text-left text-sm font-semibold text-[var(--brand-button-text)] hover:bg-[var(--brand-soft-strong)] dark:border-[var(--brand-accent)]/30 dark:bg-[var(--brand-active-dark-bg)] dark:text-[var(--brand-accent)] dark:hover:bg-[var(--brand-active-dark-bg)]">
+                                        Return Lead
+                                    </button>
+                                @endif
                             </div>
                         </form>
                     @endif
@@ -727,28 +783,6 @@
                                 <button type="submit"
                                         class="mt-5 flex min-h-12 w-full items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200 dark:hover:bg-emerald-400/20">
                                     Move to Ready Queue
-                                </button>
-                            </form>
-                        @endif
-
-                        @if ($showReturnLeadAction && $showSalesWorkflowActions)
-                            <form method="POST" action="{{ route('leads.return') }}" class="rounded-xl border border-slate-200 p-4 dark:border-zinc-800">
-                                @csrf
-                                <input type="hidden" name="return_to" value="{{ request()->fullUrl() }}">
-
-                                <template x-for="leadId in selectedLeadIds" :key="`return-${leadId}`">
-                                    <input type="hidden" name="lead_ids[]" :value="leadId">
-                                </template>
-
-                                <label for="return_notes" class="mb-2 block text-sm font-semibold text-slate-900 dark:text-zinc-100">
-                                    Return Lead
-                                </label>
-                                <textarea id="return_notes" name="return_notes" rows="3"
-                                          placeholder="Optional return notes"
-                                          class="w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"></textarea>
-                                <button type="submit"
-                                        class="mt-3 w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 hover:bg-amber-100 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200 dark:hover:bg-amber-400/20">
-                                    Move to Returned Leads
                                 </button>
                             </form>
                         @endif
@@ -819,6 +853,137 @@
                             </form>
                         @endif
                     </div>
+                </div>
+            </div>
+
+            <div x-show="returnModalOpen"
+                 x-cloak
+                 x-transition.opacity
+                 class="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/50 px-4"
+                 x-on:keydown.escape.window="returnModalOpen = false">
+                <div x-on:click.outside="returnModalOpen = false"
+                     class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl dark:bg-zinc-900">
+                    <div class="flex items-start justify-between gap-4">
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Return Lead</h3>
+                            <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
+                                Add notes for <span class="font-semibold" x-text="selectedLeadIds.length"></span> selected lead(s).
+                            </p>
+                        </div>
+
+                        <button type="button"
+                                x-on:click="returnModalOpen = false"
+                                class="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                                aria-label="Close">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <form method="POST" action="{{ route('leads.return') }}" class="mt-6 space-y-5">
+                        @csrf
+                        <input type="hidden" name="return_to" value="{{ request()->fullUrl() }}">
+
+                        <template x-for="leadId in selectedLeadIds" :key="`return-${leadId}`">
+                            <input type="hidden" name="lead_ids[]" :value="leadId">
+                        </template>
+
+                        <div>
+                            <label for="return_notes" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">Notes</label>
+                            <textarea id="return_notes"
+                                      name="return_notes"
+                                      rows="4"
+                                      placeholder="Optional return notes"
+                                      class="w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"></textarea>
+                        </div>
+
+                        <div class="flex items-center justify-end gap-3">
+                            <button type="button"
+                                    x-on:click="returnModalOpen = false"
+                                    class="rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                                Cancel
+                            </button>
+
+                            <button type="submit"
+                                    class="rounded-xl bg-amber-600 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-amber-700">
+                                Move to Returned Leads
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div x-show="disposeModalOpen"
+                 x-cloak
+                 x-transition.opacity
+                 class="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/50 px-4"
+                 x-on:keydown.escape.window="disposeModalOpen = false">
+                <div x-on:click.outside="disposeModalOpen = false"
+                     class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl dark:bg-zinc-900">
+                    <div class="flex items-start justify-between gap-4">
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Dispose Leads</h3>
+                            <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
+                                Move <span class="font-semibold" x-text="selectedLeadIds.length"></span> selected lead(s) out of active calling.
+                            </p>
+                        </div>
+
+                        <button type="button"
+                                x-on:click="disposeModalOpen = false"
+                                class="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                                aria-label="Close">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <form method="POST" action="{{ route('leads.dispose') }}" class="mt-6 space-y-5">
+                        @csrf
+                        <input type="hidden" name="return_to" value="{{ request()->fullUrl() }}">
+
+                        <template x-for="leadId in selectedLeadIds" :key="`dispose-${leadId}`">
+                            <input type="hidden" name="lead_ids[]" :value="leadId">
+                        </template>
+
+                        <div>
+                            <label for="dispose_reason" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">
+                                Reason <span class="text-rose-600">*</span>
+                            </label>
+                            <select id="dispose_reason"
+                                    name="dispose_reason"
+                                    required
+                                    class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                                <option value="">Select reason</option>
+                                @foreach ($disposeReasons ?? [] as $disposeReason)
+                                    <option value="{{ $disposeReason }}">{{ $disposeReason }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="dispose_notes" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">Notes</label>
+                            <textarea id="dispose_notes"
+                                      name="dispose_notes"
+                                      rows="4"
+                                      placeholder="Optional notes"
+                                      class="w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"></textarea>
+                        </div>
+
+                        <div class="flex items-center justify-end gap-3">
+                            <button type="button"
+                                    x-on:click="disposeModalOpen = false"
+                                    class="rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                                Cancel
+                            </button>
+
+                            <button type="submit"
+                                    class="rounded-xl bg-rose-600 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-rose-700">
+                                Dispose Leads
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
 
@@ -983,6 +1148,12 @@
                             <p class="mt-1 text-sm font-semibold text-slate-900 dark:text-zinc-100" x-text="selectedLead.archivedAt"></p>
                         </div>
 
+                        <div class="rounded-xl bg-slate-50 p-4 dark:bg-zinc-950">
+                            <p class="text-xs font-semibold uppercase text-slate-400 dark:text-zinc-500">Disposed Date</p>
+                            <p class="mt-1 text-sm font-semibold text-slate-900 dark:text-zinc-100" x-text="selectedLead.disposedAt"></p>
+                            <p class="mt-1 text-xs text-slate-500 dark:text-zinc-400" x-text="selectedLead.disposedBy"></p>
+                        </div>
+
                         @if ($canEditLead)
                             <form method="POST"
                                   x-bind:action="selectedLead.phoneStatusUrl"
@@ -1022,6 +1193,12 @@
                         <div class="rounded-xl bg-slate-50 p-4 md:col-span-2 dark:bg-zinc-950">
                             <p class="text-xs font-semibold uppercase text-slate-400 dark:text-zinc-500">Return Notes</p>
                             <p class="mt-1 whitespace-pre-wrap text-sm font-semibold leading-6 text-slate-900 dark:text-zinc-100" x-text="selectedLead.returnNotes"></p>
+                        </div>
+
+                        <div class="rounded-xl bg-slate-50 p-4 md:col-span-2 dark:bg-zinc-950">
+                            <p class="text-xs font-semibold uppercase text-slate-400 dark:text-zinc-500">Dispose Details</p>
+                            <p class="mt-1 text-sm font-semibold text-slate-900 dark:text-zinc-100" x-text="selectedLead.disposeReason"></p>
+                            <p class="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-zinc-300" x-text="selectedLead.disposeNotes"></p>
                         </div>
                     </div>
                 </div>

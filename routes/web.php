@@ -53,13 +53,14 @@ Route::get('/dashboard', function () {
     $departmentName = $user?->department;
     $isAdmin = $roleName === 'Admin';
 
-    $leadPoolQuery = Lead::query()->whereNull('sales_stage')->whereNull('archived_at');
+    $leadPoolQuery = Lead::query()->whereNull('sales_stage')->whereNull('archived_at')->whereNull('disposed_at');
     BrandScope::apply($leadPoolQuery, $user);
     $verifiedLeadsQuery = (clone $leadPoolQuery)->whereNotNull('verified_at');
     $salesPipelineQuery = Lead::query()
         ->whereNotNull('assigned_to')
         ->whereNull('returned_at')
         ->whereNull('archived_at')
+        ->whereNull('disposed_at')
         ->where(function ($query) {
             $query->whereNotNull('sales_stage')
                 ->orWhereNull('sales_stage');
@@ -108,13 +109,13 @@ Route::get('/dashboard', function () {
             ],
             [
                 'label' => 'Total Returned Leads',
-                'count' => BrandScope::apply(Lead::query(), $user)->whereNotNull('returned_at')->whereNull('archived_at')->count(),
+                'count' => BrandScope::apply(Lead::query(), $user)->whereNotNull('returned_at')->whereNull('archived_at')->whereNull('disposed_at')->count(),
                 'hint' => 'Sent back by Sales',
                 'tone' => 'rose',
             ],
             [
                 'label' => 'Total Assigned Leads',
-                'count' => BrandScope::apply(Lead::query(), $user)->whereNotNull('assigned_to')->whereNull('returned_at')->whereNull('archived_at')->count(),
+                'count' => BrandScope::apply(Lead::query(), $user)->whereNotNull('assigned_to')->whereNull('returned_at')->whereNull('archived_at')->whereNull('disposed_at')->count(),
                 'hint' => 'Assigned to Sales',
                 'tone' => 'sky',
             ],
@@ -122,19 +123,19 @@ Route::get('/dashboard', function () {
         $departmentName === 'Sales' => [
             [
                 'label' => 'Total Assigned Leads',
-                'count' => Lead::query()->where('assigned_to', $user?->id)->whereNull('returned_at')->whereNull('archived_at')->count(),
+                'count' => Lead::query()->where('assigned_to', $user?->id)->whereNull('returned_at')->whereNull('archived_at')->whereNull('disposed_at')->count(),
                 'hint' => 'Assigned to you',
                 'tone' => 'emerald',
             ],
             [
                 'label' => 'Total Sold Leads',
-                'count' => Lead::query()->where('assigned_to', $user?->id)->where('sales_stage', 'sold')->whereNull('returned_at')->whereNull('archived_at')->count(),
+                'count' => Lead::query()->where('assigned_to', $user?->id)->where('sales_stage', 'sold')->whereNull('returned_at')->whereNull('archived_at')->whereNull('disposed_at')->count(),
                 'hint' => 'Your closed sales',
                 'tone' => 'sky',
             ],
             [
                 'label' => 'Total Refund',
-                'count' => Lead::query()->where('assigned_to', $user?->id)->where('sales_stage', 'refunds')->whereNull('returned_at')->whereNull('archived_at')->count(),
+                'count' => Lead::query()->where('assigned_to', $user?->id)->where('sales_stage', 'refunds')->whereNull('returned_at')->whereNull('archived_at')->whereNull('disposed_at')->count(),
                 'hint' => 'Your refund records',
                 'tone' => 'rose',
             ],
@@ -303,6 +304,24 @@ Route::get('/dashboard', function () {
 })->middleware(['auth'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
+    Route::post('/feature-tours/{featureKey}/seen', function (\Illuminate\Http\Request $request, string $featureKey) {
+        abort_unless(in_array($featureKey, ['disposed-leads-v1'], true), 404);
+
+        \Illuminate\Support\Facades\DB::table('feature_tour_views')->updateOrInsert(
+            [
+                'user_id' => $request->user()->id,
+                'feature_key' => $featureKey,
+            ],
+            [
+                'seen_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        );
+
+        return response()->noContent();
+    })->name('feature-tours.seen');
+
     Route::get('/announcements', [AnnouncementController::class, 'index'])->name('announcements.index');
     Route::get('/services', [ServiceCatalogController::class, 'index'])->name('services.index');
 
@@ -329,6 +348,7 @@ Route::middleware('auth')->group(function () {
     Route::redirect('/leads/verified-sold', '/reports/verified-sold');
     Route::get('/leads/returned', [LeadController::class, 'returnedLeads'])->name('leads.returned');
     Route::get('/leads/archived', [LeadController::class, 'archivedLeads'])->name('leads.archived');
+    Route::get('/leads/disposed', [LeadController::class, 'disposedLeads'])->name('leads.disposed');
     Route::get('/leads/create', [LeadController::class, 'create'])->name('leads.create');
     Route::get('/leads/import', [LeadController::class, 'importForm'])->name('leads.import');
     Route::post('/leads/import', [LeadController::class, 'import'])->name('leads.import.store');
@@ -348,6 +368,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/leads/sales-stage', [LeadController::class, 'moveSalesStage'])->name('leads.sales-stage');
     Route::post('/leads/return', [LeadController::class, 'returnLeads'])->name('leads.return');
     Route::post('/leads/send-returned-to-agent', [LeadController::class, 'sendReturnedToAgent'])->name('leads.send-returned-to-agent');
+    Route::post('/leads/dispose', [LeadController::class, 'disposeLeads'])->name('leads.dispose');
+    Route::post('/leads/restore-disposed', [LeadController::class, 'restoreDisposedLeads'])->name('leads.restore-disposed');
     Route::post('/leads/archive', [LeadController::class, 'archiveLeads'])->name('leads.archive');
     Route::post('/leads/restore', [LeadController::class, 'restoreLeads'])->name('leads.restore');
 

@@ -17,6 +17,8 @@ class Brand extends Model
         'logo_path',
         'primary_color',
         'accent_color',
+        'text_color',
+        'button_text_color',
         'site_logo_path',
         'is_sales_brand',
     ];

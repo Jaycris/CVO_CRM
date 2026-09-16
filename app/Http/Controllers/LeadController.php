@@ -64,6 +64,11 @@ class LeadController extends Controller
         return $this->leadIndexView('archived', request());
     }
 
+    public function disposedLeads(): View
+    {
+        return $this->leadIndexView('disposed', request());
+    }
+
     public function salesPipeline(): View
     {
         return $this->leadIndexView('sales_pipeline', request());
@@ -134,7 +139,7 @@ class LeadController extends Controller
 
         $query = Lead::with([
             'brand', 'assignedUser', 'previousAgent', 'createdBy', 'verifiedBy',
-            'verificationAssignedUser', 'returnedBy', 'archivedBy',
+            'verificationAssignedUser', 'returnedBy', 'archivedBy', 'disposedBy',
             'assignmentHistories.agent', 'assignmentHistories.assignedBy', 'assignmentHistories.releasedBy',
         ]);
         $this->applyLeadBrandScope(
@@ -142,6 +147,12 @@ class LeadController extends Controller
             $request,
             $this->viewModeIncludesAssignedToCurrentUser($viewMode, $request)
         );
+
+        if ($viewMode === 'disposed') {
+            $query->whereNotNull('disposed_at');
+        } else {
+            $query->whereNull('disposed_at');
+        }
 
         match ($viewMode) {
             'mine' => $query->where('created_by', $request?->user()?->id)
@@ -177,6 +188,12 @@ class LeadController extends Controller
                 ->whereNull('archived_at'),
             'archived' => $query->whereNotNull('archived_at')
                 ->when(! $this->userIsAdmin($request), fn ($query) => $this->limitToOwnedOrUnclaimed($query, $request)),
+            'disposed' => $query->when(! $this->userCanViewAllDisposedLeads($request), function ($query) use ($request) {
+                $query->where(function ($query) use ($request) {
+                    $query->where('assigned_to', $request?->user()?->id)
+                        ->orWhere('disposed_by', $request?->user()?->id);
+                });
+            }),
             'sales_team_leads' => $query->whereNotNull('assigned_to')
                 ->whereNull('returned_at')
                 ->whereNull('archived_at')
@@ -217,6 +234,7 @@ class LeadController extends Controller
             ->orderBy('last_name')
             ->get();
         [$pageTitle, $pageDescription] = $this->leadPageCopy($viewMode);
+        $disposeReasons = $this->disposeReasons();
 
         return view('leads.index', compact(
             'leads',
@@ -224,7 +242,8 @@ class LeadController extends Controller
             'salesAssignees',
             'pageTitle',
             'pageDescription',
-            'viewMode'
+            'viewMode',
+            'disposeReasons'
         ));
     }
 
@@ -456,6 +475,7 @@ class LeadController extends Controller
             ->whereNotNull('verified_at')
             ->where('lead_generation_stage', 'ready_to_return')
             ->whereNull('archived_at')
+            ->whereNull('disposed_at')
             ->pluck('id');
 
         if ($sendableLeads->count() !== count(array_unique($validated['lead_ids']))) {
@@ -509,6 +529,7 @@ class LeadController extends Controller
         $queueableLeads = Lead::whereIn('id', $validated['lead_ids'])
             ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
             ->whereNull('archived_at')
+            ->whereNull('disposed_at')
             ->whereNull('sales_stage')
             ->where(function ($query) {
                 $query->whereNotNull('returned_at')
@@ -602,6 +623,7 @@ class LeadController extends Controller
             ->where('lead_generation_stage', 'verification_queue')
             ->where('verify_score', '>=', 25)
             ->whereNull('archived_at')
+            ->whereNull('disposed_at')
             ->whereNull('sales_stage')
             ->when(! $this->userIsAdmin($request), fn ($query) => $query->where('verification_assigned_to', $request->user()->id))
             ->pluck('id');
@@ -717,6 +739,7 @@ class LeadController extends Controller
                 ->whereNotNull('assigned_to')
                 ->whereNull('returned_at')
                 ->whereNull('archived_at')
+                ->whereNull('disposed_at')
                 ->whereHas('assignedUser', fn ($query) => $query->where('department', 'Sales'))
                 ->pluck('id');
         } else {
@@ -746,6 +769,10 @@ class LeadController extends Controller
             'return_notes' => null,
             'archived_at' => null,
             'archived_by' => null,
+            'disposed_at' => null,
+            'disposed_by' => null,
+            'dispose_reason' => null,
+            'dispose_notes' => null,
             'sales_stage' => null,
             'sales_stage_updated_at' => null,
             'lead_generation_stage' => null,
@@ -831,6 +858,7 @@ class LeadController extends Controller
         $unassignableLeads = Lead::whereIn('id', $validated['lead_ids'])
             ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
             ->whereNotNull('assigned_to')
+            ->whereNull('disposed_at')
             ->when($isTeamUnassignment, function ($query) {
                 $query->whereNull('returned_at')
                     ->whereNull('archived_at')
@@ -947,15 +975,101 @@ class LeadController extends Controller
             'return_notes' => $validated['return_notes'] ?? null,
             'sales_stage' => null,
             'sales_stage_updated_at' => null,
-            'archived_at' => null,
-            'archived_by' => null,
-            'lead_generation_stage' => null,
-            'verification_assigned_to' => null,
+                'archived_at' => null,
+                'archived_by' => null,
+                'disposed_at' => null,
+                'disposed_by' => null,
+                'dispose_reason' => null,
+                'dispose_notes' => null,
+                'lead_generation_stage' => null,
+                'verification_assigned_to' => null,
         ]);
 
         return redirect()
             ->to($this->safeReturnUrl($validated['return_to'] ?? null) ?? route('leads.returned'))
             ->with('success', 'Selected leads returned successfully.');
+    }
+
+    public function disposeLeads(Request $request): RedirectResponse
+    {
+        abort_unless($this->userCanDisposeLeads($request), 403);
+
+        $validated = $request->validate([
+            'lead_ids' => ['required', 'array', 'min:1'],
+            'lead_ids.*' => ['integer', 'exists:leads,id'],
+            'dispose_reason' => ['required', Rule::in($this->disposeReasons())],
+            'dispose_notes' => ['nullable', 'string', 'max:2000'],
+            'return_to' => ['nullable', 'string', 'max:2048'],
+        ]);
+
+        $disposableLeads = $this->salesActionLeadIds($request, $validated['lead_ids']);
+
+        DB::transaction(function () use ($disposableLeads, $request, $validated) {
+            Lead::whereIn('id', $disposableLeads)
+                ->update([
+                    'disposed_at' => now(),
+                    'disposed_by' => $request->user()->id,
+                    'dispose_reason' => $validated['dispose_reason'],
+                    'dispose_notes' => $validated['dispose_notes'] ?? null,
+                    'sales_stage' => null,
+                    'sales_stage_updated_at' => null,
+                    'returned_at' => null,
+                    'returned_by' => null,
+                    'return_notes' => null,
+                    'archived_at' => null,
+                    'archived_by' => null,
+                    'lead_generation_stage' => null,
+                    'verification_assigned_to' => null,
+                ]);
+
+            foreach ($disposableLeads as $leadId) {
+                $this->closeLeadAssignmentHistory(
+                    (int) $leadId,
+                    $request->user()->id,
+                    'Lead disposed: '.$validated['dispose_reason']
+                );
+            }
+        });
+
+        return redirect()
+            ->to($this->safeReturnUrl($validated['return_to'] ?? null) ?? route('leads.disposed'))
+            ->with('success', 'Selected leads moved to Disposed Leads successfully.');
+    }
+
+    public function restoreDisposedLeads(Request $request): RedirectResponse
+    {
+        abort_unless($this->userCanDisposeLeads($request), 403);
+
+        $validated = $request->validate([
+            'lead_ids' => ['required', 'array', 'min:1'],
+            'lead_ids.*' => ['integer', 'exists:leads,id'],
+            'return_to' => ['nullable', 'string', 'max:2048'],
+        ]);
+
+        $restorableLeads = Lead::whereIn('id', $validated['lead_ids'])
+            ->whereNotNull('disposed_at')
+            ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
+            ->when(! $this->userCanViewAllDisposedLeads($request), function ($query) use ($request) {
+                $query->where(function ($query) use ($request) {
+                    $query->where('assigned_to', $request->user()->id)
+                        ->orWhere('disposed_by', $request->user()->id);
+                });
+            })
+            ->pluck('id');
+
+        abort_unless($restorableLeads->count() === count(array_unique($validated['lead_ids'])), 403);
+
+        Lead::whereIn('id', $restorableLeads)
+            ->update([
+                'disposed_at' => null,
+                'disposed_by' => null,
+                'dispose_reason' => null,
+                'dispose_notes' => null,
+            ]);
+
+        return redirect()
+            ->to($this->safeReturnUrl($validated['return_to'] ?? null) ?? route('leads.assigned'))
+            ->with('success', 'Selected leads restored successfully.');
     }
 
     public function sidebarCounts(Request $request): JsonResponse
@@ -1586,6 +1700,27 @@ class LeadController extends Controller
         return $this->userHasPermission($request, 'archive_leads');
     }
 
+    private function userCanDisposeLeads(?Request $request): bool
+    {
+        return $this->userHasPermission($request, 'return_leads')
+            || $this->userHasPermission($request, 'move_sales_stage');
+    }
+
+    private function userCanViewDisposedLeads(?Request $request): bool
+    {
+        return $this->userCanDisposeLeads($request)
+            || $this->userHasPermission($request, 'view_archived_leads')
+            || $this->userHasPermission($request, 'view_all_leads');
+    }
+
+    private function userCanViewAllDisposedLeads(?Request $request): bool
+    {
+        return $this->userIsAdmin($request)
+            || $this->userHasPermission($request, 'view_all_leads')
+            || $this->userHasPermission($request, 'view_team_leads')
+            || $this->userHasPermission($request, 'view_assigned_leads_monitor');
+    }
+
     private function notificationRecipients(array $permissions, ?string $department = null)
     {
         return User::with(['role.permissionRecords', 'permissionOverrides'])
@@ -1611,6 +1746,7 @@ class LeadController extends Controller
                     $query->where('lead_generation_stage', 'verification_queue')
                         ->whereNull('verified_at')
                         ->whereNull('archived_at')
+                        ->whereNull('disposed_at')
                         ->whereNull('sales_stage');
                 },
             ])
@@ -1664,12 +1800,13 @@ class LeadController extends Controller
             ->where('lead_generation_stage', 'verification_queue')
             ->whereNull('verified_at')
             ->whereNull('archived_at')
+            ->whereNull('disposed_at')
             ->whereNull('sales_stage');
     }
 
     private function markSharedLeadPageSeen(string $viewMode, ?Request $request): void
     {
-        if (! $request?->user() || ! in_array($viewMode, ['unassigned', 'returned', 'archived'], true)) {
+        if (! $request?->user() || ! in_array($viewMode, ['unassigned', 'returned', 'archived', 'disposed'], true)) {
             return;
         }
 
@@ -1698,6 +1835,9 @@ class LeadController extends Controller
             'archived' => $this->userHasPermission($request, 'view_archived_leads')
                 ? $this->unseenLeadCount($request, 'archived')
                 : 0,
+            'disposed' => $this->userCanViewDisposedLeads($request)
+                ? $this->unseenLeadCount($request, 'disposed')
+                : 0,
         ];
     }
 
@@ -1725,6 +1865,8 @@ class LeadController extends Controller
                 ->whereNull('archived_at'),
             'archived' => Lead::query()
                 ->whereNotNull('archived_at'),
+            'disposed' => Lead::query()
+                ->whereNotNull('disposed_at'),
             default => Lead::query()->whereRaw('1 = 0'),
         };
 
@@ -1732,6 +1874,13 @@ class LeadController extends Controller
 
         if ($pageKey === 'archived' && ! $this->userIsAdmin($request) && ! $this->userHasPermission($request, 'view_all_leads')) {
             $this->limitToOwnedOrUnclaimed($query, $request);
+        }
+
+        if ($pageKey === 'disposed' && ! $this->userCanViewAllDisposedLeads($request)) {
+            $query->where(function ($query) use ($request) {
+                $query->where('assigned_to', $request->user()->id)
+                    ->orWhere('disposed_by', $request->user()->id);
+            });
         }
 
         if ($lastSeenAt) {
@@ -1836,6 +1985,7 @@ class LeadController extends Controller
                 'sales_prospect',
                 'sales_scheduled_callback',
                 'sales_sold',
+                'disposed',
             ], true);
     }
 
@@ -1876,6 +2026,7 @@ class LeadController extends Controller
             'mine' => $this->userHasPermission($request, 'view_my_leads'),
             'returned' => $this->userHasPermission($request, 'view_returned_leads'),
             'archived' => $this->userHasPermission($request, 'view_archived_leads'),
+            'disposed' => $this->userCanViewDisposedLeads($request),
             'assigned' => $this->userHasPermission($request, 'view_assigned_leads')
                 || $this->userHasPermission($request, 'view_assigned_leads_monitor'),
             'new_assigned' => $this->userHasPermission($request, 'view_assigned_leads') || $this->userCanSelfMineAndWork($request),
@@ -1896,6 +2047,7 @@ class LeadController extends Controller
 
         $actionLeadIds = $query
             ->when(! $this->userIsAdmin($request), fn ($query) => $query->where('assigned_to', $request->user()->id))
+            ->whereNull('disposed_at')
             ->pluck('id');
 
         abort_unless($actionLeadIds->count() === count(array_unique($leadIds)), 403);
@@ -1910,6 +2062,7 @@ class LeadController extends Controller
                 ->whereNotNull('assigned_to')
                 ->whereNull('returned_at')
                 ->whereNull('archived_at')
+                ->whereNull('disposed_at')
                 ->whereHas('assignedUser', fn ($query) => $query->where('department', 'Sales'));
             BrandScope::apply($teamLeadQuery, $request?->user());
 
@@ -1946,6 +2099,7 @@ class LeadController extends Controller
                 ->whereNotNull('sales_stage')
                 ->whereNull('returned_at')
                 ->whereNull('archived_at')
+                ->whereNull('disposed_at')
                 ->where('assigned_to', $request?->user()->id);
             $this->applyLeadBrandScope($salesQuery, $request, true);
             $refundCount = SalesPayment::query()
@@ -1997,7 +2151,8 @@ class LeadController extends Controller
             $assignedQuery = Lead::query()
                 ->whereNotNull('assigned_to')
                 ->whereNull('returned_at')
-                ->whereNull('archived_at');
+                ->whereNull('archived_at')
+                ->whereNull('disposed_at');
 
             if ($viewMode === 'new_assigned') {
                 $assignedQuery->whereNull('sales_stage');
@@ -2006,7 +2161,8 @@ class LeadController extends Controller
             $returnedQuery = Lead::query()
                 ->whereNotNull('assigned_to')
                 ->whereNotNull('returned_at')
-                ->whereNull('archived_at');
+                ->whereNull('archived_at')
+                ->whereNull('disposed_at');
 
             if (! $this->canViewAllAssignedLeads($request)) {
                 $this->applyLeadBrandScope($assignedQuery, $request, true);
@@ -2059,7 +2215,8 @@ class LeadController extends Controller
 
         $leadQuery = Lead::query()
             ->whereNull('sales_stage')
-            ->whereNull('archived_at');
+            ->whereNull('archived_at')
+            ->whereNull('disposed_at');
         BrandScope::apply($leadQuery, $request?->user());
 
         if ($this->userIsLeadMiner($request)) {
@@ -2134,6 +2291,10 @@ class LeadController extends Controller
                 'Archived Leads',
                 'View leads that are no longer active.',
             ],
+            'disposed' => [
+                'Disposed Leads',
+                'Review leads removed from active calling after failed contact or disqualification.',
+            ],
             'sales_pipeline' => [
                 'Pipeline',
                 'Track active sales opportunities.',
@@ -2159,5 +2320,19 @@ class LeadController extends Controller
                 'Start here with newly mined leads before sending them to Verification Queue.',
             ],
         };
+    }
+
+    private function disposeReasons(): array
+    {
+        return [
+            'No answer',
+            'Wrong number',
+            'Not interested',
+            'Do not contact',
+            'Already with competitor',
+            'Duplicate lead',
+            'Invalid contact',
+            'Other',
+        ];
     }
 }
