@@ -95,6 +95,19 @@
                     </div>
                 </div>
 
+                <div>
+                    <label for="lead_tag" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">Lead Tag</label>
+                    <select id="lead_tag"
+                            name="lead_tag"
+                            class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                        <option value="">Normal Lead</option>
+                        <option value="VIP" @selected(old('lead_tag', $lead->lead_tag) === 'VIP')>VIP</option>
+                        <option value="Hot" @selected(old('lead_tag', $lead->lead_tag) === 'Hot')>Hot</option>
+                        <option value="Priority" @selected(old('lead_tag', $lead->lead_tag) === 'Priority')>Priority</option>
+                    </select>
+                    <x-input-error :messages="$errors->get('lead_tag')" class="mt-2" />
+                </div>
+
                 <div class="flex items-center justify-end gap-3">
                     <a href="{{ $returnTo }}"
                        class="rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 dark:text-zinc-300 dark:hover:bg-zinc-800">

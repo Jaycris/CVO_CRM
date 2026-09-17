@@ -22,6 +22,8 @@ class Lead extends Model
         'email',
         'book_link',
         'published_date',
+        'lead_tag',
+        'sales_notes',
         'assigned_to',
         'assigned_date',
         'previous_agent_id',

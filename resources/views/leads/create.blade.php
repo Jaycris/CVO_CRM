@@ -94,6 +94,19 @@
                     </div>
                 </div>
 
+                <div>
+                    <label for="lead_tag" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">Lead Tag</label>
+                    <select id="lead_tag"
+                            name="lead_tag"
+                            class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                        <option value="">Normal Lead</option>
+                        <option value="VIP" @selected(old('lead_tag') === 'VIP')>VIP</option>
+                        <option value="Hot" @selected(old('lead_tag') === 'Hot')>Hot</option>
+                        <option value="Priority" @selected(old('lead_tag') === 'Priority')>Priority</option>
+                    </select>
+                    <x-input-error :messages="$errors->get('lead_tag')" class="mt-2" />
+                </div>
+
                 @if ($canSelfMineAndWork)
                     <label class="flex cursor-pointer items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:hover:bg-emerald-400/15">
                         <input type="checkbox" name="work_self" value="1"

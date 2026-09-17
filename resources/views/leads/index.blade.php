@@ -35,6 +35,7 @@
             $showRestoreAction = $canArchiveLead && $currentViewMode === 'archived';
             $showDisposeAction = $canDisposeLead && ! in_array($currentViewMode, ['archived', 'disposed'], true);
             $showRestoreDisposedAction = $canDisposeLead && $currentViewMode === 'disposed';
+            $showDeleteAction = $canDeleteLead && $currentViewMode === 'disposed';
             $isSalesPage = str_starts_with($currentViewMode, 'sales_');
             $isTeamLeadsPage = $currentViewMode === 'sales_team_leads';
             $canOpenAssignModal = $canAssignLead || ($isTeamLeadsPage && $canReassignTeamLeads);
@@ -320,10 +321,10 @@
                                 </a>
                             @endif
 
-                            @if ($canDeleteLead)
+                            @if ($showDeleteAction)
                                 <form method="POST"
                                       action="{{ route('leads.bulk-destroy') }}"
-                                      x-on:submit="if (!hasSelection() || !confirm(selectedLeadIds.length === 1 ? 'Delete this lead?' : `Delete ${selectedLeadIds.length} selected leads?`)) { $event.preventDefault(); }">
+                                      x-on:submit="if (!hasSelection() || !confirm(selectedLeadIds.length === 1 ? 'Delete this disposed lead?' : `Delete ${selectedLeadIds.length} selected disposed leads?`)) { $event.preventDefault(); }">
                                     @csrf
                                     @method('DELETE')
                                     <input type="hidden" name="return_to" value="{{ request()->fullUrl() }}">
@@ -335,7 +336,7 @@
                                     <button type="submit"
                                             x-bind:disabled="!hasSelection()"
                                             x-bind:class="hasSelection() ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-400/30 dark:bg-rose-400/10 dark:text-rose-200 dark:hover:bg-rose-400/20' : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-500'"
-                                            x-bind:title="hasSelection() ? (selectedLeadIds.length === 1 ? 'Delete selected lead' : 'Delete selected leads') : 'Select leads to delete'"
+                                            x-bind:title="hasSelection() ? (selectedLeadIds.length === 1 ? 'Delete selected disposed lead' : 'Delete selected disposed leads') : 'Select disposed leads to delete'"
                                             class="inline-flex h-10 w-10 items-center justify-center rounded-xl border shadow-sm">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166M19.228 5.79 18.16 19.673A2.25 2.25 0 0 1 15.916 21.75H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .563c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
@@ -439,11 +440,15 @@
                                             x-on:click="selectedLead = @js([
                                                 'publisher' => $lead->publisher ?: '-',
                                                 'bookTitle' => $lead->book_title,
+                                                'leadTag' => $lead->lead_tag ?: 'Normal Lead',
                                                 'authorName' => $lead->author_name,
                                                 'phoneNumbers' => $lead->phone_numbers ?? [],
                                                 'verifiedPhoneNumbers' => $lead->verified_phone_numbers ?? [],
                                                 'phoneNumberStatuses' => $lead->phone_number_statuses ?? [],
                                                 'phoneStatusUrl' => route('leads.phone-statuses', $lead),
+                                                'salesNotesUrl' => route('leads.sales-notes', $lead),
+                                                'salesNotes' => $lead->sales_notes ?: '',
+                                                'canUpdateSalesNotes' => $isAdmin || (int) $lead->assigned_to === (int) auth()->id() || auth()->user()->hasPermission('move_sales_stage'),
                                                 'email' => $lead->email ?: '-',
                                                 'bookLink' => $lead->book_link,
                                                 'publishedDate' => $lead->published_date?->format('M d, Y') ?: '-',
@@ -485,6 +490,16 @@
                                             title="View lead details"
                                             class="block max-w-full text-left font-semibold leading-snug text-slate-900 hover:text-amber-700 dark:text-zinc-100 dark:hover:text-amber-300">
                                         <span class="line-clamp-2">{{ $lead->book_title }}</span>
+                                        @if ($lead->lead_tag)
+                                            <span @class([
+                                                'mt-2 inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide',
+                                                'bg-rose-100 text-rose-700 dark:bg-rose-400/15 dark:text-rose-200' => $lead->lead_tag === 'VIP',
+                                                'bg-orange-100 text-orange-700 dark:bg-orange-400/15 dark:text-orange-200' => $lead->lead_tag === 'Hot',
+                                                'bg-sky-100 text-sky-700 dark:bg-sky-400/15 dark:text-sky-200' => $lead->lead_tag === 'Priority',
+                                            ])>
+                                                {{ $lead->lead_tag }}
+                                            </span>
+                                        @endif
                                     </button>
                                 </td>
                                 <td class="break-words px-3 py-4 text-slate-700 dark:text-zinc-200">
@@ -614,9 +629,9 @@
                             <h3 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Assign Leads</h3>
                             <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
                                 @if ($isTeamLeadsPage)
-                                    Reassign <span class="font-semibold" x-text="selectedLeadIds.length"></span> selected team lead(s) to one Sales department user.
+                                    Reassign <span class="font-semibold" x-text="selectedLeadIds.length"></span> selected team lead(s) to one eligible sales user.
                                 @else
-                                    Assign <span class="font-semibold" x-text="selectedLeadIds.length"></span> selected unassigned lead(s) to one Sales department user.
+                                    Assign <span class="font-semibold" x-text="selectedLeadIds.length"></span> selected unassigned lead(s) to one eligible sales user.
                                 @endif
                             </p>
                         </div>
@@ -641,13 +656,13 @@
 
                         <div>
                             <label for="assigned_to" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">
-                                Sales Department User
+                                Eligible Sales User
                             </label>
                             <select id="assigned_to"
                                     name="assigned_to"
                                     required
                                     class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
-                                <option value="">Select a Sales user</option>
+                                <option value="">Select an eligible sales user</option>
                                 @foreach ($salesAssignees as $salesAssignee)
                                     <option value="{{ $salesAssignee->id }}">
                                         {{ $salesAssignee->first_name }} {{ $salesAssignee->last_name }} - {{ $salesAssignee->role?->name }}
@@ -659,7 +674,7 @@
 
                         @if ($salesAssignees->isEmpty())
                             <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200">
-                                No Sales department users are available yet.
+                                No eligible sales users are available yet.
                             </div>
                         @endif
 
@@ -1026,6 +1041,19 @@
                         </div>
 
                         <div class="rounded-xl bg-slate-50 p-4 dark:bg-zinc-950">
+                            <p class="text-xs font-semibold uppercase text-slate-400 dark:text-zinc-500">Lead Tag</p>
+                            <span class="mt-2 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-slate-700 dark:bg-zinc-800 dark:text-zinc-200"
+                                  x-bind:class="selectedLead.leadTag === 'VIP'
+                                    ? 'bg-rose-100 text-rose-700 dark:bg-rose-400/15 dark:text-rose-200'
+                                    : (selectedLead.leadTag === 'Hot'
+                                        ? 'bg-orange-100 text-orange-700 dark:bg-orange-400/15 dark:text-orange-200'
+                                        : (selectedLead.leadTag === 'Priority'
+                                            ? 'bg-sky-100 text-sky-700 dark:bg-sky-400/15 dark:text-sky-200'
+                                            : 'bg-slate-100 text-slate-700 dark:bg-zinc-800 dark:text-zinc-200'))"
+                                  x-text="selectedLead.leadTag"></span>
+                        </div>
+
+                        <div class="rounded-xl bg-slate-50 p-4 dark:bg-zinc-950">
                             <p class="text-xs font-semibold uppercase text-slate-400 dark:text-zinc-500">Phone Number</p>
                             <div class="mt-2 flex flex-wrap gap-2">
                                 <template x-for="phoneNumber in selectedLead.phoneNumbers" :key="phoneNumber">
@@ -1189,6 +1217,35 @@
                                 </div>
                             </form>
                         @endif
+
+                        <form method="POST"
+                              x-show="selectedLead.canUpdateSalesNotes"
+                              x-bind:action="selectedLead.salesNotesUrl"
+                              class="rounded-xl bg-slate-50 p-4 md:col-span-2 dark:bg-zinc-950">
+                            @csrf
+                            <input type="hidden" name="return_to" value="{{ request()->fullUrl() }}">
+                            <label for="sales_notes" class="text-xs font-semibold uppercase text-slate-400 dark:text-zinc-500">Sales Notes</label>
+                            <textarea id="sales_notes"
+                                      name="sales_notes"
+                                      rows="4"
+                                      x-model="selectedLead.salesNotes"
+                                      placeholder="Add call notes, client feedback, next steps, or reminders."
+                                      class="mt-3 w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"></textarea>
+
+                            <div class="mt-4 flex justify-end">
+                                <button type="submit"
+                                        class="rounded-xl bg-zinc-950 px-4 py-2 text-sm font-semibold text-amber-100 shadow-sm hover:bg-black dark:bg-amber-400 dark:text-zinc-950">
+                                    Save Notes
+                                </button>
+                            </div>
+                        </form>
+
+                        <div x-show="!selectedLead.canUpdateSalesNotes"
+                             class="rounded-xl bg-slate-50 p-4 md:col-span-2 dark:bg-zinc-950">
+                            <p class="text-xs font-semibold uppercase text-slate-400 dark:text-zinc-500">Sales Notes</p>
+                            <p class="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-zinc-300"
+                               x-text="selectedLead.salesNotes || 'No sales notes yet.'"></p>
+                        </div>
 
                         <div class="rounded-xl bg-slate-50 p-4 md:col-span-2 dark:bg-zinc-950">
                             <p class="text-xs font-semibold uppercase text-slate-400 dark:text-zinc-500">Return Notes</p>

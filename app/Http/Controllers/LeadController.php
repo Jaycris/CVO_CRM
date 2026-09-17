@@ -219,17 +219,11 @@ class LeadController extends Controller
         $leads = $query->latest()->paginate(\App\Models\AppSetting::leadsSalesRecordsPerPage())->withQueryString();
         $summaryCards = $this->summaryCards($viewMode, $request);
         $salesAssignees = User::with('role')
-            ->where('department', 'Sales')
             ->whereNull('suspended_at')
+            ->where('is_commission_eligible', true)
             ->when(! BrandScope::canAccessAllBrands($request?->user()), function ($query) use ($request) {
                 $query->where('brand_id', $request?->user()?->brand_id);
             })
-            ->whereHas('role', fn ($query) => $query->whereIn('name', [
-                'Branding Specialist',
-                'Team Leader',
-                'Sales Director',
-                'Operation Manager',
-            ]))
             ->orderBy('first_name')
             ->orderBy('last_name')
             ->get();
@@ -278,6 +272,7 @@ class LeadController extends Controller
             'Email',
             'Book Link',
             'Published Date',
+            'Lead Tag',
         ];
 
         $example = [
@@ -288,6 +283,7 @@ class LeadController extends Controller
             'author@example.com',
             'https://example.com/book',
             '2026-06-16',
+            'VIP',
         ];
 
         return response()->streamDownload(function () use ($headers, $example) {
@@ -354,6 +350,7 @@ class LeadController extends Controller
                     'email' => ['nullable', 'email', 'max:255'],
                     'book_link' => ['nullable', 'url', 'max:5000'],
                     'published_date' => ['nullable', 'date'],
+                    'lead_tag' => ['nullable', Rule::in($this->leadTagOptions())],
                 ]);
 
                 if ($validator->fails()) {
@@ -667,6 +664,12 @@ class LeadController extends Controller
             403
         );
 
+        if (is_null($lead->disposed_at)) {
+            return redirect()
+                ->to($this->safeReturnUrl($validated['return_to'] ?? null) ?? route('leads.my'))
+                ->with('error', 'Please move the lead to Disposed Leads before deleting it.');
+        }
+
         $lead->delete();
 
         return redirect()
@@ -694,6 +697,12 @@ class LeadController extends Controller
         $leads->each(function (Lead $lead) use ($request) {
             abort_unless($this->userCanManageLeadRecord($request, $lead), 403);
         });
+
+        if ($leads->contains(fn (Lead $lead) => is_null($lead->disposed_at))) {
+            return redirect()
+                ->to($this->safeReturnUrl($validated['return_to'] ?? null) ?? route('leads.my'))
+                ->with('error', 'Only leads already moved to Disposed Leads can be deleted.');
+        }
 
         Lead::whereIn('id', $leadIds)
             ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
@@ -725,12 +734,11 @@ class LeadController extends Controller
         if (
             $salesAssignee->suspended_at
             ||
-            $salesAssignee->department !== 'Sales'
-            || ! in_array($salesAssignee->role?->name, ['Branding Specialist', 'Team Leader', 'Sales Director', 'Operation Manager'], true)
+            ! $this->userCanReceiveLeadAssignment($salesAssignee)
         ) {
             return redirect()
                 ->to($this->safeReturnUrl($validated['return_to'] ?? null) ?? route('leads.my'))
-                ->with('error', 'Selected user must be an active Sales department user.');
+                ->with('error', 'Selected user must be active and commission eligible.');
         }
 
         if ($isTeamReassignment) {
@@ -1072,6 +1080,28 @@ class LeadController extends Controller
             ->with('success', 'Selected leads restored successfully.');
     }
 
+    public function updateSalesNotes(Request $request, Lead $lead): RedirectResponse
+    {
+        $validated = $request->validate([
+            'sales_notes' => ['nullable', 'string', 'max:5000'],
+            'return_to' => ['nullable', 'string', 'max:2048'],
+        ]);
+
+        abort_unless(
+            $this->userCanAccessLeadBrand($request, $lead)
+            && $this->userCanUpdateSalesNotes($request, $lead),
+            403
+        );
+
+        $lead->update([
+            'sales_notes' => $validated['sales_notes'] ?? null,
+        ]);
+
+        return redirect()
+            ->to($this->safeReturnUrl($validated['return_to'] ?? null) ?? route('leads.assigned'))
+            ->with('success', 'Lead notes updated successfully.');
+    }
+
     public function sidebarCounts(Request $request): JsonResponse
     {
         return response()->json($this->leadSidebarCounts($request));
@@ -1263,6 +1293,7 @@ class LeadController extends Controller
             'email' => ['nullable', 'email', 'max:255'],
             'book_link' => ['nullable', 'url', 'max:5000'],
             'published_date' => ['nullable', 'date'],
+            'lead_tag' => ['nullable', Rule::in($this->leadTagOptions())],
         ]);
 
         $validated['phone_numbers'] = $this->parsePhoneNumbers($validated['phone_numbers']);
@@ -1303,6 +1334,9 @@ class LeadController extends Controller
             'book_link' => 'book_link',
             'published date' => 'published_date',
             'published_date' => 'published_date',
+            'lead tag' => 'lead_tag',
+            'lead_tag' => 'lead_tag',
+            'tag' => 'lead_tag',
         ];
 
         $map = [];
@@ -1332,7 +1366,20 @@ class LeadController extends Controller
             'email' => $value('email') ? $this->normalizeEmailForDuplicateCheck($value('email')) : null,
             'book_link' => $value('book_link') ?: null,
             'published_date' => $value('published_date') ?: null,
+            'lead_tag' => $this->normalizeLeadTag($value('lead_tag')),
         ];
+    }
+
+    private function normalizeLeadTag(?string $leadTag): ?string
+    {
+        $normalizedTag = mb_strtolower(trim((string) $leadTag));
+
+        return match ($normalizedTag) {
+            'vip' => 'VIP',
+            'hot' => 'Hot',
+            'priority' => 'Priority',
+            default => null,
+        };
     }
 
     private function parsePhoneNumbers(string $phoneNumbers): array
@@ -1663,9 +1710,23 @@ class LeadController extends Controller
                     'Sales Director',
                     'Team Leader',
                     'Operation Manager',
+                    'General Manager',
                     'Trainee',
                 ], true)
             );
+    }
+
+    private function userCanReceiveLeadAssignment(User $user): bool
+    {
+        return ! $user->suspended_at
+            && (bool) $user->is_commission_eligible;
+    }
+
+    private function userCanUpdateSalesNotes(Request $request, Lead $lead): bool
+    {
+        return $this->userIsAdmin($request)
+            || (int) $lead->assigned_to === (int) $request->user()->id
+            || $this->userHasPermission($request, 'move_sales_stage');
     }
 
     private function userCanCreateLeads(?Request $request): bool
@@ -2333,6 +2394,15 @@ class LeadController extends Controller
             'Duplicate lead',
             'Invalid contact',
             'Other',
+        ];
+    }
+
+    private function leadTagOptions(): array
+    {
+        return [
+            'VIP',
+            'Hot',
+            'Priority',
         ];
     }
 }

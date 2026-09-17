@@ -365,6 +365,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/leads/{lead}/verify', [LeadController::class, 'verify'])->name('leads.verify');
     Route::post('/leads/{lead}/verify', [LeadController::class, 'storeVerification'])->name('leads.verify.store');
     Route::post('/leads/{lead}/phone-statuses', [LeadController::class, 'updatePhoneStatuses'])->name('leads.phone-statuses');
+    Route::post('/leads/{lead}/sales-notes', [LeadController::class, 'updateSalesNotes'])->name('leads.sales-notes');
     Route::post('/leads/sales-stage', [LeadController::class, 'moveSalesStage'])->name('leads.sales-stage');
     Route::post('/leads/return', [LeadController::class, 'returnLeads'])->name('leads.return');
     Route::post('/leads/send-returned-to-agent', [LeadController::class, 'sendReturnedToAgent'])->name('leads.send-returned-to-agent');
