@@ -8,6 +8,7 @@ use App\Http\Controllers\FinanceClientController;
 use App\Http\Controllers\FinanceContractController;
 use App\Http\Controllers\LeadController;
 use App\Http\Controllers\LeadSaleCreditController;
+use App\Http\Controllers\MaintenanceController;
 use App\Http\Controllers\PersonalNoteController;
 use App\Http\Controllers\ProductionProjectController;
 use App\Http\Controllers\ProductionReportController;
@@ -46,6 +47,11 @@ use App\Http\Controllers\Admin\AnnouncementController as AdminAnnouncementContro
 Route::get('/', function () {
     return redirect()->route('login');
 });
+
+Route::get('/maintenance', MaintenanceController::class)->name('maintenance');
+Route::get('/maintenance/preview', [MaintenanceController::class, 'preview'])
+    ->middleware('auth')
+    ->name('maintenance.preview');
 
 Route::get('/dashboard', function () {
     $user = request()->user();

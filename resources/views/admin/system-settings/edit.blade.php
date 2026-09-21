@@ -63,6 +63,55 @@
                 </div>
 
                 <div class="border-t border-slate-200 pt-5 dark:border-zinc-800">
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-zinc-100">Maintenance Mode</h2>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
+                        Temporarily send users to the maintenance page while Admin can still access the CRM.
+                    </p>
+                </div>
+
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
+                    <label for="maintenance_mode" class="flex cursor-pointer items-start gap-3">
+                        <input id="maintenance_mode"
+                               name="maintenance_mode"
+                               type="checkbox"
+                               value="1"
+                               @checked((bool) old('maintenance_mode', $maintenanceMode))
+                               class="mt-1 rounded border-slate-300 text-emerald-700 shadow-sm focus:ring-emerald-600 dark:border-zinc-700 dark:bg-zinc-900">
+                        <span>
+                            <span class="block text-sm font-semibold text-slate-900 dark:text-zinc-100">Enable maintenance mode</span>
+                            <span class="mt-1 block text-sm leading-6 text-slate-500 dark:text-zinc-400">
+                                Non-admin users will see the maintenance page. Login remains available so Admin can sign in and turn this off.
+                            </span>
+                        </span>
+                    </label>
+                    <div class="mt-4 flex">
+                        <a href="{{ route('maintenance.preview') }}"
+                           target="_blank"
+                           class="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-900 dark:ring-offset-zinc-900">
+                            Preview Maintenance Page
+                        </a>
+                    </div>
+                    <x-input-error :messages="$errors->get('maintenance_mode')" class="mt-2" />
+                </div>
+
+                <div>
+                    <label for="maintenance_return" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">
+                        Estimated Return Message
+                    </label>
+                    <input id="maintenance_return"
+                           name="maintenance_return"
+                           type="text"
+                           maxlength="120"
+                           value="{{ old('maintenance_return', $maintenanceReturn) }}"
+                           placeholder="Example: Today at 5:00 PM"
+                           class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                    <p class="mt-2 text-sm text-slate-500 dark:text-zinc-400">
+                        This appears on the maintenance page. Leave it blank if there is no exact return time.
+                    </p>
+                    <x-input-error :messages="$errors->get('maintenance_return')" class="mt-2" />
+                </div>
+
+                <div class="border-t border-slate-200 pt-5 dark:border-zinc-800">
                     <h2 class="text-lg font-semibold text-slate-900 dark:text-zinc-100">Integration Employee Lookup</h2>
                     <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
                         These settings let CRM search employees from the connected system when creating users.

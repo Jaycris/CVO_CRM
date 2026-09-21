@@ -13,6 +13,8 @@ class AppSetting extends Model
     public const HRIS_API_TOKEN_KEY = 'hris_api_token';
     public const HRIS_BASE_URL_KEY = 'hris_base_url';
     public const HRIS_CRM_LOOKUP_TOKEN_KEY = 'hris_crm_lookup_token';
+    public const MAINTENANCE_MODE_KEY = 'maintenance_mode';
+    public const MAINTENANCE_RETURN_KEY = 'maintenance_return';
 
     protected static array $runtimeCache = [];
 
@@ -89,6 +91,18 @@ class AppSetting extends Model
     public static function hrisCrmLookupToken(): string
     {
         return (string) static::get(static::HRIS_CRM_LOOKUP_TOKEN_KEY, config('services.hris.crm_lookup_token'));
+    }
+
+    public static function maintenanceModeEnabled(): bool
+    {
+        return (string) static::get(static::MAINTENANCE_MODE_KEY, '0') === '1';
+    }
+
+    public static function maintenanceReturn(): ?string
+    {
+        $value = trim((string) static::get(static::MAINTENANCE_RETURN_KEY, config('app.maintenance_return')));
+
+        return $value === '' ? null : $value;
     }
 
     private static function validRecordsPerPage(int $value): bool
