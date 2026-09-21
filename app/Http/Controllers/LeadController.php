@@ -119,11 +119,9 @@ class LeadController extends Controller
         ])
             ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
             ->whereHas('paymentRecords', fn ($query) => $query->where('status', $paymentStatus))
-            ->when(! $this->userIsAdmin($request), function ($query) use ($request) {
-                $query->where(function ($query) use ($request) {
-                    $query->where('agent_id', $request->user()->id)
-                        ->orWhere('frankie_agent_id', $request->user()->id);
-                });
+            ->where(function ($query) use ($request) {
+                $query->where('agent_id', $request->user()->id)
+                    ->orWhere('frankie_agent_id', $request->user()->id);
             })
             ->latest()
             ->paginate(\App\Models\AppSetting::leadsSalesRecordsPerPage())
@@ -205,13 +203,13 @@ class LeadController extends Controller
                 ->whereNull('archived_at')
                 ->whereHas('assignedUser', fn ($query) => $query->where('department', 'Sales')),
             'sales_pipeline' => $query->whereNotNull('assigned_to')->where('sales_stage', 'pipeline')->whereNull('returned_at')->whereNull('archived_at')
-                ->when(! $this->userIsAdmin($request), fn ($query) => $query->where('assigned_to', $request?->user()->id)),
+                ->where('assigned_to', $request?->user()->id),
             'sales_prospect' => $query->where('sales_stage', 'prospect')->whereNull('returned_at')->whereNull('archived_at')
-                ->when(! $this->userIsAdmin($request), fn ($query) => $query->where('assigned_to', $request?->user()->id)),
+                ->where('assigned_to', $request?->user()->id),
             'sales_scheduled_callback' => $query->where('sales_stage', 'scheduled_callback')->whereNull('returned_at')->whereNull('archived_at')
-                ->when(! $this->userIsAdmin($request), fn ($query) => $query->where('assigned_to', $request?->user()->id)),
+                ->where('assigned_to', $request?->user()->id),
             'sales_sold' => $query->where('sales_stage', 'sold')->whereNull('returned_at')->whereNull('archived_at')
-                ->when(! $this->userIsAdmin($request), fn ($query) => $query->where('assigned_to', $request?->user()->id)),
+                ->where('assigned_to', $request?->user()->id),
             'sales_refunds' => $query->whereRaw('1 = 0'),
             default => $query->whereNull('assigned_to')
                 ->whereNull('returned_at')
