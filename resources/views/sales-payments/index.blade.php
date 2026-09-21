@@ -15,9 +15,9 @@
             selectedEndorsementId: @js(old('sales_endorsement_id', '')),
             selectedEndorsementText: '',
             paymentAmount: '',
-            amountEditable: false,
             selectedPaymentType: '',
             selectedContractAmount: 0,
+            selectedPaidAmount: 0,
             selectedRemainingBalance: 0,
             endorsementOptions: @js($endorsements->map(fn ($endorsement) => [
                 'id' => $endorsement->id,
@@ -26,8 +26,8 @@
                 'bookTitle' => $endorsement->book_title,
                 'agent' => trim(($endorsement->agent?->first_name ?? '') . ' ' . ($endorsement->agent?->last_name ?? '')) ?: 'Unknown',
                 'paymentType' => $endorsement->payment,
-                'amountToBePaid' => number_format((float) ($endorsement->amount_to_be_paid ?? $endorsement->amount ?? 0), 2, '.', ''),
                 'totalContractAmount' => (float) ($endorsement->amount ?? 0),
+                'paidAmount' => (float) ($endorsement->current_paid_amount ?? 0),
                 'remainingBalance' => (float) ($endorsement->remaining_contract_balance ?? 0),
             ])->values()->all()),
             formatCurrency(value) {
@@ -43,6 +43,7 @@
                         this.selectedEndorsementText = `${endorsement.code} - ${endorsement.author}`;
                         this.selectedPaymentType = endorsement.paymentType;
                         this.selectedContractAmount = endorsement.totalContractAmount;
+                        this.selectedPaidAmount = endorsement.paidAmount;
                         this.selectedRemainingBalance = endorsement.remainingBalance;
                     }
                 }
@@ -102,19 +103,19 @@
             selectEndorsement(endorsement) {
                 this.selectedEndorsementId = endorsement.id;
                 this.selectedEndorsementText = `${endorsement.code} - ${endorsement.author}`;
-                this.paymentAmount = this.formatMoneyInput(endorsement.amountToBePaid);
-                this.amountEditable = false;
+                this.paymentAmount = this.formatMoneyInput(endorsement.remainingBalance);
                 this.selectedPaymentType = endorsement.paymentType;
                 this.selectedContractAmount = endorsement.totalContractAmount;
+                this.selectedPaidAmount = endorsement.paidAmount;
                 this.selectedRemainingBalance = endorsement.remainingBalance;
                 this.endorsementDropdownOpen = false;
             },
             clearSelectedEndorsement() {
                 this.selectedEndorsementId = '';
                 this.paymentAmount = '';
-                this.amountEditable = false;
                 this.selectedPaymentType = '';
                 this.selectedContractAmount = 0;
+                this.selectedPaidAmount = 0;
                 this.selectedRemainingBalance = 0;
             },
             togglePayment(payment) {
@@ -433,23 +434,14 @@
                         </label>
 
                         <label class="block">
-                            <span class="text-sm font-semibold text-slate-700 dark:text-zinc-200">Amount <span class="text-rose-500">*</span></span>
-                            <div class="mt-2 flex items-center gap-3">
-                                <input type="hidden" name="amount" x-bind:value="hiddenMoneyValue(paymentAmount)">
-                                <input type="text"
-                                       inputmode="decimal"
-                                       x-model="paymentAmount"
-                                       x-bind:disabled="!amountEditable"
-                                       x-on:input="updatePaymentAmount()"
-                                       required
-                                       class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:disabled:bg-zinc-900 dark:disabled:text-zinc-300">
-                                <label class="flex shrink-0 items-center gap-2 rounded-xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 dark:border-zinc-700 dark:text-zinc-200">
-                                    <input type="checkbox"
-                                           x-model="amountEditable"
-                                           class="rounded border-slate-300 text-amber-600 shadow-sm focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950">
-                                    Edit
-                                </label>
-                            </div>
+                            <span class="text-sm font-semibold text-slate-700 dark:text-zinc-200">Payment Amount <span class="text-rose-500">*</span></span>
+                            <input type="hidden" name="amount" x-bind:value="hiddenMoneyValue(paymentAmount)">
+                            <input type="text"
+                                   inputmode="decimal"
+                                   x-model="paymentAmount"
+                                   x-on:input="updatePaymentAmount()"
+                                   required
+                                   class="mt-2 w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
                             <x-input-error :messages="$errors->get('amount')" class="mt-2" />
                         </label>
 
@@ -488,7 +480,7 @@
 
                         <div x-show="selectedEndorsementId"
                              x-cloak
-                             class="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm dark:border-zinc-800 dark:bg-zinc-950 md:col-span-2 md:grid-cols-3">
+                             class="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm dark:border-zinc-800 dark:bg-zinc-950 md:col-span-2 md:grid-cols-4">
                             <div>
                                 <p class="text-xs font-semibold uppercase text-slate-500 dark:text-zinc-400">Payment Type</p>
                                 <p class="mt-1 font-bold text-slate-900 dark:text-zinc-100" x-text="selectedPaymentType || '-'"></p>
@@ -496,6 +488,10 @@
                             <div>
                                 <p class="text-xs font-semibold uppercase text-slate-500 dark:text-zinc-400">Total Contract Amount</p>
                                 <p class="mt-1 font-bold text-slate-900 dark:text-zinc-100">$<span x-text="formatCurrency(selectedContractAmount)"></span></p>
+                            </div>
+                            <div>
+                                <p class="text-xs font-semibold uppercase text-slate-500 dark:text-zinc-400">Successful Payments</p>
+                                <p class="mt-1 font-bold text-slate-900 dark:text-zinc-100">$<span x-text="formatCurrency(selectedPaidAmount)"></span></p>
                             </div>
                             <div>
                                 <p class="text-xs font-semibold uppercase text-slate-500 dark:text-zinc-400">Current Remaining Balance</p>

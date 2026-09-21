@@ -85,24 +85,21 @@ class SalesPaymentController extends Controller
         $endorsement = SalesEndorsement::findOrFail($validated['sales_endorsement_id']);
         abort_unless($this->userCanAccessBrand($request, $endorsement->brand_id), 403);
 
-        if ((float) $validated['amount'] > $this->remainingContractAmount($endorsement)) {
+        if (
+            $validated['status'] === 'Payment Success'
+            && (float) $validated['amount'] > $this->remainingContractAmount($endorsement)
+        ) {
             return $this->redirectToPaymentForm()
                 ->withErrors(['amount' => 'The payment amount cannot be greater than the remaining contract balance.'])
                 ->withInput();
         }
 
-        $payment = SalesPayment::withTrashed()
-            ->firstOrNew(['sales_endorsement_id' => $validated['sales_endorsement_id']]);
-        $previousStatus = $payment->exists ? $payment->status : null;
-
-        if ($payment->exists && $payment->trashed()) {
-            $payment->restore();
-        }
-
-        $payment->fill(collect($validated)->except('sales_endorsement_id')->all());
-        $payment->brand_id = $endorsement->brand_id ?? BrandScope::userBrandId($request->user());
-        $payment->sales_endorsement_id = $validated['sales_endorsement_id'];
-        $payment->save();
+        $previousStatus = null;
+        $payment = SalesPayment::create([
+            ...collect($validated)->except('sales_endorsement_id')->all(),
+            'brand_id' => $endorsement->brand_id ?? BrandScope::userBrandId($request->user()),
+            'sales_endorsement_id' => $validated['sales_endorsement_id'],
+        ]);
         $payment->load('endorsement.agent', 'endorsement.frankieAgent', 'endorsement.service', 'endorsement.lead.createdBy', 'endorsement.lead.verifiedBy');
 
         if ($this->shouldNotifyLeadCreditForStatus($validated['status']) && $previousStatus !== $validated['status']) {
@@ -133,7 +130,10 @@ class SalesPaymentController extends Controller
         $previousStatus = $payment->status;
         $payment->loadMissing('endorsement');
 
-        if ((float) $validated['amount'] > $this->remainingContractAmount($payment->endorsement, $payment)) {
+        if (
+            $validated['status'] === 'Payment Success'
+            && (float) $validated['amount'] > $this->remainingContractAmount($payment->endorsement, $payment)
+        ) {
             return back()
                 ->withErrors(['amount' => 'The payment amount cannot be greater than the remaining contract balance.'])
                 ->withInput();
@@ -280,12 +280,14 @@ class SalesPaymentController extends Controller
     {
         return SalesEndorsement::with(['agent', 'service'])
             ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
-            ->whereDoesntHave('paymentRecord')
             ->latest()
             ->get()
             ->each(function (SalesEndorsement $endorsement) {
+                $endorsement->setAttribute('current_paid_amount', $this->contractPaidAmount($endorsement));
                 $endorsement->setAttribute('remaining_contract_balance', $this->remainingContractAmount($endorsement));
-            });
+            })
+            ->filter(fn (SalesEndorsement $endorsement) => (float) $endorsement->remaining_contract_balance > 0)
+            ->values();
     }
 
     private function remainingContractAmount(SalesEndorsement $endorsement, ?SalesPayment $excludePayment = null): float
@@ -298,32 +300,8 @@ class SalesPaymentController extends Controller
         return (float) SalesPayment::query()
             ->where('status', 'Payment Success')
             ->when($excludePayment, fn ($query) => $query->whereKeyNot($excludePayment->id))
-            ->whereHas('endorsement', function ($query) use ($endorsement) {
-                $query->where('agent_id', $endorsement->agent_id)
-                    ->when(
-                        $endorsement->frankie_agent_id,
-                        fn ($query) => $query->where('frankie_agent_id', $endorsement->frankie_agent_id),
-                        fn ($query) => $query->whereNull('frankie_agent_id')
-                    )
-                    ->when(
-                        $endorsement->lead_id,
-                        fn ($query) => $query->where('lead_id', $endorsement->lead_id),
-                        fn ($query) => $query
-                            ->whereRaw("LOWER(TRIM(COALESCE(author_name, ''))) = ?", [$this->normalizeContractKey($endorsement->author_name)])
-                            ->whereRaw("LOWER(TRIM(COALESCE(book_title, ''))) = ?", [$this->normalizeContractKey($endorsement->book_title)])
-                    )
-                    ->when(
-                        $endorsement->service_id,
-                        fn ($query) => $query->where('service_id', $endorsement->service_id),
-                        fn ($query) => $query->whereRaw("LOWER(TRIM(COALESCE(services, ''))) = ?", [$this->normalizeContractKey($endorsement->services)])
-                    );
-            })
+            ->where('sales_endorsement_id', $endorsement->id)
             ->sum('amount');
-    }
-
-    private function normalizeContractKey(?string $value): string
-    {
-        return strtolower(trim((string) $value));
     }
 
     private function paymentMethods(): array

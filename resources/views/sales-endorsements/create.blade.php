@@ -36,21 +36,22 @@
                     leadOptions: @js($leadOptions),
                     serviceName: @js(old('services', '')),
                     serviceOptions: @js($serviceOptions),
+                    duplicateInstallmentContracts: @js($duplicateInstallmentContracts),
                     paymentType: @js(old('payment', '')),
                     totalContractAmountDisplay: '',
-                    amountToBePaidDisplay: '',
                     frankieAgentId: @js(old('frankie_agent_id', '')),
                     frankieAgentName: @js(collect($frankieAgentOptions)->firstWhere('id', (int) old('frankie_agent_id'))['name'] ?? ''),
                     frankieAgentOptions: @js($frankieAgentOptions),
                     authorDropdownOpen: false,
                     serviceDropdownOpen: false,
                     frankieDropdownOpen: false,
+                    duplicateWarningOpen: false,
+                    duplicateWarningConfirmed: false,
+                    pendingDuplicateContract: null,
+                    formElement: null,
                     init() {
+                        this.formElement = this.$el;
                         this.totalContractAmountDisplay = this.formatMoney(@js(old('amount', '')));
-                        this.amountToBePaidDisplay = this.formatMoney(@js(old('amount_to_be_paid', old('amount', ''))));
-                    },
-                    paymentNeedsChargeAmount() {
-                        return this.paymentType !== '' && this.paymentType !== 'Full Payment';
                     },
                     parseMoney(value) {
                         const raw = String(value ?? '').replace(/,/g, '').replace(/[^\d.]/g, '');
@@ -81,21 +82,46 @@
                     },
                     updateTotalContractAmount() {
                         this.totalContractAmountDisplay = this.formatMoney(this.totalContractAmountDisplay);
-
-                        if (!this.paymentNeedsChargeAmount()) {
-                            this.amountToBePaidDisplay = this.totalContractAmountDisplay;
-                        }
-                    },
-                    updateAmountToBePaid() {
-                        this.amountToBePaidDisplay = this.formatMoney(this.amountToBePaidDisplay);
                     },
                     syncPaymentType() {
-                        if (!this.paymentNeedsChargeAmount()) {
-                            this.amountToBePaidDisplay = this.totalContractAmountDisplay;
+                        return;
+                    },
+                    normalizeContractKey(value) {
+                        return String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+                    },
+                    matchingDuplicateContract() {
+                        const matchKey = [
+                            this.normalizeContractKey(this.authorName),
+                            this.normalizeContractKey(this.bookTitle),
+                            this.normalizeContractKey(this.serviceName),
+                        ].join('|');
+
+                        if (matchKey === '||') {
+                            return null;
+                        }
+
+                        return this.duplicateInstallmentContracts.find((contract) => contract.matchKey === matchKey) || null;
+                    },
+                    confirmDuplicateSubmission(event) {
+                        if (this.duplicateWarningConfirmed) {
                             return;
                         }
 
-                        this.amountToBePaidDisplay = this.formatMoney(@js(old('amount_to_be_paid', '0.00')));
+                        const contract = this.matchingDuplicateContract();
+
+                        if (!contract) {
+                            return;
+                        }
+
+                        event.preventDefault();
+                        event.stopPropagation();
+                        this.pendingDuplicateContract = contract;
+                        this.duplicateWarningOpen = true;
+                    },
+                    submitAnyway() {
+                        this.duplicateWarningConfirmed = true;
+                        this.duplicateWarningOpen = false;
+                        this.$nextTick(() => this.formElement?.requestSubmit());
                     },
                     filteredLeadOptions() {
                         const search = this.authorName.trim().toLowerCase();
@@ -169,6 +195,7 @@
                         this.frankieDropdownOpen = false;
                     }
                   }"
+                  x-on:submit="confirmDuplicateSubmission($event)"
                   class="space-y-6">
                 @csrf
 
@@ -429,24 +456,16 @@
                     </div>
                 </div>
 
-                <div x-show="paymentNeedsChargeAmount()"
+                <div x-show="matchingDuplicateContract()"
                      x-cloak
-                     x-transition
-                     class="grid grid-cols-1 gap-5 md:grid-cols-3">
-                    <div>
-                        <label for="amount_to_be_paid" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">
-                            Amount to be Paid <span class="text-rose-600">*</span>
-                        </label>
-                        <input type="hidden" name="amount_to_be_paid" x-bind:value="hiddenMoneyValue(amountToBePaidDisplay)">
-                        <input id="amount_to_be_paid"
-                               type="text"
-                               inputmode="decimal"
-                               x-model="amountToBePaidDisplay"
-                               x-bind:required="paymentNeedsChargeAmount()"
-                               x-on:input="updateAmountToBePaid()"
-                               class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
-                        <x-input-error :messages="$errors->get('amount_to_be_paid')" class="mt-2" />
-                    </div>
+                     class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100">
+                    <template x-if="matchingDuplicateContract()">
+                        <p>
+                            This sales endorsement matches an existing installment contract under
+                            <span class="font-bold" x-text="matchingDuplicateContract().code"></span>.
+                            If this is for the remaining installment, please ask Finance to add the payment in Payment Records.
+                        </p>
+                    </template>
                 </div>
 
                 <div>
@@ -464,6 +483,56 @@
                         Submit Endorsement
                     </button>
                 </div>
+
+                <template x-teleport="body">
+                    <div x-show="duplicateWarningOpen"
+                         x-cloak
+                         x-transition.opacity
+                         class="crm-modal-backdrop fixed inset-0 z-[9998] flex items-center justify-center bg-zinc-950/60 px-4 backdrop-blur-sm"
+                         x-on:keydown.escape.window="duplicateWarningOpen = false">
+                        <div x-on:click.outside="duplicateWarningOpen = false"
+                             class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
+                            <div class="flex items-start justify-between gap-4">
+                                <div>
+                                    <p class="text-sm font-semibold leading-6 text-amber-600 dark:text-amber-300">Possible duplicate installment</p>
+                                    <h3 class="mt-2 text-xl font-bold text-slate-900 dark:text-zinc-100">Review Sales Endorsement</h3>
+                                </div>
+
+                                <button type="button"
+                                        x-on:click="duplicateWarningOpen = false"
+                                        class="inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                                        aria-label="Close">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <p class="mt-5 text-sm leading-6 text-slate-700 dark:text-zinc-300">
+                                This sales endorsement matches an existing installment contract under
+                                <span class="font-bold text-slate-950 dark:text-zinc-100" x-text="pendingDuplicateContract?.code"></span>.
+                                If this is for the remaining installment, please ask Finance to add the payment in Payment Records.
+                            </p>
+
+                            <p class="mt-3 text-sm leading-6 text-slate-500 dark:text-zinc-400">
+                                Only submit this form if it is a separate new contract.
+                            </p>
+
+                            <div class="mt-6 flex flex-wrap justify-end gap-3">
+                                <button type="button"
+                                        x-on:click="duplicateWarningOpen = false"
+                                        class="rounded-xl px-5 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                                    Cancel
+                                </button>
+                                <button type="button"
+                                        x-on:click="submitAnyway()"
+                                        class="rounded-xl bg-amber-500 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:bg-amber-400 dark:text-zinc-950">
+                                    Submit Anyway
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
             </form>
         </div>
     </div>

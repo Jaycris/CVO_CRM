@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class SalesEndorsement extends Model
@@ -74,9 +76,21 @@ class SalesEndorsement extends Model
         return $this->belongsTo(Lead::class);
     }
 
-    public function paymentRecord()
+    public function paymentRecord(): HasOne
     {
-        return $this->hasOne(SalesPayment::class);
+        return $this->hasOne(SalesPayment::class)->latestOfMany();
+    }
+
+    public function successfulPaymentRecord(): HasOne
+    {
+        return $this->hasOne(SalesPayment::class)
+            ->where('status', 'Payment Success')
+            ->latestOfMany();
+    }
+
+    public function paymentRecords(): HasMany
+    {
+        return $this->hasMany(SalesPayment::class);
     }
 
     public function productionProject()
@@ -99,7 +113,7 @@ class SalesEndorsement extends Model
 
         static::deleting(function (SalesEndorsement $endorsement) {
             if (! $endorsement->isForceDeleting()) {
-                $endorsement->paymentRecord?->delete();
+                $endorsement->paymentRecords()->get()->each->delete();
             }
         });
     }

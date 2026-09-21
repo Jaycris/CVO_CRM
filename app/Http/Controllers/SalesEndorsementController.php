@@ -66,6 +66,7 @@ class SalesEndorsementController extends Controller
             'serviceOptions' => $this->serviceOptions($request),
             'leadOptions' => $this->leadOptions($request),
             'frankieAgentOptions' => $this->frankieAgentOptions($request),
+            'duplicateInstallmentContracts' => $this->duplicateInstallmentContracts($request),
         ]);
     }
 
@@ -88,20 +89,11 @@ class SalesEndorsementController extends Controller
             'isbn' => ['required', 'string', 'max:255'],
             'services' => ['required', 'string', 'max:255'],
             'amount' => ['required', 'numeric', 'min:0'],
-            'amount_to_be_paid' => ['nullable', 'required_unless:payment,Full Payment', 'numeric', 'min:0'],
             'payment' => ['required', Rule::in($this->acceptedPaymentOptions())],
             'remarks' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $validated['amount_to_be_paid'] = $validated['payment'] === 'Full Payment'
-            ? $validated['amount']
-            : ($validated['amount_to_be_paid'] ?? $validated['amount']);
-
-        if ((float) $validated['amount_to_be_paid'] > (float) $validated['amount']) {
-            return back()
-                ->withErrors(['amount_to_be_paid' => 'The amount to be paid cannot be greater than the total contract amount.'])
-                ->withInput();
-        }
+        $validated['amount_to_be_paid'] = $validated['amount'];
 
         $lead = isset($validated['lead_id'])
             ? Lead::find($validated['lead_id'])
@@ -259,6 +251,45 @@ class SalesEndorsementController extends Controller
             ])
             ->values()
             ->all();
+    }
+
+    private function duplicateInstallmentContracts(Request $request): array
+    {
+        return SalesEndorsement::with(['paymentRecords' => fn ($query) => $query->where('status', 'Payment Success')])
+            ->tap(fn ($query) => $this->applyEndorsementBrandScope($query, $request, true))
+            ->where('agent_id', $request->user()->id)
+            ->where('payment', '!=', 'Full Payment')
+            ->latest()
+            ->get()
+            ->map(function (SalesEndorsement $endorsement) {
+                $paidAmount = (float) $endorsement->paymentRecords->sum('amount');
+                $remainingBalance = max((float) $endorsement->amount - $paidAmount, 0);
+
+                if ($remainingBalance <= 0) {
+                    return null;
+                }
+
+                return [
+                    'code' => $endorsement->endorsement_code,
+                    'authorName' => $endorsement->author_name,
+                    'bookTitle' => $endorsement->book_title,
+                    'serviceName' => $endorsement->services,
+                    'remainingBalance' => $remainingBalance,
+                    'matchKey' => implode('|', [
+                        $this->normalizeContractKey($endorsement->author_name),
+                        $this->normalizeContractKey($endorsement->book_title),
+                        $this->normalizeContractKey($endorsement->services),
+                    ]),
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    private function normalizeContractKey(?string $value): string
+    {
+        return mb_strtolower(trim(preg_replace('/\s+/', ' ', (string) $value)));
     }
 
     private function applyEndorsementBrandScope($query, Request $request, bool $includeOwnEndorsements = false): void

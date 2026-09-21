@@ -60,6 +60,9 @@
                     </thead>
                     <tbody class="divide-y divide-slate-200 dark:divide-zinc-800">
                         @forelse ($endorsements as $endorsement)
+                            @php
+                                $statusPayment = $endorsement->paymentRecords->first();
+                            @endphp
                             <tr x-on:click="selectedIds.includes({{ $endorsement->id }}) ? selectedIds = selectedIds.filter((id) => id !== {{ $endorsement->id }}) : selectedIds.push({{ $endorsement->id }})"
                                 x-bind:class="selectedIds.includes({{ $endorsement->id }}) ? 'bg-amber-50 dark:bg-amber-400/10' : 'hover:bg-slate-50 dark:hover:bg-zinc-800/60'"
                                 class="cursor-pointer align-top">
@@ -75,8 +78,8 @@
                                 </td>
                                 <td class="break-words px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">{{ $endorsement->services }}</td>
                                 <td class="px-3 py-4 font-semibold leading-snug text-slate-900 dark:text-zinc-100">${{ number_format((float) $endorsement->amount, 2) }}</td>
-                                <td class="break-words px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">{{ $endorsement->paymentRecord?->payment_method ?: '-' }}</td>
-                                <td class="px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">{{ $endorsement->paymentRecord?->sold_date?->format('M d, Y') ?: '-' }}</td>
+                                <td class="break-words px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">{{ $statusPayment?->payment_method ?: '-' }}</td>
+                                <td class="px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">{{ $statusPayment?->sold_date?->format('M d, Y') ?: '-' }}</td>
                                 <td class="px-3 py-4">
                                     <span @class([
                                         'rounded-full px-2 py-1 text-[11px] font-semibold',

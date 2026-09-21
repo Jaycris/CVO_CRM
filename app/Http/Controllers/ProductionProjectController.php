@@ -38,7 +38,7 @@ class ProductionProjectController extends Controller
 
         $tasks = ProductionTask::with([
             'project.endorsement.agent',
-            'project.endorsement.paymentRecord',
+            'project.endorsement.successfulPaymentRecord',
             'project.brand',
             'project.fulfillmentOfficer',
             'assignedUser',
@@ -91,7 +91,7 @@ class ProductionProjectController extends Controller
         $search = trim((string) $request->query('search', ''));
         $status = $completed ? 'all' : $request->query('status', 'all');
 
-        $tasks = ProductionTask::with(['project.endorsement.agent', 'project.endorsement.paymentRecord', 'project.brand', 'project.fulfillmentOfficer', 'assignedUser', 'items'])
+        $tasks = ProductionTask::with(['project.endorsement.agent', 'project.endorsement.successfulPaymentRecord', 'project.brand', 'project.fulfillmentOfficer', 'assignedUser', 'items'])
             ->whereHas('project', fn ($query) => BrandScope::apply($query, $request->user()))
             ->where('assigned_to', $request->user()->id)
             ->when(
@@ -151,7 +151,7 @@ class ProductionProjectController extends Controller
 
         $projectsQuery = ProductionProject::with([
             'endorsement.agent',
-            'endorsement.paymentRecord',
+            'endorsement.successfulPaymentRecord',
             'endorsement.service.inclusions',
             'fulfillmentOfficer',
             'endorsedBy',

@@ -18,7 +18,9 @@ class SalesActivitySync
 
         $existingActivity = SalesActivity::where('sales_payment_id', $payment->id)->first();
 
-        if ($payment->status !== 'Payment Success' && ! $existingActivity) {
+        if ($payment->status !== 'Payment Success') {
+            $existingActivity?->delete();
+
             return;
         }
 

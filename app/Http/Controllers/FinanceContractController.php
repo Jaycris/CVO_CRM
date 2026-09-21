@@ -21,9 +21,9 @@ class FinanceContractController extends Controller
 
         $status = $request->query('status', 'all');
         $search = trim((string) $request->query('search', ''));
-        $endorsements = SalesEndorsement::with(['agent', 'brand', 'paymentRecord', 'productionProject'])
+        $endorsements = SalesEndorsement::with(['agent', 'brand', 'successfulPaymentRecord', 'productionProject'])
             ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
-            ->whereHas('paymentRecord', fn ($query) => $query->where('status', 'Payment Success'))
+            ->whereHas('paymentRecords', fn ($query) => $query->where('status', 'Payment Success'))
             ->when($status === 'sent', fn ($query) => $query->where('contract_status', 'sent'))
             ->when($status === 'signed', fn ($query) => $query->where('contract_status', 'signed'))
             ->when($search !== '', function ($query) use ($search) {
@@ -217,7 +217,7 @@ class FinanceContractController extends Controller
         $endorsedCount = 0;
         $notifications = [];
 
-        SalesEndorsement::with('paymentRecord')
+        SalesEndorsement::with('successfulPaymentRecord')
             ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
             ->whereIn('id', $validated['endorsement_ids'])
             ->get()

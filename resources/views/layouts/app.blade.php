@@ -152,6 +152,10 @@
     <div x-data="{ pageLoading: false }"
          x-init="
             document.addEventListener('submit', (event) => {
+                if (event.defaultPrevented) {
+                    return;
+                }
+
                 if (!event.target.matches('[data-no-page-loader]')) {
                     pageLoading = true;
                 }

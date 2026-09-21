@@ -309,7 +309,7 @@
                                                 'projectId' => 'PRJ-' . str_pad((string) $project->id, 5, '0', STR_PAD_LEFT),
                                                 'brand' => $brandName,
                                                 'tracker' => $trackerLabels[$project->tracker_type] ?? str($project->tracker_type)->title(),
-                                                'dateSold' => $endorsement?->paymentRecord?->sold_date?->format('M d, Y') ?: '-',
+                                                'dateSold' => $endorsement?->successfulPaymentRecord?->sold_date?->format('M d, Y') ?: '-',
                                                 'author' => $endorsement?->author_name ?: '-',
                                                 'bookTitle' => $endorsement?->book_title ?: '-',
                                                 'agreement' => $endorsement?->contract_status === 'signed' ? 'Signed' : 'Pending',
@@ -352,7 +352,7 @@
                                     </span>
                                 </td>
                                 <td class="px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">
-                                    {{ $endorsement?->paymentRecord?->sold_date?->format('M d, Y') ?: '-' }}
+                                    {{ $endorsement?->successfulPaymentRecord?->sold_date?->format('M d, Y') ?: '-' }}
                                 </td>
                                 <td class="px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">
                                     <p class="font-semibold text-slate-900 dark:text-zinc-100">{{ $endorsement?->author_name ?: '-' }}</p>

@@ -110,9 +110,15 @@ class LeadController extends Controller
 
         $this->ensureCanViewLeadMode($viewMode, $request);
 
-        $endorsements = SalesEndorsement::with(['agent', 'paymentRecord'])
+        $endorsements = SalesEndorsement::with([
+            'agent',
+            'paymentRecords' => fn ($query) => $query
+                ->where('status', $paymentStatus)
+                ->latest('sold_date')
+                ->latest(),
+        ])
             ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
-            ->whereHas('paymentRecord', fn ($query) => $query->where('status', $paymentStatus))
+            ->whereHas('paymentRecords', fn ($query) => $query->where('status', $paymentStatus))
             ->when(! $this->userIsAdmin($request), function ($query) use ($request) {
                 $query->where(function ($query) use ($request) {
                     $query->where('agent_id', $request->user()->id)
