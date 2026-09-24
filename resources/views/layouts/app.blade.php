@@ -338,6 +338,7 @@
                     || auth()->user()->hasPermission('view_all_sales_endorsements');
                 $canViewPaymentRecords = $isAdmin || auth()->user()->hasPermission('view_payment_records');
                 $canViewSalesActivity = $isAdmin || auth()->user()->hasPermission('view_sales_activity');
+                $canViewLeadGenerationActivity = $isAdmin || auth()->user()->hasPermission('view_lead_generation_activity');
                 $canViewSalesPerformance = $isAdmin
                     || $departmentName === 'Sales'
                     || auth()->user()->hasPermission('view_sales_performance_mtd')
@@ -347,8 +348,8 @@
                     || auth()->user()->hasPermission('view_agent_statements')
                     || auth()->user()->hasPermission('view_all_agent_statements');
                 $canViewProductionReports = $isAdmin || auth()->user()->hasPermission('view_production_reports') || auth()->user()->hasPermission('view_reports');
-                $canViewReportOverview = $isAdmin || auth()->user()->hasPermission('view_reports') || $canViewSoldMinedLeads || $canViewVerifiedSoldLeads || $canViewSalesActivity || $canViewSalesPerformance || $canViewAgentStatements || $canViewProductionReports;
-                $canViewAnyReportPage = $canViewReportOverview || $canViewSoldMinedLeads || $canViewVerifiedSoldLeads || $canViewSalesActivity || $canViewSalesPerformance || $canViewAgentStatements || $canViewProductionReports;
+                $canViewReportOverview = $isAdmin || auth()->user()->hasPermission('view_reports') || $canViewSoldMinedLeads || $canViewVerifiedSoldLeads || $canViewSalesActivity || $canViewLeadGenerationActivity || $canViewSalesPerformance || $canViewAgentStatements || $canViewProductionReports;
+                $canViewAnyReportPage = $canViewReportOverview || $canViewSoldMinedLeads || $canViewVerifiedSoldLeads || $canViewSalesActivity || $canViewLeadGenerationActivity || $canViewSalesPerformance || $canViewAgentStatements || $canViewProductionReports;
                 $canViewFinanceClients = $isAdmin || auth()->user()->hasPermission('view_finance_clients');
                 $canViewContractRecords = $isAdmin || auth()->user()->hasPermission('view_contract_records');
                 $canViewProductionTaskTracker = $isAdmin
@@ -368,6 +369,7 @@
                 $canManageTeams = $isAdmin || auth()->user()->hasPermission('manage_teams');
                 $canManageAnnouncements = $isAdmin || auth()->user()->hasPermission('manage_announcements');
                 $canManageDashboardBanners = $isAdmin || auth()->user()->hasPermission('manage_dashboard_banners');
+                $canManageRewards = $isAdmin || auth()->user()->hasPermission('manage_rewards');
                 $canManageCommissionSettings = $isAdmin;
                 $canManageCommissionProfiles = $isAdmin || auth()->user()->hasPermission('manage_commission_profiles');
                 $canManageSystemSettings = $isAdmin;
@@ -467,6 +469,14 @@
                             <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 6h.01M4.5 12h.01M4.5 18h.01" />
                         </svg>
                         Announcements
+                    </a>
+
+                    <a href="{{ route('rewards.index') }}" class="{{ $sidebarLink(request()->routeIs('rewards.*')) }}">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ $sidebarIcon(request()->routeIs('rewards.*')) }}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M20 12v8.25H4V12m16 0H4m16 0V7.5H4V12" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 7.5v12.75M8.25 7.5C6.75 7.5 6 6.75 6 5.625S6.75 3.75 7.875 3.75C10.125 3.75 12 7.5 12 7.5s1.875-3.75 4.125-3.75C17.25 3.75 18 4.5 18 5.625S17.25 7.5 15.75 7.5h-7.5Z" />
+                        </svg>
+                        Rewards
                     </a>
 
                     @if ($canViewServicesCatalog)
@@ -851,6 +861,17 @@
                             </a>
                         @endif
 
+                        @if ($canViewLeadGenerationActivity)
+                            <a href="{{ route('reports.lead-generation-activity.index') }}" class="{{ $sidebarLink(request()->routeIs('reports.lead-generation-activity.*')) }} mt-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ $sidebarIcon(request()->routeIs('reports.lead-generation-activity.*')) }}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.5h15" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 16.5v-6.75m3.75 6.75V6.75m3.75 9.75v-4.5" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="m6.75 6.75 2.25-2.25 2.25 2.25m1.5 3 2.25-2.25 2.25 2.25" />
+                                </svg>
+                                Lead Gen Activity
+                            </a>
+                        @endif
+
                         @if ($canViewSalesPerformance)
                             <a href="{{ route('reports.sales-performance.index') }}" class="{{ $sidebarLink(request()->routeIs('reports.sales-performance.*')) }} mt-1">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ $sidebarIcon(request()->routeIs('reports.sales-performance.*')) }}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -1011,7 +1032,7 @@
                     </div>
                 @endif
 
-                @if ($canManageUsers || $canManageRolesPermissions || $canManageServices || $canViewTeams || $canManageAnnouncements || $canManageDashboardBanners || $canManageCommissionSettings || $canManageSystemSettings)
+                @if ($canManageUsers || $canManageRolesPermissions || $canManageServices || $canViewTeams || $canManageAnnouncements || $canManageDashboardBanners || $canManageRewards || $canManageCommissionSettings || $canManageSystemSettings)
                     <div class="py-4">
                         <p class="px-3 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">
                             Admin
@@ -1056,6 +1077,24 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M14.25 8.25h.01" />
                                 </svg>
                                 Dashboard Banners
+                            </a>
+                        @endif
+
+                        @if ($canManageRewards)
+                            <a href="{{ route('admin.rewards.index') }}" class="{{ $sidebarLink(request()->routeIs('admin.rewards.index')) }} mt-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ $sidebarIcon(request()->routeIs('admin.rewards.index')) }}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M20 12v8.25H4V12m16 0H4m16 0V7.5H4V12" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 7.5v12.75M8.25 7.5C6.75 7.5 6 6.75 6 5.625S6.75 3.75 7.875 3.75C10.125 3.75 12 7.5 12 7.5s1.875-3.75 4.125-3.75C17.25 3.75 18 4.5 18 5.625S17.25 7.5 15.75 7.5h-7.5Z" />
+                                </svg>
+                                Rewards
+                            </a>
+
+                            <a href="{{ route('admin.rewards.claims') }}" class="{{ $sidebarLink(request()->routeIs('admin.rewards.claims*')) }} mt-1 ml-5">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ $sidebarIcon(request()->routeIs('admin.rewards.claims*')) }}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 6.75h15M4.5 12h15M4.5 17.25h15" />
+                                </svg>
+                                Reward Claims
                             </a>
                         @endif
 

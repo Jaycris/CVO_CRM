@@ -7,12 +7,14 @@ use App\Http\Controllers\CalendarTodoController;
 use App\Http\Controllers\FinanceClientController;
 use App\Http\Controllers\FinanceContractController;
 use App\Http\Controllers\LeadController;
+use App\Http\Controllers\LeadGenerationActivityController;
 use App\Http\Controllers\LeadSaleCreditController;
 use App\Http\Controllers\MaintenanceController;
 use App\Http\Controllers\PersonalNoteController;
 use App\Http\Controllers\ProductionProjectController;
 use App\Http\Controllers\ProductionReportController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\RewardController;
 use App\Http\Controllers\SalesEndorsementController;
 use App\Http\Controllers\SalesPaymentController;
 use App\Http\Controllers\SalesActivityController;
@@ -28,6 +30,7 @@ use App\Models\ProductionProject;
 use App\Models\SalesEndorsement;
 use App\Models\SalesPayment;
 use App\Support\BrandScope;
+use App\Support\RewardProgress;
 use App\Support\SalesMtdCalculator;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\RolePermissionController;
@@ -35,6 +38,7 @@ use App\Http\Controllers\Admin\TrashController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\DashboardBannerController;
+use App\Http\Controllers\Admin\RewardController as AdminRewardController;
 use App\Http\Controllers\Admin\ServiceController;
 use App\Http\Controllers\Admin\TeamController;
 use App\Http\Controllers\Admin\CommissionProfileController;
@@ -296,6 +300,8 @@ Route::get('/dashboard', function () {
         ->take(2)
         ->get();
 
+    $dashboardRewards = RewardProgress::visibleFor($user, $salesMtdSummary, 8);
+
     return view('dashboard', compact(
         'dashboardCards',
         'topSalesPerformance',
@@ -305,7 +311,8 @@ Route::get('/dashboard', function () {
         'salesMtdBrandSnapshots',
         'recentNotes',
         'upcomingCalendarTodos',
-        'dashboardBanners'
+        'dashboardBanners',
+        'dashboardRewards'
     ));
 })->middleware(['auth'])->name('dashboard');
 
@@ -329,6 +336,9 @@ Route::middleware('auth')->group(function () {
     })->name('feature-tours.seen');
 
     Route::get('/announcements', [AnnouncementController::class, 'index'])->name('announcements.index');
+    Route::get('/rewards', [RewardController::class, 'index'])->name('rewards.index');
+    Route::get('/rewards/{reward}/claim', [RewardController::class, 'showClaim'])->name('rewards.claim.show');
+    Route::post('/rewards/{reward}/claim', [RewardController::class, 'requestClaim'])->name('rewards.claim.request');
     Route::get('/services', [ServiceCatalogController::class, 'index'])->name('services.index');
 
     Route::get('/notes', [PersonalNoteController::class, 'index'])->name('notes.index');
@@ -424,6 +434,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/sold-mined', [LeadSaleCreditController::class, 'soldMined'])->name('sold-mined');
         Route::get('/verified-sold', [LeadSaleCreditController::class, 'verifiedSold'])->name('verified-sold');
         Route::get('/sales-activity', [SalesActivityController::class, 'index'])->name('sales-activity.index');
+        Route::get('/lead-generation-activity', [LeadGenerationActivityController::class, 'index'])->name('lead-generation-activity.index');
         Route::get('/sales-performance', [SalesPerformanceController::class, 'index'])->name('sales-performance.index');
         Route::put('/sales-performance/targets', [SalesPerformanceController::class, 'updateTargets'])->name('sales-performance.targets');
         Route::get('/agent-statements', [AgentStatementController::class, 'index'])->name('agent-statements.index');
@@ -439,6 +450,11 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::post('/dashboard-banners', [DashboardBannerController::class, 'store'])->name('dashboard-banners.store');
     Route::put('/dashboard-banners/{dashboardBanner}', [DashboardBannerController::class, 'update'])->name('dashboard-banners.update');
     Route::delete('/dashboard-banners/{dashboardBanner}', [DashboardBannerController::class, 'destroy'])->name('dashboard-banners.destroy');
+    Route::get('/rewards', [AdminRewardController::class, 'index'])->name('rewards.index');
+    Route::post('/rewards', [AdminRewardController::class, 'store'])->name('rewards.store');
+    Route::get('/rewards/claims', [AdminRewardController::class, 'claims'])->name('rewards.claims');
+    Route::put('/rewards/claims/{rewardUnlock}/claimed', [AdminRewardController::class, 'markClaimed'])->name('rewards.claims.mark-claimed');
+    Route::delete('/rewards/{reward}', [AdminRewardController::class, 'destroy'])->name('rewards.destroy');
     Route::get('/commission-profiles', [CommissionProfileController::class, 'index'])->name('commission-profiles.index');
     Route::post('/commission-profiles', [CommissionProfileController::class, 'store'])->name('commission-profiles.store');
     Route::put('/commission-profiles/assignments', [CommissionProfileController::class, 'updateAssignments'])->name('commission-profiles.assignments.update');

@@ -130,6 +130,16 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Lead::class, 'assigned_to');
     }
 
+    public function minedLeads()
+    {
+        return $this->hasMany(Lead::class, 'created_by');
+    }
+
+    public function verifiedLeads()
+    {
+        return $this->hasMany(Lead::class, 'verified_by');
+    }
+
     public function assignedProductionProjects()
     {
         return $this->hasMany(ProductionProject::class, 'assigned_to');

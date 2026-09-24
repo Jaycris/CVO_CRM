@@ -245,6 +245,141 @@
             @endif
         </section>
 
+        @if (($dashboardRewards ?? collect())->isNotEmpty())
+            <section
+                x-data="{
+                    scrollByCard(direction) {
+                        this.$refs.rewardsTrack.scrollBy({
+                            left: direction * Math.min(this.$refs.rewardsTrack.clientWidth, 420),
+                            behavior: 'smooth'
+                        });
+                    }
+                }"
+                class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800"
+            >
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Rewards</h3>
+                        <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Available perks based on monthly MTD progress.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        @if ($dashboardRewards->count() > 1)
+                            <button type="button"
+                                    @click="scrollByCard(-1)"
+                                    class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                                    aria-label="Previous rewards">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+                                </svg>
+                            </button>
+                            <button type="button"
+                                    @click="scrollByCard(1)"
+                                    class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                                    aria-label="Next rewards">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                                </svg>
+                            </button>
+                        @endif
+                        <a href="{{ route('rewards.index') }}"
+                           class="rounded-xl bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90">
+                            View All
+                        </a>
+                    </div>
+                </div>
+
+                <div x-ref="rewardsTrack" class="mt-5 flex gap-4 overflow-x-auto pb-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    @foreach ($dashboardRewards as $reward)
+                        @php
+                            $media = $reward->media->first();
+                            $progressAmount = (float) $reward->getAttribute('progress_amount');
+                            $requirementAmount = (float) $reward->requirement_amount;
+                            $unlock = $reward->getAttribute('user_unlock');
+                        @endphp
+
+                        <article class="min-w-full shrink-0 snap-start overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+                            <div class="grid grid-cols-1 lg:grid-cols-[minmax(18rem,30rem)_1fr]">
+                                @if ($media)
+                                    @if ($media->type === 'video')
+                                        <video src="{{ asset('storage/' . $media->path) }}" class="h-56 w-full bg-slate-100 object-cover dark:bg-zinc-900 lg:h-80" muted controls></video>
+                                    @else
+                                        <img src="{{ asset('storage/' . $media->path) }}" alt="{{ $reward->title }}" class="h-56 w-full bg-slate-100 object-cover dark:bg-zinc-900 lg:h-80">
+                                    @endif
+                                @else
+                                    <div class="flex h-56 items-center justify-center bg-emerald-50 text-sm font-semibold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200 lg:h-80">
+                                        Reward
+                                    </div>
+                                @endif
+
+                                <div class="flex flex-col justify-between gap-6 p-5 lg:p-6">
+                                    <div>
+                                        <div class="flex flex-wrap gap-2">
+                                            <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">
+                                                {{ $reward->reward_scope === 'team' ? 'Team Reward' : 'Individual Reward' }}
+                                            </span>
+                                            <span @class([
+                                                'rounded-full px-2.5 py-1 text-xs font-bold',
+                                                'bg-amber-50 text-amber-700 dark:bg-amber-400/10 dark:text-amber-200' => $reward->getAttribute('is_unlocked'),
+                                                'bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300' => ! $reward->getAttribute('is_unlocked'),
+                                            ])>
+                                                {{ $reward->getAttribute('is_unlocked') ? 'Unlocked' : 'In Progress' }}
+                                            </span>
+                                        </div>
+
+                                        <h4 class="mt-4 text-2xl font-bold text-slate-950 dark:text-white">{{ $reward->title }}</h4>
+
+                                        @if ($reward->accommodation)
+                                            <p class="mt-3 max-w-3xl text-sm leading-6 text-slate-600 dark:text-zinc-300">{{ $reward->accommodation }}</p>
+                                        @endif
+
+                                        @if ($reward->requirements)
+                                            <p class="mt-3 max-w-3xl text-sm text-slate-500 dark:text-zinc-400">
+                                                <span class="font-semibold text-slate-700 dark:text-zinc-300">Additional requirements:</span>
+                                                {{ $reward->requirements }}
+                                            </p>
+                                        @endif
+                                    </div>
+
+                                    <div class="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+                                        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                                            <div class="flex items-center justify-between gap-3 text-sm font-semibold text-slate-600 dark:text-zinc-300">
+                                                <span>{{ $reward->reward_scope === 'team' ? 'Team progress' : 'Your progress' }}</span>
+                                                <span class="text-slate-950 dark:text-white">
+                                                    ${{ number_format($progressAmount, 2) }} / ${{ number_format($requirementAmount, 2) }}
+                                                </span>
+                                            </div>
+                                            <div class="mt-3 h-3 overflow-hidden rounded-full bg-slate-200 dark:bg-zinc-800">
+                                                <div class="h-full rounded-full bg-emerald-600 dark:bg-emerald-400" style="width: {{ $reward->getAttribute('progress_percent') }}%"></div>
+                                            </div>
+                                        </div>
+
+                                        @if ($reward->getAttribute('is_unlocked') && $unlock?->expires_at)
+                                            <p class="rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 dark:bg-amber-400/10 dark:text-amber-200">
+                                                Expires {{ $unlock->expires_at->format('M d, Y') }}
+                                            </p>
+                                        @elseif ($reward->expires_in_days)
+                                            <p class="text-sm text-slate-500 dark:text-zinc-400 lg:max-w-56">
+                                                Reach the requirement to reveal the reward expiration date.
+                                            </p>
+                                        @endif
+                                    </div>
+
+                                    @if ($reward->getAttribute('is_unlocked'))
+                                        <div>
+                                            <a href="{{ route('rewards.claim.show', $reward) }}"
+                                               class="inline-flex min-h-10 items-center justify-center rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800">
+                                                {{ $unlock?->claim_requested_at ? 'View Claim Request' : 'Claim Reward' }}
+                                            </a>
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+                        </article>
+                    @endforeach
+                </div>
+            </section>
+        @endif
+
         <div class="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
             @php
                 $cardToneClasses = [

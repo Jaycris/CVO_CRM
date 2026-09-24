@@ -7,7 +7,9 @@ use App\Models\SalesPayment;
 use App\Notifications\LeadSaleCreditNotification;
 use App\Notifications\PaymentStatusNotification;
 use App\Support\BrandScope;
+use App\Support\RewardProgress;
 use App\Support\SalesActivitySync;
+use App\Support\SalesMtdCalculator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -110,6 +112,7 @@ class SalesPaymentController extends Controller
         $this->syncLeadSoldStage($payment);
 
         $this->notifySalesAgentPaymentStatus($payment);
+        $this->checkRewardUnlocksForPayment($payment);
 
         return redirect(route('finance.payments.index') . '#payment-feedback')
             ->with('success', 'Payment record added successfully.');
@@ -153,6 +156,8 @@ class SalesPaymentController extends Controller
         if ($validated['status'] !== $previousStatus) {
             $this->notifySalesAgentPaymentStatus($payment);
         }
+
+        $this->checkRewardUnlocksForPayment($payment);
 
         return redirect()
             ->route('finance.payments.index')
@@ -222,6 +227,29 @@ class SalesPaymentController extends Controller
         }
 
         $endorsement->agent->notify(new PaymentStatusNotification($endorsement, $payment));
+    }
+
+    private function checkRewardUnlocksForPayment(SalesPayment $payment): void
+    {
+        if ($payment->status !== 'Payment Success') {
+            return;
+        }
+
+        $payment->loadMissing('endorsement.agent');
+        $agent = $payment->endorsement?->agent;
+
+        if (! $agent) {
+            return;
+        }
+
+        $summary = SalesMtdCalculator::summary(
+            $agent,
+            now(),
+            BrandScope::userBrandId($agent),
+            $agent->department === 'Sales'
+        );
+
+        RewardProgress::visibleFor($agent, $summary);
     }
 
     private function notifyGroupedLeadSaleCredit($user, string $creditType, SalesPayment $payment): void

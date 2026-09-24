@@ -71,7 +71,9 @@ class RolePermissionController extends Controller
                     ['name' => 'Users', 'allowed' => 'Admin only', 'note' => 'User directory and invitations.'],
                     ['name' => 'Brands / Accounts', 'allowed' => 'Admin only', 'note' => 'Manages imprints and brand accounts under CreatiVision Outsourcing.'],
                     ['name' => 'Services', 'allowed' => 'Admin, permitted managers', 'note' => 'Manages brand/account services, inclusions, pricing, and production position templates.'],
+                    ['name' => 'Rewards', 'allowed' => 'Admin, permitted managers', 'note' => 'Manages reward perks, unlock settings, and claim request notifications.'],
                     ['name' => 'Roles & Permissions', 'allowed' => 'Admin only', 'note' => 'Access rules reference page.'],
+                    ['name' => 'Lead Gen Activity', 'allowed' => 'Admin, permitted managers', 'note' => 'Report showing daily mined leads by Lead Miners and verified leads by Verifiers.'],
                 ],
             ],
             [
@@ -100,7 +102,9 @@ class RolePermissionController extends Controller
                     ['name' => 'Update production project status', 'allowed' => 'Admin, Fulfillment Officer, Operation Manager, assigned Production users', 'note' => 'Updates status as Pending, In Progress, Fulfilled, or Hold Off. When assigned staff marks a task Done, the Fulfillment Officer is notified.'],
                     ['name' => 'Delete fulfillment records', 'allowed' => 'Admin by default, permitted Production users', 'note' => 'Soft-deletes selected fulfillment tracker records so Admin can restore them from Trash.'],
                     ['name' => 'Manage services', 'allowed' => 'Admin by default, permitted managers', 'note' => 'Can create, edit, and delete services and inclusions for accessible brands/accounts.'],
+                    ['name' => 'Manage rewards', 'allowed' => 'Admin by default, permitted managers', 'note' => 'Can create, post, and delete rewards and receive reward claim notifications.'],
                     ['name' => 'View services catalog', 'allowed' => 'Admin, permitted users', 'note' => 'Can browse services without editing the service setup.'],
+                    ['name' => 'View Lead Generation Activity', 'allowed' => 'Admin by default, permitted managers', 'note' => 'Can monitor daily mined leads and verified leads for Lead Generation users.'],
                 ],
             ],
             [
