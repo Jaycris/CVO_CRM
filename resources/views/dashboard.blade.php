@@ -332,21 +332,21 @@
                             $sameTierClaim = $reward->getAttribute('same_tier_claim');
                         @endphp
 
-                        <article class="min-w-full shrink-0 snap-start overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-                            <div class="grid grid-cols-1 lg:grid-cols-[minmax(18rem,30rem)_minmax(0,1fr)]">
+                        <article class="w-full flex-none snap-start overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+                            <div class="grid grid-cols-1 lg:grid-cols-[minmax(16rem,26rem)_minmax(0,1fr)]">
                                 @if ($media)
                                     @if ($media->type === 'video')
-                                        <video src="{{ asset('storage/' . $media->path) }}" class="h-56 w-full bg-slate-100 object-cover dark:bg-zinc-900 lg:h-80" muted controls></video>
+                                        <video src="{{ asset('storage/' . $media->path) }}" class="h-56 w-full bg-slate-100 object-cover dark:bg-zinc-900 lg:h-72" muted controls></video>
                                     @else
-                                        <img src="{{ asset('storage/' . $media->path) }}" alt="{{ $reward->title }}" class="h-56 w-full bg-slate-100 object-cover dark:bg-zinc-900 lg:h-80">
+                                        <img src="{{ asset('storage/' . $media->path) }}" alt="{{ $reward->title }}" class="h-56 w-full bg-slate-100 object-cover dark:bg-zinc-900 lg:h-72">
                                     @endif
                                 @else
-                                    <div class="flex h-56 items-center justify-center bg-emerald-50 text-sm font-semibold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200 lg:h-80">
+                                    <div class="flex h-56 items-center justify-center bg-emerald-50 text-sm font-semibold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200 lg:h-72">
                                         Reward
                                     </div>
                                 @endif
 
-                                <div class="min-w-0 overflow-hidden flex flex-col justify-between gap-6 p-5 lg:p-6">
+                                <div class="flex min-w-0 flex-col justify-between gap-5 overflow-hidden p-5 lg:py-6 lg:pl-8 lg:pr-10">
                                     <div class="min-w-0">
                                         <div class="flex flex-wrap gap-2">
                                             <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">
@@ -372,18 +372,20 @@
                                         <h4 class="mt-4 break-words text-2xl font-bold text-slate-950 dark:text-white">{{ $reward->title }}</h4>
 
                                         @if ($reward->accommodation)
-                                            <p class="mt-3 max-w-3xl whitespace-pre-wrap break-words text-justify text-sm leading-6 text-slate-600 dark:text-zinc-300">{{ $reward->accommodation }}</p>
+                                            <p class="mt-3 max-w-2xl break-words text-sm leading-6 text-slate-600 dark:text-zinc-300">
+                                                {{ \Illuminate\Support\Str::limit(preg_replace('/\s+/', ' ', trim($reward->accommodation)), 260) }}
+                                            </p>
                                         @endif
 
                                         @if ($reward->requirements)
-                                            <p class="mt-3 max-w-3xl whitespace-pre-wrap break-words text-justify text-sm leading-6 text-slate-500 dark:text-zinc-400">
+                                            <p class="mt-3 max-w-2xl break-words text-sm leading-6 text-slate-500 dark:text-zinc-400">
                                                 <span class="font-semibold text-slate-700 dark:text-zinc-300">Additional requirements:</span>
-                                                {{ $reward->requirements }}
+                                                {{ \Illuminate\Support\Str::limit(preg_replace('/\s+/', ' ', trim($reward->requirements)), 140) }}
                                             </p>
                                         @endif
                                     </div>
 
-                                    <div class="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                                    <div class="grid min-w-0 gap-4">
                                         <div class="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
                                             <div class="flex flex-wrap items-center justify-between gap-3 text-sm font-semibold text-slate-600 dark:text-zinc-300">
                                                 <span>{{ $reward->reward_scope === 'team' ? 'Team progress' : 'Your progress' }}</span>
