@@ -58,11 +58,12 @@
 
                 <div>
                     <label for="accommodation" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">
-                        Accommodation / Perks
+                        Description
                     </label>
                     <textarea id="accommodation" name="accommodation" rows="3"
+                              wrap="soft"
                               placeholder="Good for 2, including breakfast"
-                              class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">{{ old('accommodation') }}</textarea>
+                              class="w-full overflow-x-hidden rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">{{ old('accommodation') }}</textarea>
                     <x-input-error :messages="$errors->get('accommodation')" class="mt-2" />
                 </div>
 
@@ -71,8 +72,9 @@
                         Additional Requirements
                     </label>
                     <textarea id="requirements" name="requirements" rows="3"
+                              wrap="soft"
                               placeholder="Optional: confirmed payments only, no refunds, applies to this month only"
-                              class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">{{ old('requirements') }}</textarea>
+                              class="w-full overflow-x-hidden rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">{{ old('requirements') }}</textarea>
                     <x-input-error :messages="$errors->get('requirements')" class="mt-2" />
                 </div>
 
@@ -181,7 +183,7 @@
                                 @endunless
                             </div>
 
-                            <p class="mt-2 text-sm text-slate-600 dark:text-zinc-300">{{ $reward->accommodation ?: 'No accommodation details.' }}</p>
+                            <p class="mt-2 whitespace-pre-wrap break-words text-justify text-sm leading-6 text-slate-600 dark:text-zinc-300">{{ $reward->accommodation ?: 'No description.' }}</p>
                             <p class="mt-2 text-sm font-semibold text-slate-900 dark:text-zinc-100">
                                 Requirement: ${{ number_format((float) $reward->requirement_amount, 2) }} MTD
                             </p>

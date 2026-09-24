@@ -248,13 +248,47 @@
         @if (($dashboardRewards ?? collect())->isNotEmpty())
             <section
                 x-data="{
+                    timer: null,
+                    init() {
+                        if ({{ $dashboardRewards->count() }} > 1) {
+                            this.startAutoSlide();
+                        }
+                    },
+                    startAutoSlide() {
+                        if ({{ $dashboardRewards->count() }} <= 1) {
+                            return;
+                        }
+
+                        this.stopAutoSlide();
+                        this.timer = setInterval(() => this.scrollByCard(1), 6000);
+                    },
+                    stopAutoSlide() {
+                        if (this.timer) {
+                            clearInterval(this.timer);
+                            this.timer = null;
+                        }
+                    },
                     scrollByCard(direction) {
-                        this.$refs.rewardsTrack.scrollBy({
-                            left: direction * Math.min(this.$refs.rewardsTrack.clientWidth, 420),
+                        const track = this.$refs.rewardsTrack;
+                        const distance = track.clientWidth;
+                        const atEnd = track.scrollLeft + track.clientWidth >= track.scrollWidth - 8;
+
+                        if (direction > 0 && atEnd) {
+                            track.scrollTo({ left: 0, behavior: 'smooth' });
+                            return;
+                        }
+
+                        track.scrollBy({
+                            left: direction * distance,
                             behavior: 'smooth'
                         });
-                    }
+                    },
+                    destroy() {
+                        this.stopAutoSlide();
+                    },
                 }"
+                @mouseenter="stopAutoSlide()"
+                @mouseleave="startAutoSlide()"
                 class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800"
             >
                 <div class="flex flex-wrap items-center justify-between gap-3">
@@ -295,6 +329,7 @@
                             $progressAmount = (float) $reward->getAttribute('progress_amount');
                             $requirementAmount = (float) $reward->requirement_amount;
                             $unlock = $reward->getAttribute('user_unlock');
+                            $sameTierClaim = $reward->getAttribute('same_tier_claim');
                         @endphp
 
                         <article class="min-w-full shrink-0 snap-start overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
@@ -317,23 +352,31 @@
                                             <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">
                                                 {{ $reward->reward_scope === 'team' ? 'Team Reward' : 'Individual Reward' }}
                                             </span>
-                                            <span @class([
-                                                'rounded-full px-2.5 py-1 text-xs font-bold',
-                                                'bg-amber-50 text-amber-700 dark:bg-amber-400/10 dark:text-amber-200' => $reward->getAttribute('is_unlocked'),
-                                                'bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300' => ! $reward->getAttribute('is_unlocked'),
-                                            ])>
-                                                {{ $reward->getAttribute('is_unlocked') ? 'Unlocked' : 'In Progress' }}
-                                            </span>
+                                            @if ($unlock?->claimed_at)
+                                                <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">Claimed</span>
+                                            @elseif ($unlock?->claim_requested_at)
+                                                <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">Claim Pending</span>
+                                            @elseif ($sameTierClaim)
+                                                <span class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 dark:bg-amber-400/10 dark:text-amber-200">Unavailable</span>
+                                            @else
+                                                <span @class([
+                                                    'rounded-full px-2.5 py-1 text-xs font-bold',
+                                                    'bg-amber-50 text-amber-700 dark:bg-amber-400/10 dark:text-amber-200' => $reward->getAttribute('is_unlocked'),
+                                                    'bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300' => ! $reward->getAttribute('is_unlocked'),
+                                                ])>
+                                                    {{ $reward->getAttribute('is_unlocked') ? 'Unlocked' : 'In Progress' }}
+                                                </span>
+                                            @endif
                                         </div>
 
                                         <h4 class="mt-4 text-2xl font-bold text-slate-950 dark:text-white">{{ $reward->title }}</h4>
 
                                         @if ($reward->accommodation)
-                                            <p class="mt-3 max-w-3xl text-sm leading-6 text-slate-600 dark:text-zinc-300">{{ $reward->accommodation }}</p>
+                                            <p class="mt-3 max-w-3xl whitespace-pre-wrap break-words text-justify text-sm leading-6 text-slate-600 dark:text-zinc-300">{{ $reward->accommodation }}</p>
                                         @endif
 
                                         @if ($reward->requirements)
-                                            <p class="mt-3 max-w-3xl text-sm text-slate-500 dark:text-zinc-400">
+                                            <p class="mt-3 max-w-3xl whitespace-pre-wrap break-words text-justify text-sm leading-6 text-slate-500 dark:text-zinc-400">
                                                 <span class="font-semibold text-slate-700 dark:text-zinc-300">Additional requirements:</span>
                                                 {{ $reward->requirements }}
                                             </p>
@@ -353,7 +396,15 @@
                                             </div>
                                         </div>
 
-                                        @if ($reward->getAttribute('is_unlocked') && $unlock?->expires_at)
+                                        @if ($unlock?->claimed_at)
+                                            <p class="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">
+                                                Claimed {{ $unlock->claimed_at->format('M d, Y') }}
+                                            </p>
+                                        @elseif ($sameTierClaim)
+                                            <p class="rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 dark:bg-amber-400/10 dark:text-amber-200">
+                                                Selected {{ $sameTierClaim->reward?->title ?? 'another reward' }}
+                                            </p>
+                                        @elseif ($reward->getAttribute('is_unlocked') && $unlock?->expires_at)
                                             <p class="rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 dark:bg-amber-400/10 dark:text-amber-200">
                                                 Expires {{ $unlock->expires_at->format('M d, Y') }}
                                             </p>
@@ -366,9 +417,17 @@
 
                                     @if ($reward->getAttribute('is_unlocked'))
                                         <div>
-                                            <a href="{{ route('rewards.claim.show', $reward) }}"
+                                            <a href="{{ route('rewards.claim.show', $sameTierClaim?->reward ?? $reward) }}"
                                                class="inline-flex min-h-10 items-center justify-center rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800">
-                                                {{ $unlock?->claim_requested_at ? 'View Claim Request' : 'Claim Reward' }}
+                                                @if ($unlock?->claimed_at)
+                                                    View Claimed Reward
+                                                @elseif ($unlock?->claim_requested_at)
+                                                    View Claim Request
+                                                @elseif ($sameTierClaim)
+                                                    View Selected Reward
+                                                @else
+                                                    Claim Reward
+                                                @endif
                                             </a>
                                         </div>
                                     @endif

@@ -36,13 +36,22 @@ class RewardController extends Controller
     public function showClaim(Request $request, Reward $reward): View
     {
         $unlock = $this->unlockedRewardForUser($request, $reward);
+        $sameTierClaim = $unlock->claim_requested_at
+            ? null
+            : RewardProgress::sameTierClaim($reward, $request->user());
 
-        return view('rewards.claim', compact('reward', 'unlock'));
+        return view('rewards.claim', compact('reward', 'unlock', 'sameTierClaim'));
     }
 
     public function requestClaim(Request $request, Reward $reward): RedirectResponse
     {
         $unlock = $this->unlockedRewardForUser($request, $reward);
+
+        if ($unlock->claimed_at) {
+            return redirect()
+                ->route('rewards.claim.show', $reward)
+                ->with('success', 'This reward has already been claimed.');
+        }
 
         if ($unlock->expires_at && $unlock->expires_at->isPast()) {
             return redirect()
@@ -53,6 +62,14 @@ class RewardController extends Controller
         $alreadyRequested = (bool) $unlock->claim_requested_at;
 
         if (! $alreadyRequested) {
+            $sameTierClaim = RewardProgress::sameTierClaim($reward, $request->user());
+
+            if ($sameTierClaim) {
+                return redirect()
+                    ->route('rewards.claim.show', $reward)
+                    ->with('error', 'You already selected another reward with the same requirement.');
+            }
+
             $unlock->forceFill(['claim_requested_at' => now()])->save();
 
             RewardProgress::rewardManagers()

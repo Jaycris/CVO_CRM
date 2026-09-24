@@ -27,6 +27,7 @@
         <div class="grid grid-cols-1 gap-5 xl:grid-cols-2">
             @forelse ($rewards as $reward)
                 @php($unlock = $reward->getAttribute('user_unlock'))
+                @php($sameTierClaim = $reward->getAttribute('same_tier_claim'))
                 <article class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
                     @php($mediaItems = $reward->media)
                     @if ($mediaItems->isNotEmpty())
@@ -46,7 +47,13 @@
                             <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">
                                 {{ $reward->reward_scope === 'team' ? 'Team Reward' : 'Individual Reward' }}
                             </span>
-                            @if ($reward->getAttribute('is_unlocked'))
+                            @if ($unlock?->claimed_at)
+                                <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">Claimed</span>
+                            @elseif ($unlock?->claim_requested_at)
+                                <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">Claim Pending</span>
+                            @elseif ($sameTierClaim)
+                                <span class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 dark:bg-amber-400/10 dark:text-amber-200">Unavailable</span>
+                            @elseif ($reward->getAttribute('is_unlocked'))
                                 <span class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 dark:bg-amber-400/10 dark:text-amber-200">Unlocked</span>
                             @else
                                 <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600 dark:bg-zinc-800 dark:text-zinc-300">In Progress</span>
@@ -56,7 +63,7 @@
                         <h2 class="mt-4 text-xl font-bold text-slate-950 dark:text-white">{{ $reward->title }}</h2>
 
                         @if ($reward->accommodation)
-                            <p class="mt-3 text-sm leading-6 text-slate-600 dark:text-zinc-300">{{ $reward->accommodation }}</p>
+                            <p class="mt-3 whitespace-pre-wrap break-words text-justify text-sm leading-6 text-slate-600 dark:text-zinc-300">{{ $reward->accommodation }}</p>
                         @endif
 
                         <div class="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
@@ -72,14 +79,22 @@
                                 <div class="h-full rounded-full bg-emerald-600 dark:bg-emerald-400" style="width: {{ $reward->getAttribute('progress_percent') }}%"></div>
                             </div>
                             @if ($reward->requirements)
-                                <p class="mt-3 text-sm text-slate-500 dark:text-zinc-400">
+                                <p class="mt-3 whitespace-pre-wrap break-words text-justify text-sm leading-6 text-slate-500 dark:text-zinc-400">
                                     <span class="font-semibold text-slate-700 dark:text-zinc-300">Additional requirements:</span>
                                     {{ $reward->requirements }}
                                 </p>
                             @endif
                         </div>
 
-                        @if ($reward->getAttribute('is_unlocked') && $unlock?->expires_at)
+                        @if ($unlock?->claimed_at)
+                            <div class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200">
+                                Claimed on {{ $unlock->claimed_at->format('M d, Y') }}.
+                            </div>
+                        @elseif ($sameTierClaim)
+                            <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100">
+                                You already selected {{ $sameTierClaim->reward?->title ?? 'another reward' }} for this same requirement.
+                            </div>
+                        @elseif ($reward->getAttribute('is_unlocked') && $unlock?->expires_at)
                             <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100">
                                 Reward expires on {{ $unlock->expires_at->format('M d, Y') }}.
                             </div>
@@ -91,9 +106,17 @@
 
                         @if ($reward->getAttribute('is_unlocked'))
                             <div class="mt-5">
-                                <a href="{{ route('rewards.claim.show', $reward) }}"
+                                <a href="{{ route('rewards.claim.show', $sameTierClaim?->reward ?? $reward) }}"
                                    class="inline-flex min-h-11 items-center justify-center rounded-xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800">
-                                    {{ $unlock?->claim_requested_at ? 'View Claim Request' : 'Claim Reward' }}
+                                    @if ($unlock?->claimed_at)
+                                        View Claimed Reward
+                                    @elseif ($unlock?->claim_requested_at)
+                                        View Claim Request
+                                    @elseif ($sameTierClaim)
+                                        View Selected Reward
+                                    @else
+                                        Claim Reward
+                                    @endif
                                 </a>
                             </div>
                         @endif

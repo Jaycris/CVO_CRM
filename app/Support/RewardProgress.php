@@ -70,8 +70,26 @@ class RewardProgress
         $reward->setAttribute('progress_percent', $progressPercent);
         $reward->setAttribute('is_unlocked', $isUnlocked || (bool) $unlock);
         $reward->setAttribute('user_unlock', $unlock);
+        $reward->setAttribute('same_tier_claim', $unlock?->claim_requested_at
+            ? null
+            : self::sameTierClaim($reward, $user));
 
         return $reward;
+    }
+
+    public static function sameTierClaim(Reward $reward, User $user): ?RewardUnlock
+    {
+        return RewardUnlock::query()
+            ->with('reward')
+            ->where('user_id', $user->id)
+            ->where('reward_id', '!=', $reward->id)
+            ->whereNotNull('claim_requested_at')
+            ->whereHas('reward', function ($query) use ($reward) {
+                $query->where('reward_scope', $reward->reward_scope)
+                    ->where('requirement_amount', $reward->requirement_amount);
+            })
+            ->latest('claim_requested_at')
+            ->first();
     }
 
     private static function notifyAdmins(Reward $reward, User $user): void
