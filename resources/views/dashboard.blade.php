@@ -333,7 +333,7 @@
                         @endphp
 
                         <article class="min-w-full shrink-0 snap-start overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-                            <div class="grid grid-cols-1 lg:grid-cols-[minmax(18rem,30rem)_1fr]">
+                            <div class="grid grid-cols-1 lg:grid-cols-[minmax(18rem,30rem)_minmax(0,1fr)]">
                                 @if ($media)
                                     @if ($media->type === 'video')
                                         <video src="{{ asset('storage/' . $media->path) }}" class="h-56 w-full bg-slate-100 object-cover dark:bg-zinc-900 lg:h-80" muted controls></video>
@@ -346,8 +346,8 @@
                                     </div>
                                 @endif
 
-                                <div class="flex flex-col justify-between gap-6 p-5 lg:p-6">
-                                    <div>
+                                <div class="min-w-0 overflow-hidden flex flex-col justify-between gap-6 p-5 lg:p-6">
+                                    <div class="min-w-0">
                                         <div class="flex flex-wrap gap-2">
                                             <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">
                                                 {{ $reward->reward_scope === 'team' ? 'Team Reward' : 'Individual Reward' }}
@@ -369,7 +369,7 @@
                                             @endif
                                         </div>
 
-                                        <h4 class="mt-4 text-2xl font-bold text-slate-950 dark:text-white">{{ $reward->title }}</h4>
+                                        <h4 class="mt-4 break-words text-2xl font-bold text-slate-950 dark:text-white">{{ $reward->title }}</h4>
 
                                         @if ($reward->accommodation)
                                             <p class="mt-3 max-w-3xl whitespace-pre-wrap break-words text-justify text-sm leading-6 text-slate-600 dark:text-zinc-300">{{ $reward->accommodation }}</p>
@@ -383,11 +383,11 @@
                                         @endif
                                     </div>
 
-                                    <div class="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
-                                        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
-                                            <div class="flex items-center justify-between gap-3 text-sm font-semibold text-slate-600 dark:text-zinc-300">
+                                    <div class="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                                        <div class="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                                            <div class="flex flex-wrap items-center justify-between gap-3 text-sm font-semibold text-slate-600 dark:text-zinc-300">
                                                 <span>{{ $reward->reward_scope === 'team' ? 'Team progress' : 'Your progress' }}</span>
-                                                <span class="text-slate-950 dark:text-white">
+                                                <span class="break-words text-slate-950 dark:text-white">
                                                     ${{ number_format($progressAmount, 2) }} / ${{ number_format($requirementAmount, 2) }}
                                                 </span>
                                             </div>
