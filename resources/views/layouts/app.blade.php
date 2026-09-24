@@ -399,6 +399,7 @@
                     'sales.refunds'
                 );
                 $reportsActive = request()->routeIs('reports.*');
+                $adminRewardsActive = request()->routeIs('admin.rewards.*');
                 $sidebarLink = fn (bool $active) => $active
                     ? 'flex items-center gap-3 rounded-lg bg-[var(--brand-accent)] px-3 py-2 text-sm font-semibold text-[var(--brand-text)] dark:bg-[var(--brand-active-dark-bg)] dark:text-[var(--brand-accent)]'
                     : 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-white dark:text-zinc-300 dark:hover:bg-zinc-900';
@@ -416,6 +417,7 @@
                  x-data="{
                     leadBadgeCounts: { unassigned: 0, returned: 0, archived: 0, disposed: 0 },
                     productionBadgeCounts: { new_endorsed_projects: 0 },
+                    adminRewardsOpen: @js($adminRewardsActive),
                     refreshLeadBadgeCounts() {
                         fetch('{{ route('leads.sidebar-counts') }}', { headers: { 'Accept': 'application/json' } })
                             .then(response => response.ok ? response.json() : this.leadBadgeCounts)
@@ -1081,21 +1083,33 @@
                         @endif
 
                         @if ($canManageRewards)
-                            <a href="{{ route('admin.rewards.index') }}" class="{{ $sidebarLink(request()->routeIs('admin.rewards.index')) }} mt-1">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ $sidebarIcon(request()->routeIs('admin.rewards.index')) }}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M20 12v8.25H4V12m16 0H4m16 0V7.5H4V12" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 7.5v12.75M8.25 7.5C6.75 7.5 6 6.75 6 5.625S6.75 3.75 7.875 3.75C10.125 3.75 12 7.5 12 7.5s1.875-3.75 4.125-3.75C17.25 3.75 18 4.5 18 5.625S17.25 7.5 15.75 7.5h-7.5Z" />
+                            <button type="button"
+                                    x-on:click="adminRewardsOpen = !adminRewardsOpen"
+                                    class="{{ $sidebarLink($adminRewardsActive) }} mt-1 w-full justify-between">
+                                <span class="flex items-center gap-3">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ $sidebarIcon($adminRewardsActive) }}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M20 12v8.25H4V12m16 0H4m16 0V7.5H4V12" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 7.5v12.75M8.25 7.5C6.75 7.5 6 6.75 6 5.625S6.75 3.75 7.875 3.75C10.125 3.75 12 7.5 12 7.5s1.875-3.75 4.125-3.75C17.25 3.75 18 4.5 18 5.625S17.25 7.5 15.75 7.5h-7.5Z" />
+                                    </svg>
+                                    Rewards
+                                </span>
+                                <svg xmlns="http://www.w3.org/2000/svg"
+                                     class="h-4 w-4 transition-transform {{ $sidebarIcon($adminRewardsActive) }}"
+                                     x-bind:class="adminRewardsOpen ? 'rotate-180' : ''"
+                                     fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6" />
                                 </svg>
-                                Rewards
-                            </a>
+                            </button>
 
-                            <a href="{{ route('admin.rewards.claims') }}" class="{{ $sidebarLink(request()->routeIs('admin.rewards.claims*')) }} mt-1 ml-5">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ $sidebarIcon(request()->routeIs('admin.rewards.claims*')) }}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 6.75h15M4.5 12h15M4.5 17.25h15" />
-                                </svg>
-                                Reward Claims
-                            </a>
+                            <div x-show="adminRewardsOpen" x-transition.opacity x-cloak class="mt-1 space-y-1 pl-5">
+                                <a href="{{ route('admin.rewards.index') }}" class="{{ $sidebarSubLink(request()->routeIs('admin.rewards.index')) }}">
+                                    Rewards Setup
+                                </a>
+
+                                <a href="{{ route('admin.rewards.claims') }}" class="{{ $sidebarSubLink(request()->routeIs('admin.rewards.claims*')) }}">
+                                    Reward Claims
+                                </a>
+                            </div>
                         @endif
 
                         @if ($canManageCommissionSettings)
