@@ -1,4 +1,8 @@
 <x-guest-layout plain>
+    <x-slot name="title">
+        Login | VisionFlow CreatiVision Outsourcing
+    </x-slot>
+
     <div class="flex min-h-screen bg-slate-50">
         <div class="hidden min-h-screen w-1/2 min-w-[420px] flex-col justify-between p-10 text-white lg:flex xl:p-14"
              style="background: radial-gradient(circle at top left, #0f4f32 0%, #082d21 42%, #050706 100%);">

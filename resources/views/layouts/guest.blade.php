@@ -6,7 +6,7 @@
         <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>{{ config('app.name', 'CreatiVision CRM') }}</title>
+        <title>{{ $title ?? config('app.name', 'CreatiVision CRM') }}</title>
         <link rel="icon" type="image/png" href="{{ asset('images/CreativeVision LOGO-navsite.png') }}">
         <link rel="apple-touch-icon" href="{{ asset('images/CreativeVision LOGO-navsite.png') }}">
 
