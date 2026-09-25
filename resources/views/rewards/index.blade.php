@@ -28,7 +28,6 @@
             @forelse ($rewards as $reward)
                 @php($unlock = $reward->getAttribute('user_unlock'))
                 @php($sameTierClaim = $reward->getAttribute('same_tier_claim'))
-                @php($isWholeTeamReward = $reward->reward_scope === \App\Models\Reward::SCOPE_COMPANY)
                 <article class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
                     @php($mediaItems = $reward->media)
                     @if ($mediaItems->isNotEmpty())
@@ -95,10 +94,6 @@
                             <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100">
                                 You already selected {{ $sameTierClaim->reward?->title ?? 'another reward' }} for this same requirement this month.
                             </div>
-                        @elseif ($isWholeTeamReward && $reward->getAttribute('is_unlocked'))
-                            <div class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200">
-                                Whole Team Reward Unlocked. Admin will announce the reward details and next steps soon.
-                            </div>
                         @elseif ($reward->getAttribute('is_unlocked') && $unlock?->expires_at)
                             <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100">
                                 Reward expires on {{ $unlock->expires_at->format('M d, Y') }}.
@@ -109,7 +104,7 @@
                             </p>
                         @endif
 
-                        @if ($reward->getAttribute('is_unlocked') && ! $isWholeTeamReward)
+                        @if ($reward->getAttribute('is_unlocked'))
                             <div class="mt-5">
                                 <a href="{{ route('rewards.claim.show', $sameTierClaim?->reward ?? $reward) }}"
                                    class="inline-flex min-h-11 items-center justify-center rounded-xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800">

@@ -39,6 +39,10 @@ class LeadGenerationActivityController extends Controller
                     BrandScope::apply($query, $request->user());
                     $query->whereDate('created_at', $dateString);
                 },
+                'verifiedLeads as verified_today_count' => function ($query) use ($request, $dateString) {
+                    BrandScope::apply($query, $request->user());
+                    $query->whereDate('verified_at', $dateString);
+                },
                 'minedLeads as mined_month_count' => function ($query) use ($request, $date) {
                     BrandScope::apply($query, $request->user());
                     $query->whereBetween('created_at', [
@@ -46,26 +50,17 @@ class LeadGenerationActivityController extends Controller
                         $date->copy()->endOfMonth(),
                     ]);
                 },
+                'verifiedLeads as verified_month_count' => function ($query) use ($request, $date) {
+                    BrandScope::apply($query, $request->user());
+                    $query->whereBetween('verified_at', [
+                        $date->copy()->startOfMonth(),
+                        $date->copy()->endOfMonth(),
+                    ]);
+                },
             ])
             ->orderBy('first_name')
             ->orderBy('last_name')
-            ->get()
-            ->map(function (User $user) use ($request, $date) {
-                $user->setAttribute('verified_today_count', $this->verifierActivityCount(
-                    $user,
-                    $request,
-                    $date->copy()->startOfDay(),
-                    $date->copy()->endOfDay(),
-                ));
-                $user->setAttribute('verified_month_count', $this->verifierActivityCount(
-                    $user,
-                    $request,
-                    $date->copy()->startOfMonth(),
-                    $date->copy()->endOfMonth(),
-                ));
-
-                return $user;
-            });
+            ->get();
 
         $leadMiners = $leadGenerationUsers
             ->filter(fn (User $user) => $user->role?->name === 'Lead Miner'
@@ -102,31 +97,5 @@ class LeadGenerationActivityController extends Controller
     {
         return Lead::query()
             ->tap(fn ($query) => BrandScope::apply($query, $request->user()));
-    }
-
-    private function verifierActivityCount(User $user, Request $request, $start, $end): int
-    {
-        return $this->leadQuery($request)
-            ->where(function ($query) use ($user) {
-                $query->where('verified_by', $user->id)
-                    ->orWhere('verification_assigned_to', $user->id);
-            })
-            ->where(function ($query) use ($start, $end) {
-                $query->whereBetween('verified_at', [$start, $end])
-                    ->orWhere(function ($query) use ($start, $end) {
-                        $query->whereBetween('updated_at', [$start, $end])
-                            ->where(function ($query) {
-                                $query->where('verify_score', '>=', 25)
-                                    ->orWhereNotNull('verification_notes')
-                                    ->orWhere('author_confirmed', true)
-                                    ->orWhere('book_confirmed', true)
-                                    ->orWhere('phone_confirmed', true)
-                                    ->orWhere('email_confirmed', true)
-                                    ->orWhereNotNull('phone_number_statuses')
-                                    ->orWhereNotNull('verified_phone_numbers');
-                            });
-                    });
-            })
-            ->count();
     }
 }

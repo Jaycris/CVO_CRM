@@ -8,7 +8,7 @@
             <div>
                 <h1 class="text-2xl font-bold text-slate-900 dark:text-zinc-100">Lead Gen Activity</h1>
                 <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
-                    Monitor how many leads were mined and reviewed by Lead Generation today.
+                    Monitor how many leads were mined and verified by Lead Generation today.
                 </p>
             </div>
 
@@ -38,7 +38,7 @@
             </div>
 
             <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
-                <p class="text-sm font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">Reviewed Leads</p>
+                <p class="text-sm font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">Verified Leads</p>
                 <h2 class="mt-3 text-3xl font-bold text-slate-950 dark:text-white">{{ number_format($totalVerifiedToday) }}</h2>
                 <p class="mt-2 text-sm text-slate-500 dark:text-zinc-400">{{ $date->format('F d, Y') }}</p>
             </div>
@@ -91,7 +91,7 @@
             <section class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
                 <div class="border-b border-slate-200 px-6 py-4 dark:border-zinc-800">
                     <h2 class="text-lg font-semibold text-slate-900 dark:text-zinc-100">Verifiers</h2>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Leads fully verified or touched with saved verification progress.</p>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Leads verified on the selected date.</p>
                 </div>
 
                 <div class="overflow-x-auto">

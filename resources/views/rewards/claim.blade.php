@@ -1,6 +1,6 @@
 <x-app-layout>
     <x-slot name="header">
-        {{ $reward->reward_scope === \App\Models\Reward::SCOPE_COMPANY ? 'Whole Team Reward' : 'Claim Reward' }}
+        Claim Reward
     </x-slot>
 
     <div class="mx-auto max-w-4xl space-y-6">
@@ -27,30 +27,25 @@
             @endif
 
             <div class="p-6">
-                @php($isWholeTeamReward = $reward->reward_scope === \App\Models\Reward::SCOPE_COMPANY)
                 <span class="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">
                     Congratulations
                 </span>
 
                 <h1 class="mt-4 text-2xl font-bold text-slate-950 dark:text-white">
-                    {{ $isWholeTeamReward ? 'Whole Team Reward Unlocked: ' : 'Congratulations on unlocking ' }}{{ $reward->title }}.
+                    Congratulations on unlocking {{ $reward->title }}.
                 </h1>
 
                 @if ($reward->accommodation)
                     <p class="mt-3 whitespace-pre-wrap break-words text-justify text-sm leading-6 text-slate-600 dark:text-zinc-300">{{ $reward->accommodation }}</p>
                 @endif
 
-                @if (! $isWholeTeamReward && ! $unlock->claimed_at && $unlock->expires_at && ! $unlock->expires_at->isPast())
+                @if (! $unlock->claimed_at && $unlock->expires_at && ! $unlock->expires_at->isPast())
                     <div class="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100">
                         Please claim this reward before {{ $unlock->expires_at->format('M d, Y') }}.
                     </div>
                 @endif
 
-                @if ($isWholeTeamReward)
-                    <div class="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200">
-                        Congratulations, team. This whole-team reward has been unlocked. Admin will announce the reward details and next steps soon.
-                    </div>
-                @elseif ($unlock->claimed_at)
+                @if ($unlock->claimed_at)
                     <div class="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200">
                         This reward was already claimed on {{ $unlock->claimed_at->format('M d, Y') }}.
                     </div>

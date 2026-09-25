@@ -47,12 +47,6 @@ class RewardController extends Controller
     {
         $unlock = $this->unlockedRewardForUser($request, $reward);
 
-        if ($reward->reward_scope === Reward::SCOPE_COMPANY) {
-            return redirect()
-                ->route('rewards.claim.show', $reward)
-                ->with('success', 'This whole-team reward is unlocked. Admin will announce the details and next steps soon.');
-        }
-
         if ($unlock->claimed_at) {
             return redirect()
                 ->route('rewards.claim.show', $reward)
