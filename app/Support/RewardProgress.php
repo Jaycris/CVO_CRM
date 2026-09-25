@@ -30,7 +30,7 @@ class RewardProgress
                 ->where('user_id', $user->id)
                 ->whereDate('period_month', $periodMonth)])
             ->where('is_active', true)
-            ->where(function ($query) use ($user) {
+            ->when($user->role?->name !== 'Admin', function ($query) use ($user) {
                 $query->where('audience', Reward::AUDIENCE_ALL);
 
                 if ($user->is_commission_eligible) {

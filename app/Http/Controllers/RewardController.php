@@ -125,6 +125,10 @@ class RewardController extends Controller
             return false;
         }
 
+        if ($user->role?->name === 'Admin') {
+            return true;
+        }
+
         return match ($reward->audience) {
             Reward::AUDIENCE_ALL => true,
             Reward::AUDIENCE_LEAD_GENERATION => $user->department === 'Lead Generation',
