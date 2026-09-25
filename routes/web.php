@@ -217,11 +217,25 @@ Route::get('/dashboard', function () {
         ? Brand::query()->whereKey($dashboardBrandId)->value('imprint_name')
         : ($isAdmin ? 'Sales Brands' : 'All Brands');
     $salesMtdSummary = SalesMtdCalculator::summary($user, now(), $dashboardBrandId, $includeOwnCreditsAcrossBrands, $isAdmin && ! $dashboardBrandId);
+    $canViewHomeSalesMtdSnapshot = $isAdmin
+        || (bool) $user?->hasPermission('view_home_sales_mtd_snapshot');
+    $canViewAllHomeSalesMtdSnapshots = $isAdmin
+        || ($canViewHomeSalesMtdSnapshot
+            && $departmentName !== 'Sales'
+            && BrandScope::canAccessAllBrands($user));
+    $homeSalesMtdBrandId = $canViewAllHomeSalesMtdSnapshots
+        ? null
+        : ($departmentName === 'Sales' ? BrandScope::userBrandId($user) : null);
+    $salesMtdSnapshotSummary = $canViewHomeSalesMtdSnapshot
+        ? SalesMtdCalculator::summary(null, now(), $homeSalesMtdBrandId, false, $homeSalesMtdBrandId === null)
+        : null;
+    $salesMtdSnapshotLabel = 'Company Sales MTD';
     $salesMtdBrandSnapshots = collect();
 
-    if ($isAdmin) {
+    if ($canViewHomeSalesMtdSnapshot) {
         $salesMtdBrandSnapshots = Brand::query()
             ->where('is_sales_brand', true)
+            ->when(! $canViewAllHomeSalesMtdSnapshots, fn ($query) => $query->whereKey($homeSalesMtdBrandId))
             ->orderBy('imprint_name')
             ->get()
             ->map(fn (Brand $brand) => [
@@ -307,6 +321,9 @@ Route::get('/dashboard', function () {
         'topSalesPerformance',
         'monthlySalesComparison',
         'salesMtdSummary',
+        'salesMtdSnapshotSummary',
+        'salesMtdSnapshotLabel',
+        'canViewHomeSalesMtdSnapshot',
         'dashboardBrandName',
         'salesMtdBrandSnapshots',
         'recentNotes',

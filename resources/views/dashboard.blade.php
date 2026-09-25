@@ -145,13 +145,13 @@
         @endif
 
         @php
-            $salesMtdGlobal = $salesMtdSummary['global'] ?? ['mtd' => 0, 'target' => 0, 'remaining' => 0, 'percent' => 0];
+            $salesMtdGlobal = ($salesMtdSnapshotSummary ?? $salesMtdSummary)['global'] ?? ['mtd' => 0, 'target' => 0, 'remaining' => 0, 'percent' => 0];
             $salesMtdBrandSnapshots = $salesMtdBrandSnapshots ?? collect();
-            $isAdminDashboard = auth()->user()?->role?->name === 'Admin';
+            $salesMtdBrandCount = $salesMtdBrandSnapshots->count();
         @endphp
 
-        <section class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
-            @if ($isAdminDashboard)
+        @if ($canViewHomeSalesMtdSnapshot ?? false)
+            <section class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <p class="text-sm font-semibold uppercase tracking-wide text-[var(--brand-primary)] dark:text-[var(--brand-accent)]">
@@ -169,7 +169,8 @@
 
                 <div @class([
                     'mt-5 grid grid-cols-1 gap-4',
-                    'lg:grid-cols-2 2xl:grid-cols-3' => $salesMtdBrandSnapshots->count() > 1,
+                    'xl:grid-cols-2' => $salesMtdBrandCount === 2,
+                    'lg:grid-cols-2 2xl:grid-cols-3' => $salesMtdBrandCount > 2,
                 ])>
                     @forelse ($salesMtdBrandSnapshots as $snapshot)
                         @php
@@ -177,32 +178,39 @@
                             $brandSummary = $snapshot['summary'] ?? ['mtd' => 0, 'target' => 0, 'remaining' => 0, 'percent' => 0];
                         @endphp
 
-                        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
-                            <div class="flex items-start justify-between gap-3">
-                                <div>
-                                    <p class="font-bold text-slate-900 dark:text-zinc-100">{{ $brand->imprint_name }}</p>
-                                    <p class="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">Sales brand</p>
+                        <div @class([
+                            'rounded-xl border border-slate-200 bg-slate-50 p-5 dark:border-zinc-800 dark:bg-zinc-950',
+                            'md:grid md:grid-cols-[minmax(16rem,1fr)_minmax(20rem,1.4fr)] md:items-center md:gap-8' => $salesMtdBrandCount === 1,
+                        ])>
+                            <div>
+                                <div class="flex items-start justify-between gap-3">
+                                    <div>
+                                        <p class="font-bold text-slate-900 dark:text-zinc-100">{{ $brand->imprint_name }}</p>
+                                        <p class="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">Sales brand</p>
+                                    </div>
+                                    <span class="text-sm font-bold text-slate-900 dark:text-zinc-100">
+                                        {{ number_format((float) $brandSummary['percent'], 2) }}%
+                                    </span>
                                 </div>
-                                <span class="text-sm font-bold text-slate-900 dark:text-zinc-100">
-                                    {{ number_format((float) $brandSummary['percent'], 2) }}%
-                                </span>
+
+                                <h3 class="mt-4 text-2xl font-bold text-slate-900 dark:text-zinc-100">
+                                    ${{ number_format((float) $brandSummary['mtd'], 2) }}
+                                </h3>
+                                <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
+                                    of ${{ number_format((float) $brandSummary['target'], 2) }} target
+                                </p>
                             </div>
 
-                            <h3 class="mt-4 text-2xl font-bold text-slate-900 dark:text-zinc-100">
-                                ${{ number_format((float) $brandSummary['mtd'], 2) }}
-                            </h3>
-                            <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
-                                of ${{ number_format((float) $brandSummary['target'], 2) }} target
-                            </p>
+                            <div class="mt-4 md:mt-0">
+                                <div class="h-3 overflow-hidden rounded-full bg-white dark:bg-zinc-800">
+                                    <div class="h-3 rounded-full bg-[var(--brand-primary)] transition-all" style="width: {{ min((float) $brandSummary['percent'], 100) }}%;"></div>
+                                </div>
 
-                            <div class="mt-4 h-3 overflow-hidden rounded-full bg-white dark:bg-zinc-800">
-                                <div class="h-3 rounded-full bg-[var(--brand-primary)] transition-all" style="width: {{ min((float) $brandSummary['percent'], 100) }}%;"></div>
+                                <p class="mt-3 text-sm text-slate-500 dark:text-zinc-400">
+                                    Remaining:
+                                    <span class="font-bold text-rose-600 dark:text-rose-300">${{ number_format((float) $brandSummary['remaining'], 2) }}</span>
+                                </p>
                             </div>
-
-                            <p class="mt-3 text-sm text-slate-500 dark:text-zinc-400">
-                                Remaining:
-                                <span class="font-bold text-rose-600 dark:text-rose-300">${{ number_format((float) $brandSummary['remaining'], 2) }}</span>
-                            </p>
                         </div>
                     @empty
                         <div class="rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">
@@ -210,40 +218,8 @@
                         </div>
                     @endforelse
                 </div>
-            @else
-                <div class="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                        <p class="text-sm font-semibold uppercase tracking-wide text-[var(--brand-primary)] dark:text-[var(--brand-accent)]">
-                            Sales MTD Snapshot
-                        </p>
-                        <p class="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">
-                            {{ $dashboardBrandName ?? 'All Brands' }}
-                        </p>
-                        <h3 class="mt-2 text-2xl font-bold text-slate-900 dark:text-zinc-100">
-                            ${{ number_format((float) $salesMtdGlobal['mtd'], 2) }}
-                            <span class="text-base font-semibold text-slate-500 dark:text-zinc-400">
-                                of ${{ number_format((float) $salesMtdGlobal['target'], 2) }} target
-                            </span>
-                        </h3>
-                        <p class="mt-2 text-sm text-slate-500 dark:text-zinc-400">
-                            Remaining Target MTD:
-                            <span class="font-bold text-rose-600 dark:text-rose-300">${{ number_format((float) $salesMtdGlobal['remaining'], 2) }}</span>.
-                            PHP commission totals use the exchange rate saved in Commission Settings.
-                        </p>
-                    </div>
-
-                    <div class="w-full lg:max-w-md">
-                        <div class="flex justify-between text-sm font-semibold text-slate-600 dark:text-zinc-300">
-                            <span>Global MTD Progress</span>
-                            <span>{{ number_format((float) $salesMtdGlobal['percent'], 2) }}%</span>
-                        </div>
-                        <div class="mt-3 h-4 overflow-hidden rounded-full bg-slate-100 dark:bg-zinc-800">
-                            <div class="h-4 rounded-full bg-[var(--brand-primary)] transition-all" style="width: {{ min((float) $salesMtdGlobal['percent'], 100) }}%;"></div>
-                        </div>
-                    </div>
-                </div>
-            @endif
-        </section>
+            </section>
+        @endif
 
         @if (($dashboardRewards ?? collect())->isNotEmpty())
             <section
@@ -330,6 +306,7 @@
                             $requirementAmount = (float) $reward->requirement_amount;
                             $unlock = $reward->getAttribute('user_unlock');
                             $sameTierClaim = $reward->getAttribute('same_tier_claim');
+                            $isWholeTeamReward = $reward->reward_scope === \App\Models\Reward::SCOPE_COMPANY;
                         @endphp
 
                         <article class="w-full flex-none snap-start overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
@@ -406,6 +383,10 @@
                                             <p class="rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 dark:bg-amber-400/10 dark:text-amber-200">
                                                 Selected {{ $sameTierClaim->reward?->title ?? 'another reward' }}
                                             </p>
+                                        @elseif ($isWholeTeamReward && $reward->getAttribute('is_unlocked'))
+                                            <p class="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">
+                                                Whole Team Reward Unlocked. Admin will announce the details and next steps soon.
+                                            </p>
                                         @elseif ($reward->getAttribute('is_unlocked') && $unlock?->expires_at)
                                             <p class="rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 dark:bg-amber-400/10 dark:text-amber-200">
                                                 Expires {{ $unlock->expires_at->format('M d, Y') }}
@@ -417,7 +398,7 @@
                                         @endif
                                     </div>
 
-                                    @if ($reward->getAttribute('is_unlocked'))
+                                    @if ($reward->getAttribute('is_unlocked') && ! $isWholeTeamReward)
                                         <div>
                                             <a href="{{ route('rewards.claim.show', $sameTierClaim?->reward ?? $reward) }}"
                                                class="inline-flex min-h-10 items-center justify-center rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800">
