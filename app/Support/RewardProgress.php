@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\Reward;
 use App\Models\RewardUnlock;
+use App\Models\Brand;
 use App\Models\ProductionTask;
 use App\Models\SalesActivity;
 use App\Models\User;
@@ -155,7 +156,7 @@ class RewardProgress
             Reward::REQUIREMENT_SOLD_VERIFIED_LEADS => self::monthlySoldLeadCount($reward, $user, 'verifier_id'),
             Reward::REQUIREMENT_COMPLETED_PRODUCTION_TASKS => self::monthlyCompletedProductionTaskCount($reward, $user),
             default => match ($reward->reward_scope) {
-                Reward::SCOPE_COMPANY => $globalMtd,
+                Reward::SCOPE_COMPANY => self::monthlyCompanySalesMtd(),
                 Reward::SCOPE_TEAM => self::monthlyTeamSalesMtd($user),
                 default => $individualMtd,
             },
@@ -215,6 +216,27 @@ class RewardProgress
             }
 
             return $amount;
+        });
+    }
+
+    private static function monthlyCompanySalesMtd(): float
+    {
+        $salesBrandIds = Brand::query()
+            ->where('is_sales_brand', true)
+            ->pluck('id')
+            ->all();
+
+        $query = SalesActivity::query()
+            ->where('payment_status', 'Payment Success')
+            ->whereBetween('sold_date', self::monthRange());
+
+        if ($salesBrandIds !== []) {
+            $query->whereIn('brand_id', $salesBrandIds);
+        }
+
+        return (float) $query->get()->sum(function (SalesActivity $activity) {
+            return (float) ($activity->agent_credit_amount ?: $activity->amount)
+                + (float) $activity->frankie_credit_amount;
         });
     }
 

@@ -145,13 +145,14 @@
         @endif
 
         @php
-            $salesMtdGlobal = $salesMtdSummary['global'] ?? ['mtd' => 0, 'target' => 0, 'remaining' => 0, 'percent' => 0];
+            $salesMtdGlobal = ($homeSalesMtdSummary ?? $salesMtdSummary)['global'] ?? ['mtd' => 0, 'target' => 0, 'remaining' => 0, 'percent' => 0];
             $salesMtdBrandSnapshots = $salesMtdBrandSnapshots ?? collect();
             $isAdminDashboard = auth()->user()?->role?->name === 'Admin';
         @endphp
 
-        <section class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
-            @if ($isAdminDashboard)
+        @if ($canViewHomeSalesMtdSnapshot ?? false)
+            <section class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
+                @if ($isAdminDashboard)
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <p class="text-sm font-semibold uppercase tracking-wide text-[var(--brand-primary)] dark:text-[var(--brand-accent)]">
@@ -210,14 +211,14 @@
                         </div>
                     @endforelse
                 </div>
-            @else
+                @else
                 <div class="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                         <p class="text-sm font-semibold uppercase tracking-wide text-[var(--brand-primary)] dark:text-[var(--brand-accent)]">
                             Sales MTD Snapshot
                         </p>
                         <p class="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">
-                            {{ $dashboardBrandName ?? 'All Brands' }}
+                            {{ $homeSalesMtdBrandName ?? $dashboardBrandName ?? 'All Brands' }}
                         </p>
                         <h3 class="mt-2 text-2xl font-bold text-slate-900 dark:text-zinc-100">
                             ${{ number_format((float) $salesMtdGlobal['mtd'], 2) }}
@@ -242,8 +243,9 @@
                         </div>
                     </div>
                 </div>
-            @endif
-        </section>
+                @endif
+            </section>
+        @endif
 
         @if (($dashboardRewards ?? collect())->isNotEmpty())
             <section

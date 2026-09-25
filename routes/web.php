@@ -217,6 +217,16 @@ Route::get('/dashboard', function () {
         ? Brand::query()->whereKey($dashboardBrandId)->value('imprint_name')
         : ($isAdmin ? 'Sales Brands' : 'All Brands');
     $salesMtdSummary = SalesMtdCalculator::summary($user, now(), $dashboardBrandId, $includeOwnCreditsAcrossBrands, $isAdmin && ! $dashboardBrandId);
+    $canViewHomeSalesMtdSnapshot = $isAdmin
+        || (bool) $user?->hasPermission('view_home_sales_mtd_snapshot');
+    $homeSalesMtdSummary = $salesMtdSummary;
+    $homeSalesMtdBrandName = $dashboardBrandName;
+
+    if ($canViewHomeSalesMtdSnapshot && ! $isAdmin && BrandScope::canAccessAllBrands($user)) {
+        $homeSalesMtdSummary = SalesMtdCalculator::summary(null, now(), null, false, true);
+        $homeSalesMtdBrandName = 'Sales Brands';
+    }
+
     $salesMtdBrandSnapshots = collect();
 
     if ($isAdmin) {
@@ -307,6 +317,9 @@ Route::get('/dashboard', function () {
         'topSalesPerformance',
         'monthlySalesComparison',
         'salesMtdSummary',
+        'homeSalesMtdSummary',
+        'homeSalesMtdBrandName',
+        'canViewHomeSalesMtdSnapshot',
         'dashboardBrandName',
         'salesMtdBrandSnapshots',
         'recentNotes',

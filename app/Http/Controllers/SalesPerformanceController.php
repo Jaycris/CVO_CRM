@@ -32,18 +32,22 @@ class SalesPerformanceController extends Controller
 
         $month = $this->monthFromRequest($request);
         $isAdmin = $user?->role?->name === 'Admin';
-        $salesBrands = $isAdmin
+        $canUseSalesBrandFilter = $isAdmin
+            || (BrandScope::canAccessAllBrands($user)
+                && ($user?->hasPermission('view_all_agent_mtd_directory') || $canManageTargets));
+        $salesBrands = $canUseSalesBrandFilter
             ? Brand::query()->where('is_sales_brand', true)->orderBy('imprint_name')->get()
             : collect();
         $requestedBrandId = $request->integer('brand_id') ?: null;
-        $brandId = $isAdmin
+        $brandId = $canUseSalesBrandFilter
             ? ($salesBrands->contains('id', $requestedBrandId) ? $requestedBrandId : null)
             : BrandScope::userBrandId($user);
         $search = trim((string) $request->query('search', ''));
         $includeOwnCreditsAcrossBrands = ! BrandScope::canAccessAllBrands($user)
             && $user?->department === 'Sales'
             && ! $brandId;
-        $summary = SalesMtdCalculator::summary($user, $month, $brandId, $includeOwnCreditsAcrossBrands, $isAdmin && ! $brandId);
+        $summaryUser = $canUseSalesBrandFilter ? null : $user;
+        $summary = SalesMtdCalculator::summary($summaryUser, $month, $brandId, $includeOwnCreditsAcrossBrands, $canUseSalesBrandFilter && ! $brandId);
         $visibleAgentIds = $summary['agentCredits']->keys()
             ->merge($summary['agentTargets']->keys())
             ->filter()
@@ -60,8 +64,8 @@ class SalesPerformanceController extends Controller
                 }
             })
             ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
-            ->when($isAdmin && ! $brandId, fn ($query) => $query->whereHas('brand', fn ($query) => $query->where('is_sales_brand', true)))
-            ->when(! $brandId, fn ($query) => BrandScope::apply($query, $user))
+            ->when($canUseSalesBrandFilter && ! $brandId, fn ($query) => $query->whereHas('brand', fn ($query) => $query->where('is_sales_brand', true)))
+            ->when(! $brandId && ! $canUseSalesBrandFilter, fn ($query) => BrandScope::apply($query, $user))
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($query) use ($search) {
                     $query->where('first_name', 'like', "%{$search}%")
