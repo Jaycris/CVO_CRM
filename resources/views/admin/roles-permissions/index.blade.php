@@ -229,7 +229,8 @@
         <div x-show="departmentModalOpen"
              x-cloak
              x-transition.opacity
-             class="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/50 px-4"
+             class="fixed inset-0 z-[10020] flex items-center justify-center bg-zinc-950/60 px-4"
+             style="z-index: 10080;"
              x-on:keydown.escape.window="departmentModalOpen = false">
             <div x-on:click.outside="departmentModalOpen = false"
                  class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-zinc-900">
@@ -281,7 +282,8 @@
             <div x-show="editDepartmentModalOpen === {{ $department->id }}"
                  x-cloak
                  x-transition.opacity
-                 class="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/50 px-4"
+                 class="fixed inset-0 z-[10020] flex items-center justify-center bg-zinc-950/60 px-4"
+                 style="z-index: 10080;"
                  x-on:keydown.escape.window="editDepartmentModalOpen = null">
                 <div x-on:click.outside="editDepartmentModalOpen = null"
                      class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-zinc-900">
@@ -334,11 +336,13 @@
         <div x-show="createRoleModalOpen"
              x-cloak
              x-transition.opacity
-             class="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/50 px-4"
+             class="fixed inset-0 z-[10020] flex items-start justify-center overflow-y-auto bg-zinc-950/60 px-4 py-6 sm:py-8"
+             style="z-index: 10080;"
              x-on:keydown.escape.window="createRoleModalOpen = false">
             <div x-on:click.outside="createRoleModalOpen = false"
-                 class="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-zinc-900">
-                <div class="flex items-start justify-between gap-4">
+                 class="flex max-h-[calc(100vh-7rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900">
+                <div class="shrink-0 border-b border-slate-200 bg-white px-6 py-5 dark:border-zinc-800 dark:bg-zinc-900">
+                    <div class="flex items-start justify-between gap-4">
                     <div>
                         <h3 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Create Role</h3>
                         <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
@@ -352,32 +356,35 @@
                             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
                         </svg>
                     </button>
+                    </div>
                 </div>
 
                 <form id="create-role-form"
                       method="POST"
                       action="{{ route('admin.roles-permissions.roles.store') }}"
-                      class="mt-6">
+                      class="flex min-h-0 flex-1 flex-col">
                     @csrf
                     <input type="hidden" name="return_to" value="{{ request()->fullUrl() }}">
-                    <div x-show="createRoleStep === 1" x-cloak class="space-y-4">
-                        @include('admin.roles-permissions.partials.role-details-fields', [
-                            'departments' => $departments,
-                            'role' => null,
-                            'prefix' => 'create',
-                        ])
+                    <div class="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                        <div x-show="createRoleStep === 1" x-cloak class="space-y-4">
+                            @include('admin.roles-permissions.partials.role-details-fields', [
+                                'departments' => $departments,
+                                'role' => null,
+                                'prefix' => 'create',
+                            ])
+                        </div>
+
+                        <div x-show="createRoleStep === 2" x-cloak>
+                            @include('admin.roles-permissions.partials.permission-fields', [
+                                'availablePermissions' => $availablePermissions,
+                                'selectedPermissions' => old('permissions', []),
+                                'disabled' => false,
+                                'xModel' => 'createSelectedPermissions',
+                            ])
+                        </div>
                     </div>
 
-                    <div x-show="createRoleStep === 2" x-cloak>
-                        @include('admin.roles-permissions.partials.permission-fields', [
-                            'availablePermissions' => $availablePermissions,
-                            'selectedPermissions' => old('permissions', []),
-                            'disabled' => false,
-                            'xModel' => 'createSelectedPermissions',
-                        ])
-                    </div>
-
-                    <div class="mt-6 flex justify-end gap-3">
+                    <div class="shrink-0 border-t border-slate-200 bg-white px-6 py-4 dark:border-zinc-800 dark:bg-zinc-900 flex justify-end gap-3">
                         <button type="button"
                                 x-show="createRoleStep === 2"
                                 x-on:click="createRoleStep = 1"
@@ -401,14 +408,16 @@
         </div>
 
         @foreach ($roles as $role)
+            <template x-teleport="body">
             <div x-show="editRoleModalOpen === {{ $role->id }}"
                  x-cloak
                  x-transition.opacity
-                 class="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/50 px-4"
+                 class="crm-top-modal-backdrop flex items-center justify-center overflow-y-auto bg-zinc-950/70 px-4 py-4 sm:py-5"
                  x-on:keydown.escape.window="editRoleModalOpen = null">
                 <div x-on:click.outside="editRoleModalOpen = null"
-                     class="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-zinc-900">
-                    <div class="flex items-start justify-between gap-4">
+                     class="my-auto flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900">
+                    <div class="shrink-0 border-b border-slate-200 bg-white px-6 py-5 dark:border-zinc-800 dark:bg-zinc-900">
+                        <div class="flex items-start justify-between gap-4">
                         <div>
                             <h3 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Edit Role</h3>
                             <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
@@ -422,38 +431,41 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
                             </svg>
                         </button>
+                        </div>
                     </div>
 
                     <form id="edit-role-form-{{ $role->id }}"
                           method="POST"
                           action="{{ route('admin.roles-permissions.roles.update', $role) }}"
                           x-data="{ selectedPermissions: @js($role->permissionRecords->pluck('key')->values()->all()) }"
-                          class="mt-6">
+                          class="flex min-h-0 flex-1 flex-col">
                         @csrf
                         @method('PUT')
                         <input type="hidden" name="return_to" value="{{ request()->fullUrl() }}">
 
-                        <div x-show="(editRoleStep[{{ $role->id }}] || 1) === 1" x-cloak class="space-y-4">
-                            @include('admin.roles-permissions.partials.role-details-fields', [
-                                'departments' => $departments,
-                                'role' => $role,
-                                'prefix' => 'edit_' . $role->id,
-                            ])
+                        <div class="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                            <div x-show="(editRoleStep[{{ $role->id }}] || 1) === 1" x-cloak class="space-y-4">
+                                @include('admin.roles-permissions.partials.role-details-fields', [
+                                    'departments' => $departments,
+                                    'role' => $role,
+                                    'prefix' => 'edit_' . $role->id,
+                                ])
+                            </div>
+
+                            <div x-show="(editRoleStep[{{ $role->id }}] || 1) === 2" x-cloak>
+                                @include('admin.roles-permissions.partials.permission-fields', [
+                                    'availablePermissions' => $availablePermissions,
+                                    'selectedPermissions' => $role->permissionRecords->pluck('key')->all(),
+                                    'disabled' => $role->name === 'Admin',
+                                    'xModel' => 'selectedPermissions',
+                                ])
+                                @if ($role->name === 'Admin')
+                                    <p class="mt-3 text-xs text-slate-500 dark:text-zinc-400">Admin keeps all permissions enabled.</p>
+                                @endif
+                            </div>
                         </div>
 
-                        <div x-show="(editRoleStep[{{ $role->id }}] || 1) === 2" x-cloak>
-                            @include('admin.roles-permissions.partials.permission-fields', [
-                                'availablePermissions' => $availablePermissions,
-                                'selectedPermissions' => $role->permissionRecords->pluck('key')->all(),
-                                'disabled' => $role->name === 'Admin',
-                                'xModel' => 'selectedPermissions',
-                            ])
-                            @if ($role->name === 'Admin')
-                                <p class="mt-3 text-xs text-slate-500 dark:text-zinc-400">Admin keeps all permissions enabled.</p>
-                            @endif
-                        </div>
-
-                        <div class="mt-6 flex justify-end gap-3">
+                        <div class="shrink-0 border-t border-slate-200 bg-white px-6 py-4 dark:border-zinc-800 dark:bg-zinc-900 flex justify-end gap-3">
                             <button type="button"
                                     x-show="(editRoleStep[{{ $role->id }}] || 1) === 2"
                                     x-on:click="editRoleStep[{{ $role->id }}] = 1"
@@ -475,6 +487,7 @@
                     </form>
                 </div>
             </div>
+            </template>
         @endforeach
     </div>
 </x-app-layout>

@@ -111,6 +111,7 @@ class RewardController extends Controller
         $unlock = RewardUnlock::query()
             ->where('reward_id', $reward->id)
             ->where('user_id', $user->id)
+            ->whereDate('period_month', RewardProgress::currentPeriodMonth())
             ->first();
 
         abort_unless($unlock, 403);

@@ -66,8 +66,8 @@ return new class extends Migration
             ],
             'update_production_project_status' => [
                 'Production Actions',
-                'Update Production Project Status',
-                'Can update production project status and fulfillment notes.',
+                'Update Production Task Status',
+                'Can update production task status and task notes.',
             ],
         ];
 

@@ -11,13 +11,21 @@ use Illuminate\Support\Collection;
 
 class RewardProgress
 {
+    public static function currentPeriodMonth(): string
+    {
+        return now()->startOfMonth()->toDateString();
+    }
+
     public static function visibleFor(User $user, array $summary, ?int $limit = null): Collection
     {
         $individualMtd = (float) data_get($summary, "agentCredits.{$user->id}.mtd", 0);
         $teamMtd = (float) data_get($summary, 'global.mtd', 0);
+        $periodMonth = self::currentPeriodMonth();
 
         $query = Reward::query()
-            ->with(['media', 'unlocks' => fn ($query) => $query->where('user_id', $user->id)])
+            ->with(['media', 'unlocks' => fn ($query) => $query
+                ->where('user_id', $user->id)
+                ->whereDate('period_month', $periodMonth)])
             ->where('is_active', true)
             ->when(! $user->is_commission_eligible, function ($query) {
                 $query->where('audience', Reward::AUDIENCE_ALL);
@@ -36,6 +44,7 @@ class RewardProgress
 
     public static function attachProgress(Reward $reward, User $user, float $individualMtd, float $teamMtd): Reward
     {
+        $periodMonth = self::currentPeriodMonth();
         $progressAmount = $reward->reward_scope === Reward::SCOPE_TEAM
             ? $teamMtd
             : $individualMtd;
@@ -45,16 +54,19 @@ class RewardProgress
             : 100;
         $isUnlocked = $progressAmount >= $requirementAmount;
         $unlock = $reward->relationLoaded('unlocks')
-            ? $reward->unlocks->firstWhere('user_id', $user->id)
+            ? $reward->unlocks->first(fn (RewardUnlock $unlock) => (int) $unlock->user_id === (int) $user->id
+                && $unlock->period_month?->toDateString() === $periodMonth)
             : RewardUnlock::query()
                 ->where('reward_id', $reward->id)
                 ->where('user_id', $user->id)
+                ->whereDate('period_month', $periodMonth)
                 ->first();
 
         if ($isUnlocked && ! $unlock) {
             $unlock = RewardUnlock::create([
                 'reward_id' => $reward->id,
                 'user_id' => $user->id,
+                'period_month' => $periodMonth,
                 'progress_amount' => $progressAmount,
                 'unlocked_at' => now(),
                 'expires_at' => $reward->expires_in_days ? now()->addDays($reward->expires_in_days) : null,
@@ -79,10 +91,13 @@ class RewardProgress
 
     public static function sameTierClaim(Reward $reward, User $user): ?RewardUnlock
     {
+        $periodMonth = self::currentPeriodMonth();
+
         return RewardUnlock::query()
             ->with('reward')
             ->where('user_id', $user->id)
             ->where('reward_id', '!=', $reward->id)
+            ->whereDate('period_month', $periodMonth)
             ->whereNotNull('claim_requested_at')
             ->whereHas('reward', function ($query) use ($reward) {
                 $query->where('reward_scope', $reward->reward_scope)

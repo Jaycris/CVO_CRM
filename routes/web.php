@@ -412,6 +412,9 @@ Route::middleware('auth')->group(function () {
     Route::put('/finance/contracts', [FinanceContractController::class, 'bulkUpdate'])->name('finance.contracts.bulk-update');
     Route::post('/finance/contracts/endorse-production', [FinanceContractController::class, 'endorseToProduction'])->name('finance.contracts.endorse-production');
     Route::delete('/finance/contracts', [FinanceContractController::class, 'bulkDestroy'])->name('finance.contracts.bulk-destroy');
+    Route::post('/finance/contracts/{endorsement}/documents', [FinanceContractController::class, 'storeDocument'])->name('finance.contracts.documents.store');
+    Route::get('/finance/contract-documents/{document}', [FinanceContractController::class, 'downloadDocument'])->name('finance.contracts.documents.download');
+    Route::delete('/finance/contract-documents/{document}', [FinanceContractController::class, 'removeDocument'])->name('finance.contracts.documents.destroy');
     Route::post('/finance/contracts/{endorsement}/attachment', [FinanceContractController::class, 'attach'])->name('finance.contracts.attachment.store');
     Route::get('/finance/contracts/{endorsement}/attachment', [FinanceContractController::class, 'download'])->name('finance.contracts.attachment.download');
     Route::delete('/finance/contracts/{endorsement}/attachment', [FinanceContractController::class, 'removeAttachment'])->name('finance.contracts.attachment.destroy');

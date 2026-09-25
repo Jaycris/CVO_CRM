@@ -59,7 +59,7 @@
                     </div>
                 @elseif ($sameTierClaim)
                     <div class="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100">
-                        You already selected {{ $sameTierClaim->reward?->title ?? 'another reward' }} for this same requirement. This reward can no longer be claimed.
+                        You already selected {{ $sameTierClaim->reward?->title ?? 'another reward' }} for this same requirement this month. You can choose again next month if this reward is still available.
                     </div>
 
                     @if ($sameTierClaim->reward)

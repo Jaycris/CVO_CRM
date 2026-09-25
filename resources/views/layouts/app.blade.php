@@ -144,6 +144,19 @@
             position: relative;
             z-index: 9999;
         }
+
+        .crm-top-modal-backdrop {
+            position: fixed !important;
+            inset: 0 !important;
+            top: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            min-height: 100vh !important;
+            min-height: 100dvh !important;
+            z-index: 2147483000 !important;
+        }
     </style>
 </head>
 

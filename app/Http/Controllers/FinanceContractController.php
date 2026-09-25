@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\SalesEndorsement;
+use App\Models\SalesEndorsementDocument;
 use App\Models\ProductionProject;
 use App\Models\User;
 use App\Notifications\ProductionProjectsEndorsedNotification;
@@ -21,7 +22,7 @@ class FinanceContractController extends Controller
 
         $status = $request->query('status', 'all');
         $search = trim((string) $request->query('search', ''));
-        $endorsements = SalesEndorsement::with(['agent', 'brand', 'successfulPaymentRecord', 'productionProject'])
+        $endorsements = SalesEndorsement::with(['agent', 'brand', 'successfulPaymentRecord', 'productionProject', 'documents.uploader'])
             ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
             ->whereHas('paymentRecords', fn ($query) => $query->where('status', 'Payment Success'))
             ->when($status === 'sent', fn ($query) => $query->where('contract_status', 'sent'))
@@ -155,6 +156,15 @@ class FinanceContractController extends Controller
         $file = $validated['contract_file'];
         $path = $file->store("contracts/{$endorsement->id}", 'local');
 
+        $endorsement->documents()->create([
+            'uploaded_by' => $request->user()?->id,
+            'document_type' => SalesEndorsementDocument::TYPE_CONTRACT,
+            'file_path' => $path,
+            'file_name' => $file->getClientOriginalName(),
+            'file_size' => $file->getSize(),
+            'mime_type' => $file->getMimeType(),
+        ]);
+
         $endorsement->update([
             'contract_file_path' => $path,
             'contract_file_name' => $file->getClientOriginalName(),
@@ -164,6 +174,91 @@ class FinanceContractController extends Controller
         return redirect()
             ->route('finance.contracts.index', ['status' => $validated['status'] ?? 'all'])
             ->with('success', 'Contract file attached successfully.');
+    }
+
+    public function storeDocument(Request $request, SalesEndorsement $endorsement): RedirectResponse
+    {
+        abort_unless($this->userHasPermission($request, 'manage_contract_records'), 403);
+        abort_unless($this->userCanAccessBrand($request, $endorsement->brand_id), 403);
+
+        $validated = $request->validate([
+            'document_type' => ['required', 'in:' . implode(',', array_keys(SalesEndorsementDocument::TYPES))],
+            'documents' => ['required', 'array', 'min:1', 'max:25'],
+            'documents.*' => ['required', 'file', 'mimes:pdf,doc,docx,jpg,jpeg,png', 'max:10240'],
+            'status' => ['nullable', 'in:all,sent,signed'],
+        ]);
+
+        foreach ($validated['documents'] as $file) {
+            $path = $file->store("transaction-documents/{$endorsement->id}/{$validated['document_type']}", 'local');
+
+            $document = $endorsement->documents()->create([
+                'uploaded_by' => $request->user()?->id,
+                'document_type' => $validated['document_type'],
+                'file_path' => $path,
+                'file_name' => $file->getClientOriginalName(),
+                'file_size' => $file->getSize(),
+                'mime_type' => $file->getMimeType(),
+            ]);
+
+            if ($validated['document_type'] === SalesEndorsementDocument::TYPE_CONTRACT) {
+                $endorsement->forceFill([
+                    'contract_file_path' => $document->file_path,
+                    'contract_file_name' => $document->file_name,
+                    'contract_file_uploaded_at' => $document->created_at,
+                ])->save();
+            }
+        }
+
+        return redirect()
+            ->route('finance.contracts.index', ['status' => $validated['status'] ?? 'all'])
+            ->with('success', SalesEndorsementDocument::TYPES[$validated['document_type']] . ' document(s) uploaded successfully.');
+    }
+
+    public function downloadDocument(Request $request, SalesEndorsementDocument $document): StreamedResponse
+    {
+        abort_unless($this->userHasPermission($request, 'view_contract_records'), 403);
+        $document->loadMissing('endorsement');
+        abort_unless($this->userCanAccessBrand($request, $document->endorsement?->brand_id), 403);
+        abort_unless(Storage::disk('local')->exists($document->file_path), 404);
+
+        return Storage::disk('local')->download(
+            $document->file_path,
+            $document->file_name ?: "{$document->document_type}-document"
+        );
+    }
+
+    public function removeDocument(Request $request, SalesEndorsementDocument $document): RedirectResponse
+    {
+        abort_unless($this->userHasPermission($request, 'manage_contract_records'), 403);
+        $document->loadMissing('endorsement.documents');
+        abort_unless($this->userCanAccessBrand($request, $document->endorsement?->brand_id), 403);
+
+        $validated = $request->validate([
+            'status' => ['nullable', 'in:all,sent,signed'],
+        ]);
+
+        Storage::disk('local')->delete($document->file_path);
+
+        $endorsement = $document->endorsement;
+        $documentType = $document->document_type;
+        $document->delete();
+
+        if ($documentType === SalesEndorsementDocument::TYPE_CONTRACT) {
+            $latestContract = $endorsement->documents()
+                ->where('document_type', SalesEndorsementDocument::TYPE_CONTRACT)
+                ->latest()
+                ->first();
+
+            $endorsement->forceFill([
+                'contract_file_path' => $latestContract?->file_path,
+                'contract_file_name' => $latestContract?->file_name,
+                'contract_file_uploaded_at' => $latestContract?->created_at,
+            ])->save();
+        }
+
+        return redirect()
+            ->route('finance.contracts.index', ['status' => $validated['status'] ?? 'all'])
+            ->with('success', 'Document removed successfully.');
     }
 
     public function download(Request $request, SalesEndorsement $endorsement): StreamedResponse

@@ -93,6 +93,11 @@ class SalesEndorsement extends Model
         return $this->hasMany(SalesPayment::class);
     }
 
+    public function documents(): HasMany
+    {
+        return $this->hasMany(SalesEndorsementDocument::class);
+    }
+
     public function productionProject()
     {
         return $this->hasOne(ProductionProject::class);
