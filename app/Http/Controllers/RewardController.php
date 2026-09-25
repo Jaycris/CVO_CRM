@@ -90,7 +90,7 @@ class RewardController extends Controller
 
         abort_unless(
             $reward->is_active
-                && ($reward->audience === Reward::AUDIENCE_ALL || $user?->is_commission_eligible),
+                && $this->userCanSeeReward($user, $reward),
             404
         );
 
@@ -117,5 +117,19 @@ class RewardController extends Controller
         abort_unless($unlock, 403);
 
         return $unlock->loadMissing('reward.media', 'user');
+    }
+
+    private function userCanSeeReward(?User $user, Reward $reward): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        return match ($reward->audience) {
+            Reward::AUDIENCE_ALL => true,
+            Reward::AUDIENCE_LEAD_GENERATION => $user->department === 'Lead Generation',
+            Reward::AUDIENCE_PRODUCTION => $user->department === 'Production',
+            default => (bool) $user->is_commission_eligible,
+        };
     }
 }

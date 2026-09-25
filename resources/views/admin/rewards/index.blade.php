@@ -8,7 +8,7 @@
             <div>
                 <h1 class="text-2xl font-bold text-slate-900 dark:text-zinc-100">Rewards</h1>
                 <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
-                    Create sales rewards based on monthly MTD performance.
+                    Create monthly rewards for Sales, Lead Generation, and Production performance.
                 </p>
             </div>
 
@@ -47,12 +47,32 @@
 
                     <div>
                         <label for="requirement_amount" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">
-                            Required Monthly MTD <span class="text-rose-600">*</span>
+                            Required Monthly Target <span class="text-rose-600">*</span>
                         </label>
                         <input id="requirement_amount" name="requirement_amount" type="number" min="0" step="0.01" value="{{ old('requirement_amount') }}" required
-                               placeholder="15000"
+                               placeholder="15000 or 5"
                                class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
                         <x-input-error :messages="$errors->get('requirement_amount')" class="mt-2" />
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
+                    <div>
+                        <label for="requirement_type" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">
+                            Requirement Type <span class="text-rose-600">*</span>
+                        </label>
+                        <select id="requirement_type" name="requirement_type" required
+                                class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                            <option value="sales_mtd" @selected(old('requirement_type', 'sales_mtd') === 'sales_mtd')>Sales monthly MTD</option>
+                            <option value="sold_mined_leads" @selected(old('requirement_type') === 'sold_mined_leads')>Sold leads from mined leads</option>
+                            <option value="sold_verified_leads" @selected(old('requirement_type') === 'sold_verified_leads')>Sold leads from verified leads</option>
+                            <option value="completed_production_tasks" @selected(old('requirement_type') === 'completed_production_tasks')>Completed production tasks</option>
+                        </select>
+                        <x-input-error :messages="$errors->get('requirement_type')" class="mt-2" />
+                    </div>
+
+                    <div class="rounded-xl border border-slate-200 p-4 text-sm text-slate-600 dark:border-zinc-800 dark:text-zinc-300">
+                        Sales targets use dollar MTD. Lead Generation and Production targets use counts, such as 1 sold lead or 5 completed tasks, and reset every month.
                     </div>
                 </div>
 
@@ -88,6 +108,10 @@
                             </label>
                             <label class="flex gap-3 text-sm text-slate-700 dark:text-zinc-300">
                                 <input type="radio" name="reward_scope" value="team" @checked(old('reward_scope') === 'team') class="mt-1 text-emerald-700 focus:ring-emerald-600">
+                                <span>Team Reward</span>
+                            </label>
+                            <label class="flex gap-3 text-sm text-slate-700 dark:text-zinc-300">
+                                <input type="radio" name="reward_scope" value="company" @checked(old('reward_scope') === 'company') class="mt-1 text-emerald-700 focus:ring-emerald-600">
                                 <span>This is for whole Team</span>
                             </label>
                         </div>
@@ -104,6 +128,14 @@
                             <label class="flex gap-3 text-sm text-slate-700 dark:text-zinc-300">
                                 <input type="radio" name="audience" value="commission_eligible" @checked(old('audience', 'commission_eligible') === 'commission_eligible') class="mt-1 text-emerald-700 focus:ring-emerald-600">
                                 <span>Only Eligible Commission</span>
+                            </label>
+                            <label class="flex gap-3 text-sm text-slate-700 dark:text-zinc-300">
+                                <input type="radio" name="audience" value="lead_generation" @checked(old('audience') === 'lead_generation') class="mt-1 text-emerald-700 focus:ring-emerald-600">
+                                <span>Lead Generation</span>
+                            </label>
+                            <label class="flex gap-3 text-sm text-slate-700 dark:text-zinc-300">
+                                <input type="radio" name="audience" value="production" @checked(old('audience') === 'production') class="mt-1 text-emerald-700 focus:ring-emerald-600">
+                                <span>Production</span>
                             </label>
                         </div>
                         <x-input-error :messages="$errors->get('audience')" class="mt-2" />
@@ -173,10 +205,10 @@
                             <div class="flex flex-wrap items-center gap-2">
                                 <h3 class="text-base font-bold text-slate-950 dark:text-white">{{ $reward->title }}</h3>
                                 <span class="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">
-                                    {{ $reward->reward_scope === 'team' ? 'Team' : 'Individual' }}
+                                    {{ $reward->scopeLabel() }}
                                 </span>
                                 <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600 dark:bg-zinc-800 dark:text-zinc-300">
-                                    {{ $reward->audience === 'all_users' ? 'All Users' : 'Eligible Commission' }}
+                                    {{ $reward->audienceLabel() }}
                                 </span>
                                 @unless ($reward->is_active)
                                     <span class="rounded-full bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700 dark:bg-rose-400/10 dark:text-rose-200">Hidden</span>
@@ -185,7 +217,8 @@
 
                             <p class="mt-2 whitespace-pre-wrap break-words text-justify text-sm leading-6 text-slate-600 dark:text-zinc-300">{{ $reward->accommodation ?: 'No description.' }}</p>
                             <p class="mt-2 text-sm font-semibold text-slate-900 dark:text-zinc-100">
-                                Requirement: ${{ number_format((float) $reward->requirement_amount, 2) }} MTD
+                                Requirement: {{ $reward->formatsRequirementAsMoney() ? '$'.number_format((float) $reward->requirement_amount, 2) : number_format((float) $reward->requirement_amount, 0).' '.$reward->requirementUnitLabel() }}
+                                <span class="font-normal text-slate-500 dark:text-zinc-400">({{ $reward->requirementLabel() }})</span>
                             </p>
                             @if ($reward->expires_in_days)
                                 <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">

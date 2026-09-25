@@ -9,6 +9,8 @@ use App\Notifications\ProductionProjectCompletedNotification;
 use App\Notifications\ProductionTaskAssignedNotification;
 use App\Notifications\ProductionTaskDoneNotification;
 use App\Support\BrandScope;
+use App\Support\RewardProgress;
+use App\Support\SalesMtdCalculator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -535,6 +537,7 @@ class ProductionProjectController extends Controller
             });
 
         $this->notifyFulfillmentOfficersTasksDone($completedTaskIds);
+        $this->checkProductionRewardsForTasks($completedTaskIds);
 
         return redirect()
             ->to($this->safeReturnUrl($validated['return_to'] ?? null) ?? route('production.tasks.index'))
@@ -894,6 +897,30 @@ class ProductionProjectController extends Controller
                     $tasks->count() === 1 ? $firstProject : null,
                     $tasks->count()
                 ));
+            });
+    }
+
+    private function checkProductionRewardsForTasks(array $taskIds): void
+    {
+        if ($taskIds === []) {
+            return;
+        }
+
+        ProductionTask::with('assignedUser')
+            ->whereIn('id', $taskIds)
+            ->get()
+            ->pluck('assignedUser')
+            ->filter()
+            ->unique('id')
+            ->each(function (User $user) {
+                $summary = SalesMtdCalculator::summary(
+                    $user,
+                    now(),
+                    BrandScope::userBrandId($user),
+                    $user->department === 'Sales'
+                );
+
+                RewardProgress::visibleFor($user, $summary);
             });
     }
 

@@ -235,21 +235,26 @@ class SalesPaymentController extends Controller
             return;
         }
 
-        $payment->loadMissing('endorsement.agent');
+        $payment->loadMissing('endorsement.agent', 'endorsement.lead.createdBy', 'endorsement.lead.verifiedBy');
         $agent = $payment->endorsement?->agent;
 
-        if (! $agent) {
-            return;
-        }
-
-        $summary = SalesMtdCalculator::summary(
+        collect([
             $agent,
-            now(),
-            BrandScope::userBrandId($agent),
-            $agent->department === 'Sales'
-        );
+            $payment->endorsement?->lead?->createdBy,
+            $payment->endorsement?->lead?->verifiedBy,
+        ])
+            ->filter()
+            ->unique('id')
+            ->each(function ($user) {
+                $summary = SalesMtdCalculator::summary(
+                    $user,
+                    now(),
+                    BrandScope::userBrandId($user),
+                    $user->department === 'Sales'
+                );
 
-        RewardProgress::visibleFor($agent, $summary);
+                RewardProgress::visibleFor($user, $summary);
+            });
     }
 
     private function notifyGroupedLeadSaleCredit($user, string $creditType, SalesPayment $payment): void

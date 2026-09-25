@@ -8,7 +8,7 @@
             <div>
                 <h1 class="text-2xl font-bold text-slate-900 dark:text-zinc-100">Rewards</h1>
                 <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
-                    View available perks and track your monthly MTD progress.
+                    View available perks and track your monthly progress.
                 </p>
             </div>
 
@@ -18,7 +18,7 @@
                     <p class="mt-1 text-xl font-bold text-slate-950 dark:text-white">${{ number_format($individualMtd, 2) }}</p>
                 </div>
                 <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
-                    <p class="text-xs font-semibold uppercase text-slate-400 dark:text-zinc-500">Team MTD</p>
+                    <p class="text-xs font-semibold uppercase text-slate-400 dark:text-zinc-500">Global MTD</p>
                     <p class="mt-1 text-xl font-bold text-slate-950 dark:text-white">${{ number_format($teamMtd, 2) }}</p>
                 </div>
             </div>
@@ -45,7 +45,7 @@
                     <div class="p-6">
                         <div class="flex flex-wrap items-center gap-2">
                             <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">
-                                {{ $reward->reward_scope === 'team' ? 'Team Reward' : 'Individual Reward' }}
+                                {{ $reward->scopeLabel() }} Reward
                             </span>
                             @if ($unlock?->claimed_at)
                                 <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">Claimed</span>
@@ -69,10 +69,10 @@
                         <div class="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
                             <div class="flex items-center justify-between gap-3 text-sm">
                                 <span class="font-semibold text-slate-700 dark:text-zinc-300">
-                                    {{ $reward->reward_scope === 'team' ? 'Team progress' : 'Your progress' }}
+                                    {{ $reward->getAttribute('progress_title') }}
                                 </span>
                                 <span class="font-bold text-slate-950 dark:text-white">
-                                    ${{ number_format((float) $reward->getAttribute('progress_amount'), 2) }} / ${{ number_format((float) $reward->requirement_amount, 2) }}
+                                    {{ $reward->getAttribute('progress_label') }} / {{ $reward->getAttribute('requirement_label') }}
                                 </span>
                             </div>
                             <div class="mt-3 h-3 overflow-hidden rounded-full bg-slate-200 dark:bg-zinc-800">

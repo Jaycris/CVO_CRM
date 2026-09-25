@@ -294,7 +294,7 @@
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h3 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Rewards</h3>
-                        <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Available perks based on monthly MTD progress.</p>
+                        <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Available perks based on monthly progress.</p>
                     </div>
                     <div class="flex items-center gap-2">
                         @if ($dashboardRewards->count() > 1)
@@ -350,7 +350,7 @@
                                     <div class="min-w-0">
                                         <div class="flex flex-wrap gap-2">
                                             <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">
-                                                {{ $reward->reward_scope === 'team' ? 'Team Reward' : 'Individual Reward' }}
+                                                {{ $reward->scopeLabel() }} Reward
                                             </span>
                                             @if ($unlock?->claimed_at)
                                                 <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">Claimed</span>
@@ -388,9 +388,9 @@
                                     <div class="grid min-w-0 gap-4">
                                         <div class="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
                                             <div class="flex flex-wrap items-center justify-between gap-3 text-sm font-semibold text-slate-600 dark:text-zinc-300">
-                                                <span>{{ $reward->reward_scope === 'team' ? 'Team progress' : 'Your progress' }}</span>
+                                                <span>{{ $reward->getAttribute('progress_title') }}</span>
                                                 <span class="break-words text-slate-950 dark:text-white">
-                                                    ${{ number_format($progressAmount, 2) }} / ${{ number_format($requirementAmount, 2) }}
+                                                    {{ $reward->getAttribute('progress_label') }} / {{ $reward->getAttribute('requirement_label') }}
                                                 </span>
                                             </div>
                                             <div class="mt-3 h-3 overflow-hidden rounded-full bg-slate-200 dark:bg-zinc-800">
