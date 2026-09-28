@@ -3,6 +3,7 @@
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\AnnouncementController;
+use App\Http\Controllers\AuthorBalanceController;
 use App\Http\Controllers\CalendarTodoController;
 use App\Http\Controllers\FinanceClientController;
 use App\Http\Controllers\FinanceContractController;
@@ -417,6 +418,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/finance/payments', [SalesPaymentController::class, 'store'])->name('finance.payments.store');
     Route::delete('/finance/payments', [SalesPaymentController::class, 'bulkDestroy'])->name('finance.payments.bulk-destroy');
     Route::put('/finance/payments/{payment}', [SalesPaymentController::class, 'update'])->name('finance.payments.update');
+    Route::get('/finance/author-balances', [AuthorBalanceController::class, 'index'])->name('finance.author-balances.index');
     Route::redirect('/finance/sales-activity', '/reports/sales-activity');
     Route::get('/finance/clients/sold', [FinanceClientController::class, 'sold'])->name('finance.clients.sold');
     Route::get('/finance/clients/refunds-disputes', [FinanceClientController::class, 'refundsDisputes'])->name('finance.clients.refunds-disputes');

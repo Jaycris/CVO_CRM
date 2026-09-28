@@ -365,6 +365,12 @@
                 $canViewAnyReportPage = $canViewReportOverview || $canViewSoldMinedLeads || $canViewVerifiedSoldLeads || $canViewSalesActivity || $canViewLeadGenerationActivity || $canViewSalesPerformance || $canViewAgentStatements || $canViewProductionReports;
                 $canViewFinanceClients = $isAdmin || auth()->user()->hasPermission('view_finance_clients');
                 $canViewContractRecords = $isAdmin || auth()->user()->hasPermission('view_contract_records');
+                $canViewAuthorBalances = $canViewPaymentRecords
+                    || $canViewFinanceClients
+                    || $canViewContractRecords
+                    || ($departmentName === 'Sales' && auth()->user()->is_commission_eligible)
+                    || auth()->user()->hasPermission('submit_sales_endorsement')
+                    || auth()->user()->hasPermission('view_own_sales_endorsements');
                 $canViewProductionTaskTracker = $isAdmin
                     || auth()->user()->hasPermission('view_all_fulfillment_trackers')
                     || auth()->user()->hasPermission('view_publishing_tracker')
@@ -940,7 +946,7 @@
                     </div>
                 @endif
 
-                @if ($canViewSalesEndorsementForm || $canViewPaymentRecords || $canViewFinanceClients || $canViewContractRecords)
+                @if ($canViewSalesEndorsementForm || $canViewPaymentRecords || $canViewFinanceClients || $canViewContractRecords || $canViewAuthorBalances)
                     <div class="border-b border-slate-200 py-4 dark:border-zinc-800">
                         <p class="px-3 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">
                             Finance
@@ -962,6 +968,16 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M3.75 6h16.5A1.5 1.5 0 0 1 21.75 7.5v9A1.5 1.5 0 0 1 20.25 18H3.75A1.5 1.5 0 0 1 2.25 16.5v-9A1.5 1.5 0 0 1 3.75 6Z" />
                                 </svg>
                                 Payment Records
+                            </a>
+                        @endif
+
+                        @if ($canViewAuthorBalances)
+                            <a href="{{ route('finance.author-balances.index') }}" class="{{ $sidebarLink(request()->routeIs('finance.author-balances.*')) }} mt-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ $sidebarIcon(request()->routeIs('finance.author-balances.*')) }}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.25h13.5v13.5H5.25z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 9h7.5M8.25 12h7.5M8.25 15h4.5" />
+                                </svg>
+                                Author Balances
                             </a>
                         @endif
 
