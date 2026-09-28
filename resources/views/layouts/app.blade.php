@@ -365,7 +365,9 @@
                 $canViewAnyReportPage = $canViewReportOverview || $canViewSoldMinedLeads || $canViewVerifiedSoldLeads || $canViewSalesActivity || $canViewLeadGenerationActivity || $canViewSalesPerformance || $canViewAgentStatements || $canViewProductionReports;
                 $canViewFinanceClients = $isAdmin || auth()->user()->hasPermission('view_finance_clients');
                 $canViewContractRecords = $isAdmin || auth()->user()->hasPermission('view_contract_records');
-                $canViewAuthorBalances = $canViewPaymentRecords
+                $canViewAllAuthorBalances = $isAdmin || auth()->user()->hasPermission('view_all_author_balances');
+                $canViewAuthorBalances = $canViewAllAuthorBalances
+                    || $canViewPaymentRecords
                     || $canViewFinanceClients
                     || $canViewContractRecords
                     || ($departmentName === 'Sales' && auth()->user()->is_commission_eligible)

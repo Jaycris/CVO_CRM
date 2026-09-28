@@ -146,12 +146,26 @@
 
         @php
             $salesMtdGlobal = ($homeSalesMtdSummary ?? $salesMtdSummary)['global'] ?? ['mtd' => 0, 'target' => 0, 'remaining' => 0, 'percent' => 0];
+            $salesMtdGlobalHit = (float) ($salesMtdGlobal['target'] ?? 0) > 0
+                && (float) ($salesMtdGlobal['remaining'] ?? 0) <= 0;
             $salesMtdBrandSnapshots = $salesMtdBrandSnapshots ?? collect();
             $isAdminDashboard = auth()->user()?->role?->name === 'Admin';
         @endphp
 
         @if ($canViewHomeSalesMtdSnapshot ?? false)
-            <section class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
+            <section @class([
+                'relative overflow-visible rounded-2xl bg-white p-6 shadow-sm ring-1 dark:bg-zinc-900',
+                'ring-emerald-200 dark:ring-emerald-400/40' => $salesMtdGlobalHit,
+                'ring-slate-200 dark:ring-zinc-800' => ! $salesMtdGlobalHit,
+            ])
+            @if ($salesMtdGlobalHit)
+                x-data="salesMtdQuotaConfetti()"
+                x-init="burst($el)"
+            @endif>
+                @if ($salesMtdGlobalHit)
+                    <canvas x-ref="canvas" class="pointer-events-none absolute inset-x-[-24px] top-[-40px] z-20 h-[220px] w-[calc(100%+48px)]"></canvas>
+                @endif
+
                 @if ($isAdminDashboard)
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -168,6 +182,12 @@
                     </p>
                 </div>
 
+                @if ($salesMtdGlobalHit)
+                    <div class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200">
+                        Global quota hit. Great work from the team.
+                    </div>
+                @endif
+
                 <div @class([
                     'mt-5 grid grid-cols-1 gap-4',
                     'lg:grid-cols-2 2xl:grid-cols-3' => $salesMtdBrandSnapshots->count() > 1,
@@ -176,17 +196,30 @@
                         @php
                             $brand = $snapshot['brand'];
                             $brandSummary = $snapshot['summary'] ?? ['mtd' => 0, 'target' => 0, 'remaining' => 0, 'percent' => 0];
+                            $brandQuotaHit = (float) ($brandSummary['target'] ?? 0) > 0
+                                && (float) ($brandSummary['remaining'] ?? 0) <= 0;
                         @endphp
 
-                        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
+                        <div @class([
+                            'rounded-xl border p-4',
+                            'border-emerald-200 bg-emerald-50/70 dark:border-emerald-400/30 dark:bg-emerald-400/10' => $brandQuotaHit,
+                            'border-slate-200 bg-slate-50 dark:border-zinc-800 dark:bg-zinc-950' => ! $brandQuotaHit,
+                        ])>
                             <div class="flex items-start justify-between gap-3">
                                 <div>
                                     <p class="font-bold text-slate-900 dark:text-zinc-100">{{ $brand->imprint_name }}</p>
                                     <p class="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">Sales brand</p>
                                 </div>
-                                <span class="text-sm font-bold text-slate-900 dark:text-zinc-100">
-                                    {{ number_format((float) $brandSummary['percent'], 2) }}%
-                                </span>
+                                <div class="text-right">
+                                    @if ($brandQuotaHit)
+                                        <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-400/20 dark:text-emerald-200">
+                                            Quota hit
+                                        </span>
+                                    @endif
+                                    <span class="mt-1 block text-sm font-bold text-slate-900 dark:text-zinc-100">
+                                        {{ number_format((float) $brandSummary['percent'], 2) }}%
+                                    </span>
+                                </div>
                             </div>
 
                             <h3 class="mt-4 text-2xl font-bold text-slate-900 dark:text-zinc-100">
@@ -197,12 +230,20 @@
                             </p>
 
                             <div class="mt-4 h-3 overflow-hidden rounded-full bg-white dark:bg-zinc-800">
-                                <div class="h-3 rounded-full bg-[var(--brand-primary)] transition-all" style="width: {{ min((float) $brandSummary['percent'], 100) }}%;"></div>
+                                <div @class([
+                                    'h-3 rounded-full transition-all',
+                                    'bg-gradient-to-r from-emerald-500 to-lime-400' => $brandQuotaHit,
+                                    'bg-[var(--brand-primary)]' => ! $brandQuotaHit,
+                                ]) style="width: {{ min((float) $brandSummary['percent'], 100) }}%;"></div>
                             </div>
 
                             <p class="mt-3 text-sm text-slate-500 dark:text-zinc-400">
-                                Remaining:
-                                <span class="font-bold text-rose-600 dark:text-rose-300">${{ number_format((float) $brandSummary['remaining'], 2) }}</span>
+                                @if ($brandQuotaHit)
+                                    <span class="font-bold text-emerald-700 dark:text-emerald-200">Target reached.</span>
+                                @else
+                                    Remaining:
+                                    <span class="font-bold text-rose-600 dark:text-rose-300">${{ number_format((float) $brandSummary['remaining'], 2) }}</span>
+                                @endif
                             </p>
                         </div>
                     @empty
@@ -227,8 +268,12 @@
                             </span>
                         </h3>
                         <p class="mt-2 text-sm text-slate-500 dark:text-zinc-400">
-                            Remaining Target MTD:
-                            <span class="font-bold text-rose-600 dark:text-rose-300">${{ number_format((float) $salesMtdGlobal['remaining'], 2) }}</span>.
+                            @if ($salesMtdGlobalHit)
+                                <span class="font-bold text-emerald-700 dark:text-emerald-200">Global quota hit. Great work from the team.</span>
+                            @else
+                                Remaining Target MTD:
+                                <span class="font-bold text-rose-600 dark:text-rose-300">${{ number_format((float) $salesMtdGlobal['remaining'], 2) }}</span>.
+                            @endif
                             PHP commission totals use the exchange rate saved in Commission Settings.
                         </p>
                     </div>
@@ -239,12 +284,101 @@
                             <span>{{ number_format((float) $salesMtdGlobal['percent'], 2) }}%</span>
                         </div>
                         <div class="mt-3 h-4 overflow-hidden rounded-full bg-slate-100 dark:bg-zinc-800">
-                            <div class="h-4 rounded-full bg-[var(--brand-primary)] transition-all" style="width: {{ min((float) $salesMtdGlobal['percent'], 100) }}%;"></div>
+                            <div @class([
+                                'h-4 rounded-full transition-all',
+                                'bg-gradient-to-r from-emerald-500 to-lime-400' => $salesMtdGlobalHit,
+                                'bg-[var(--brand-primary)]' => ! $salesMtdGlobalHit,
+                            ]) style="width: {{ min((float) $salesMtdGlobal['percent'], 100) }}%;"></div>
                         </div>
                     </div>
                 </div>
                 @endif
             </section>
+        @endif
+
+        @if (($canViewHomeSalesMtdSnapshot ?? false) && $salesMtdGlobalHit)
+            <script>
+                document.addEventListener('alpine:init', () => {
+                    Alpine.data('salesMtdQuotaConfetti', () => ({
+                        burst(section) {
+                            const canvas = this.$refs.canvas;
+
+                            if (!canvas || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                                return;
+                            }
+
+                            const context = canvas.getContext('2d');
+                            const colors = ['#10b981', '#34d399', '#84cc16', '#f59e0b', '#0f766e'];
+                            const particles = [];
+                            const startedAt = performance.now();
+                            const duration = 2400;
+
+                            const resize = () => {
+                                const rect = canvas.getBoundingClientRect();
+                                const dpr = window.devicePixelRatio || 1;
+
+                                canvas.width = Math.max(Math.floor(rect.width * dpr), 1);
+                                canvas.height = Math.max(Math.floor(rect.height * dpr), 1);
+                                context.setTransform(dpr, 0, 0, dpr, 0, 0);
+                            };
+
+                            resize();
+
+                            const rect = canvas.getBoundingClientRect();
+                            const centerX = rect.width / 2;
+                            const centerY = 72;
+
+                            for (let i = 0; i < 90; i += 1) {
+                                const angle = (-Math.PI * 0.95) + (Math.random() * Math.PI * 0.9);
+                                const speed = 3 + Math.random() * 5.5;
+
+                                particles.push({
+                                    x: centerX + (Math.random() - 0.5) * Math.min(rect.width * 0.36, 360),
+                                    y: centerY + Math.random() * 24,
+                                    vx: Math.cos(angle) * speed,
+                                    vy: Math.sin(angle) * speed - Math.random() * 1.5,
+                                    size: 5 + Math.random() * 6,
+                                    rotation: Math.random() * Math.PI,
+                                    spin: (Math.random() - 0.5) * 0.25,
+                                    color: colors[Math.floor(Math.random() * colors.length)],
+                                });
+                            }
+
+                            const tick = (time) => {
+                                const elapsed = time - startedAt;
+                                const fade = Math.max(1 - elapsed / duration, 0);
+
+                                context.clearRect(0, 0, rect.width, rect.height);
+
+                                particles.forEach((particle) => {
+                                    particle.x += particle.vx;
+                                    particle.y += particle.vy;
+                                    particle.vy += 0.12;
+                                    particle.rotation += particle.spin;
+
+                                    context.save();
+                                    context.globalAlpha = fade;
+                                    context.translate(particle.x, particle.y);
+                                    context.rotate(particle.rotation);
+                                    context.fillStyle = particle.color;
+                                    context.fillRect(-particle.size / 2, -particle.size / 2, particle.size, particle.size * 0.58);
+                                    context.restore();
+                                });
+
+                                if (elapsed < duration) {
+                                    requestAnimationFrame(tick);
+                                    return;
+                                }
+
+                                context.clearRect(0, 0, rect.width, rect.height);
+                                canvas.remove();
+                            };
+
+                            requestAnimationFrame(tick);
+                        },
+                    }));
+                });
+            </script>
         @endif
 
         @if (($dashboardRewards ?? collect())->isNotEmpty())

@@ -90,7 +90,10 @@ class AuthorBalanceController extends Controller
         return $this->canViewAllAuthorBalances($request)
             || ($user?->department === 'Sales' && (bool) $user?->is_commission_eligible)
             || (bool) $user?->hasPermission('submit_sales_endorsement')
-            || (bool) $user?->hasPermission('view_own_sales_endorsements');
+            || (bool) $user?->hasPermission('view_own_sales_endorsements')
+            || (bool) $user?->hasPermission('view_payment_records')
+            || (bool) $user?->hasPermission('view_finance_clients')
+            || (bool) $user?->hasPermission('view_contract_records');
     }
 
     private function canViewAllAuthorBalances(Request $request): bool
@@ -98,10 +101,7 @@ class AuthorBalanceController extends Controller
         $user = $request->user();
 
         return $user?->role?->name === 'Admin'
-            || $user?->role?->name === 'Finance Officer'
-            || (bool) $user?->hasPermission('view_payment_records')
-            || (bool) $user?->hasPermission('view_finance_clients')
-            || (bool) $user?->hasPermission('view_contract_records');
+            || (bool) $user?->hasPermission('view_all_author_balances');
     }
 
     private function balanceRow(SalesEndorsement $endorsement): array
