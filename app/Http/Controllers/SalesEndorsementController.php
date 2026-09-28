@@ -212,6 +212,13 @@ class SalesEndorsementController extends Controller
         $this->applyLeadOptionBrandScope($query, $request);
 
         return $query
+            ->whereNull('returned_at')
+            ->whereNull('archived_at')
+            ->whereNull('disposed_at')
+            ->where(function ($query) {
+                $query->whereNull('sales_stage')
+                    ->orWhereNotIn('sales_stage', ['sold', 'returned', 'archived', 'disposed']);
+            })
             ->when($request->user()?->role?->name !== 'Admin', function ($query) use ($request) {
                 $query->where(function ($query) use ($request) {
                     $query->where('assigned_to', $request->user()->id)
@@ -220,6 +227,7 @@ class SalesEndorsementController extends Controller
             })
             ->orderBy('author_name')
             ->get()
+            ->filter(fn (Lead $lead) => $this->leadHasCleanAuthorOption($lead))
             ->map(fn (Lead $lead) => [
                 'id' => $lead->id,
                 'authorName' => $lead->author_name,
@@ -326,8 +334,45 @@ class SalesEndorsementController extends Controller
 
     private function userCanEndorseLead(Request $request, Lead $lead): bool
     {
+        if (! $this->leadCanBeEndorsed($lead)) {
+            return false;
+        }
+
         return $this->userCanAccessBrand($request, $lead->brand_id)
             || (int) $lead->assigned_to === (int) $request->user()?->id;
+    }
+
+    private function leadCanBeEndorsed(Lead $lead): bool
+    {
+        if ($lead->returned_at || $lead->archived_at || $lead->disposed_at) {
+            return false;
+        }
+
+        if (in_array($lead->sales_stage, ['sold', 'returned', 'archived', 'disposed'], true)) {
+            return false;
+        }
+
+        return $this->leadHasCleanAuthorOption($lead);
+    }
+
+    private function leadHasCleanAuthorOption(Lead $lead): bool
+    {
+        $authorName = trim((string) $lead->author_name);
+        $bookTitle = trim((string) $lead->book_title);
+
+        if ($authorName === '' || $bookTitle === '') {
+            return false;
+        }
+
+        if (preg_match('/\?{2,}/', $authorName)) {
+            return false;
+        }
+
+        if (! preg_match('/\pL/u', $authorName)) {
+            return false;
+        }
+
+        return ! preg_match('/^[\d\s()+\-.]+$/', $authorName);
     }
 
     private function notifyFinanceUsers(SalesEndorsement $endorsement): void
