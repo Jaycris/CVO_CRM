@@ -170,7 +170,7 @@ class LeadController extends Controller
                 ->whereNull('archived_at')
                 ->when(! $this->userIsAdmin($request), fn ($query) => $query->where('verification_assigned_to', $request?->user()->id)),
             'unassigned' => $query->where('lead_generation_stage', 'ready_to_assign')
-                ->whereNotNull('verified_at')
+                ->where('verify_score', '>=', 25)
                 ->whereNull('assigned_to')
                 ->whereNull('sales_stage')
                 ->whereNull('returned_at')
@@ -759,17 +759,18 @@ class LeadController extends Controller
                 ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
                 ->whereNull('assigned_to')
                 ->where('lead_generation_stage', 'ready_to_assign')
-                ->whereNotNull('verified_at')
-                ->when(! $this->userIsAdmin($request), fn ($query) => $this->limitToOwnedOrUnclaimed($query, $request))
+                ->where('verify_score', '>=', 25)
+                ->whereNull('sales_stage')
+                ->whereNull('returned_at')
+                ->whereNull('archived_at')
+                ->whereNull('disposed_at')
                 ->pluck('id');
         }
 
         if ($assignableLeads->count() !== count($leadIds)) {
             return redirect()
                 ->to($this->safeReturnUrl($validated['return_to'] ?? null) ?? route('leads.my'))
-                ->with('error', $isTeamReassignment
-                    ? 'Only active assigned Sales leads can be reassigned.'
-                    : 'Only leads in Unassigned Leads / Ready to Assign can be assigned.');
+                ->with('error', $this->leadAssignmentBlockedMessage($request, $leadIds, $isTeamReassignment));
         }
 
         $updateData = [
@@ -1750,6 +1751,57 @@ class LeadController extends Controller
         return $this->userHasPermission($request, 'assign_leads');
     }
 
+    private function leadAssignmentBlockedMessage(Request $request, array $leadIds, bool $isTeamReassignment): string
+    {
+        $visibleLeads = Lead::query()
+            ->with('assignedUser')
+            ->whereIn('id', $leadIds)
+            ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
+            ->get();
+
+        if ($visibleLeads->count() !== count($leadIds)) {
+            return 'Some selected leads are outside your brand access. Refresh the page and select leads from your allowed brand.';
+        }
+
+        if ($isTeamReassignment) {
+            if ($visibleLeads->contains(fn (Lead $lead) => is_null($lead->assigned_to))) {
+                return 'Only currently assigned Sales leads can be reassigned.';
+            }
+
+            if ($visibleLeads->contains(fn (Lead $lead) => $lead->returned_at || $lead->archived_at || $lead->disposed_at)) {
+                return 'Returned, archived, or disposed leads cannot be reassigned from this action.';
+            }
+
+            if ($visibleLeads->contains(fn (Lead $lead) => $lead->assignedUser?->department !== 'Sales')) {
+                return 'Only leads assigned to Sales users can be reassigned here.';
+            }
+
+            return 'Only active assigned Sales leads can be reassigned.';
+        }
+
+        if ($visibleLeads->contains(fn (Lead $lead) => ! is_null($lead->assigned_to))) {
+            return 'One or more selected leads are already assigned. Refresh the page and choose only unassigned leads.';
+        }
+
+        if ($visibleLeads->contains(fn (Lead $lead) => $lead->lead_generation_stage !== 'ready_to_assign')) {
+            return 'One or more selected leads are not in Ready to Assign yet. Please choose from the Ready to Assign list only.';
+        }
+
+        if ($visibleLeads->contains(fn (Lead $lead) => is_null($lead->verify_score) || $lead->verify_score < 25)) {
+            return 'One or more selected leads do not have at least 25/100 review score yet. Only reviewed Ready to Assign leads can be assigned.';
+        }
+
+        if ($visibleLeads->contains(fn (Lead $lead) => ! is_null($lead->sales_stage))) {
+            return 'One or more selected leads already entered the Sales workflow and cannot be assigned from Unassigned Leads.';
+        }
+
+        if ($visibleLeads->contains(fn (Lead $lead) => $lead->returned_at || $lead->archived_at || $lead->disposed_at)) {
+            return 'Returned, archived, or disposed leads cannot be assigned from Unassigned Leads.';
+        }
+
+        return 'Only leads in Unassigned Leads / Ready to Assign can be assigned.';
+    }
+
     private function userCanReassignTeamLeads(?Request $request): bool
     {
         return $this->userHasPermission($request, 'reassign_team_leads');
@@ -1916,7 +1968,7 @@ class LeadController extends Controller
         $query = match ($pageKey) {
             'unassigned' => Lead::query()
                 ->where('lead_generation_stage', 'ready_to_assign')
-                ->whereNotNull('verified_at')
+                ->where('verify_score', '>=', 25)
                 ->whereNull('assigned_to')
                 ->whereNull('sales_stage')
                 ->whereNull('returned_at')
@@ -2314,7 +2366,7 @@ class LeadController extends Controller
             ],
             [
                 'label' => 'Ready to Assign',
-                'count' => (clone $leadQuery)->where('lead_generation_stage', 'ready_to_assign')->count(),
+                'count' => (clone $leadQuery)->where('lead_generation_stage', 'ready_to_assign')->where('verify_score', '>=', 25)->count(),
                 'hint' => 'Reviewed and ready',
                 'tone' => 'emerald',
             ],
