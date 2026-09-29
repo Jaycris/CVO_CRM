@@ -69,13 +69,8 @@
                 <div>
                     <dt class="text-sm font-medium text-slate-500">Reports To</dt>
                     <dd class="mt-1 font-semibold text-slate-900">
-                        @if ($user->reportsToUser)
-                            {{ $user->reportsToUser->first_name }} {{ $user->reportsToUser->last_name }}
-                            <span class="block text-xs font-medium text-slate-500">
-                                HRIS ID: {{ $user->reports_to_hris_employee_id }}
-                            </span>
-                        @elseif ($user->reports_to_hris_employee_id)
-                            HRIS ID: {{ $user->reports_to_hris_employee_id }}
+                        @if ($reportsToName)
+                            {{ $reportsToName }}
                         @else
                             Not set
                         @endif

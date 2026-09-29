@@ -11,6 +11,7 @@ use App\Models\LeadAssignmentHistory;
 use App\Models\Permission;
 use App\Models\User;
 use App\Models\Role;
+use App\Support\HrisEmployeeLookupClient;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -143,13 +144,14 @@ class UserController extends Controller
             ->with('success', 'User created successfully. Invitation email sent.');
     }
 
-    public function show(User $user)
+    public function show(User $user, HrisEmployeeLookupClient $hrisEmployeeLookupClient)
     {
         $this->ensureAdmin();
 
         $user->load('role', 'permissionOverrides', 'reportsToUser');
+        $reportsToName = $this->reportsToName($user, $hrisEmployeeLookupClient);
 
-        return view('admin.users.show', compact('user'));
+        return view('admin.users.show', compact('user', 'reportsToName'));
     }
 
     public function edit(User $user)
@@ -467,6 +469,42 @@ class UserController extends Controller
     private function normalizePhoneForDuplicateCheck(string $phoneNumber): string
     {
         return preg_replace('/\D+/', '', $phoneNumber) ?? '';
+    }
+
+    private function reportsToName(User $user, HrisEmployeeLookupClient $hrisEmployeeLookupClient): ?string
+    {
+        if ($user->reportsToUser) {
+            return trim($user->reportsToUser->first_name.' '.$user->reportsToUser->last_name);
+        }
+
+        if (! $user->reports_to_hris_employee_id) {
+            return null;
+        }
+
+        $result = $hrisEmployeeLookupClient->show((string) $user->reports_to_hris_employee_id);
+
+        if (! $result['available']) {
+            return null;
+        }
+
+        $employee = $result['payload']['data'] ?? $result['payload'] ?? [];
+
+        if (! is_array($employee)) {
+            return null;
+        }
+
+        $name = trim((string) ($employee['phone_name'] ?? ''));
+
+        if ($name !== '') {
+            return $name;
+        }
+
+        $name = trim(implode(' ', array_filter([
+            $employee['first_name'] ?? null,
+            $employee['last_name'] ?? null,
+        ])));
+
+        return $name !== '' ? $name : null;
     }
 
 }
