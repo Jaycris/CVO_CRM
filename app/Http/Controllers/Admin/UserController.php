@@ -147,7 +147,7 @@ class UserController extends Controller
     {
         $this->ensureAdmin();
 
-        $user->load('role', 'permissionOverrides');
+        $user->load('role', 'permissionOverrides', 'reportsToUser');
 
         return view('admin.users.show', compact('user'));
     }
