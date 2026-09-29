@@ -44,6 +44,7 @@
                           department: @js(old('department', '')),
                           brandId: @js((string) old('brand_id', $defaultBrandId)),
                           roleId: @js(old('role_id', '')),
+                          endOfShiftEnabled: @js((bool) old('enable_end_of_shift_report', false)),
                           commissionEligible: @js((bool) old('is_commission_eligible', old('department') === 'Sales')),
                           changeDepartment() {
                               const selectedRole = this.$refs.roleSelect?.selectedOptions?.[0];
@@ -60,6 +61,7 @@
                               searchUrl: @js(route('admin.hris-employees.index')),
                               showUrlTemplate: @js(route('admin.hris-employees.show', ['hrisEmployeeId' => '__ID__'])),
                               initialEmployeeId: @js(old('hris_employee_id', '')),
+                              initialReportsToHrisEmployeeId: @js(old('reports_to_hris_employee_id', '')),
                               initialSelectedLabel: '',
                           })
                       }">
@@ -157,6 +159,19 @@
                         </p>
                         <x-input-error :messages="$errors->get('work_type')" class="mt-2" />
                     </div>
+
+                    <label class="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <input type="hidden" name="enable_end_of_shift_report" value="0">
+                        <input type="checkbox"
+                               name="enable_end_of_shift_report"
+                               value="1"
+                               x-model="endOfShiftEnabled"
+                               class="mt-1 rounded border-slate-300 text-emerald-700 focus:ring-emerald-600">
+                        <span>
+                            <span class="block text-sm font-semibold text-slate-900">Enable End of Shift Report</span>
+                            <span class="block text-xs leading-5 text-slate-500">Allow this user to submit EOS reports after their shift.</span>
+                        </span>
+                    </label>
 
                     <label class="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                         <input type="hidden" name="is_commission_eligible" value="0">

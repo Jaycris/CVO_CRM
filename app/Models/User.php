@@ -33,12 +33,14 @@ class User extends Authenticatable implements MustVerifyEmail
         'email',
         'phone_number',
         'hris_employee_id',
+        'reports_to_hris_employee_id',
         'service_commission_percent',
         'commission_profile_id',
         'markup_commission_percent',
         'commission_threshold_amount',
         'is_commission_threshold_exempt',
         'is_commission_eligible',
+        'enable_end_of_shift_report',
         'profile_photo_path',
         'password',
         'password_created_at',
@@ -145,6 +147,21 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(ProductionProject::class, 'assigned_to');
     }
 
+    public function endOfShiftReports()
+    {
+        return $this->hasMany(EndOfShiftReport::class);
+    }
+
+    public function receivedEndOfShiftReports()
+    {
+        return $this->hasMany(EndOfShiftReport::class, 'report_to_user_id');
+    }
+
+    public function hrisDirectReports()
+    {
+        return $this->hasMany(User::class, 'reports_to_hris_employee_id', 'hris_employee_id');
+    }
+
     public function fulfillmentProjects()
     {
         return $this->hasMany(ProductionProject::class, 'fulfillment_officer_id');
@@ -183,6 +200,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'commission_threshold_amount' => 'decimal:2',
             'is_commission_threshold_exempt' => 'boolean',
             'is_commission_eligible' => 'boolean',
+            'enable_end_of_shift_report' => 'boolean',
             'password' => 'hashed',
         ];
     }

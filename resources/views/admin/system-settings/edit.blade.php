@@ -63,6 +63,33 @@
                 </div>
 
                 <div class="border-t border-slate-200 pt-5 dark:border-zinc-800">
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-zinc-100">Lead Auto Return</h2>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
+                        Control when untouched leads assigned to commission-eligible Sales agents return to Ready to Assign.
+                    </p>
+                </div>
+
+                <div>
+                    <label for="auto_return_untouched_leads_hours" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">
+                        Auto-return untouched leads after <span class="text-rose-600">*</span>
+                    </label>
+                    <select id="auto_return_untouched_leads_hours"
+                            name="auto_return_untouched_leads_hours"
+                            required
+                            class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                        @foreach ($autoReturnUntouchedLeadOptions as $optionValue => $optionLabel)
+                            <option value="{{ $optionValue }}" @selected((int) old('auto_return_untouched_leads_hours', $autoReturnUntouchedLeadsHours) === (int) $optionValue)>
+                                {{ $optionLabel }}
+                            </option>
+                        @endforeach
+                    </select>
+                    <p class="mt-2 text-sm text-slate-500 dark:text-zinc-400">
+                        Untouched means the lead still has no sales stage and no sales notes. Returned leads keep their previous owner history and go back to Unassigned Leads / Ready to Assign.
+                    </p>
+                    <x-input-error :messages="$errors->get('auto_return_untouched_leads_hours')" class="mt-2" />
+                </div>
+
+                <div class="border-t border-slate-200 pt-5 dark:border-zinc-800">
                     <h2 class="text-lg font-semibold text-slate-900 dark:text-zinc-100">Maintenance Mode</h2>
                     <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
                         Temporarily send users to the maintenance page while Admin can still access the CRM.

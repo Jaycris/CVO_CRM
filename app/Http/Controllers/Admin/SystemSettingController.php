@@ -19,6 +19,15 @@ class SystemSettingController extends Controller
             'recordsPerPage' => AppSetting::recordsPerPage(),
             'leadsSalesRecordsPerPage' => AppSetting::leadsSalesRecordsPerPage(),
             'recordsPerPageOptions' => [10, 25, 50, 100],
+            'autoReturnUntouchedLeadsHours' => AppSetting::autoReturnUntouchedLeadsHours(),
+            'autoReturnUntouchedLeadOptions' => [
+                0 => 'Off - do not auto-return leads',
+                12 => 'After 12 hours',
+                24 => 'After 24 hours',
+                48 => 'After 48 hours',
+                72 => 'After 3 days',
+                168 => 'After 7 days',
+            ],
             'maintenanceMode' => AppSetting::maintenanceModeEnabled(),
             'maintenanceReturn' => AppSetting::maintenanceReturn(),
             'hrisApiToken' => AppSetting::hrisApiToken(),
@@ -36,6 +45,7 @@ class SystemSettingController extends Controller
         $validated = $request->validate([
             'records_per_page' => ['required', 'integer', 'in:10,25,50,100'],
             'leads_sales_records_per_page' => ['required', 'integer', 'in:10,25,50,100'],
+            'auto_return_untouched_leads_hours' => ['required', 'integer', 'in:0,12,24,48,72,168'],
             'maintenance_mode' => ['nullable', 'boolean'],
             'maintenance_return' => ['nullable', 'string', 'max:120'],
             'hris_base_url' => ['nullable', 'url', 'max:255'],
@@ -44,6 +54,7 @@ class SystemSettingController extends Controller
 
         AppSetting::set('records_per_page', $validated['records_per_page']);
         AppSetting::set('leads_sales_records_per_page', $validated['leads_sales_records_per_page']);
+        AppSetting::set(AppSetting::AUTO_RETURN_UNTOUCHED_LEADS_HOURS_KEY, $validated['auto_return_untouched_leads_hours']);
         AppSetting::set(AppSetting::MAINTENANCE_MODE_KEY, $request->boolean('maintenance_mode') ? '1' : '0');
         AppSetting::set(AppSetting::MAINTENANCE_RETURN_KEY, trim((string) ($validated['maintenance_return'] ?? '')));
         AppSetting::set(AppSetting::HRIS_BASE_URL_KEY, rtrim((string) ($validated['hris_base_url'] ?? ''), '/'));

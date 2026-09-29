@@ -91,6 +91,8 @@ class UserController extends Controller
             'email' => ['required', 'email', 'unique:users,email'],
             'phone_number' => ['nullable', 'required_if:department,Sales', 'string', 'max:50'],
             'hris_employee_id' => ['nullable', 'string', 'max:50'],
+            'reports_to_hris_employee_id' => ['nullable', 'string', 'max:50'],
+            'enable_end_of_shift_report' => ['nullable', 'boolean'],
             'is_commission_eligible' => ['nullable', 'boolean'],
         ], [
             'role_id.exists' => 'Please choose a role that belongs to the selected department.',
@@ -110,6 +112,8 @@ class UserController extends Controller
             'email'         =>  $validated['email'],
             'phone_number' => $validated['phone_number'] ?? null,
             'hris_employee_id' => $validated['hris_employee_id'] ?? null,
+            'reports_to_hris_employee_id' => $validated['reports_to_hris_employee_id'] ?? null,
+            'enable_end_of_shift_report' => $request->boolean('enable_end_of_shift_report'),
             'is_commission_eligible' => $request->boolean('is_commission_eligible'),
 
             // Temporary random password
@@ -176,6 +180,8 @@ class UserController extends Controller
             'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($user)],
             'phone_number' => ['nullable', 'required_if:department,Sales', 'string', 'max:50'],
             'hris_employee_id' => ['nullable', 'string', 'max:50'],
+            'reports_to_hris_employee_id' => ['nullable', 'string', 'max:50'],
+            'enable_end_of_shift_report' => ['nullable', 'boolean'],
             'is_commission_eligible' => ['nullable', 'boolean'],
             'final_permissions' => ['nullable', 'array'],
             'final_permissions.*' => ['string'],
@@ -186,7 +192,8 @@ class UserController extends Controller
         $this->ensureRoleBelongsToDepartment($request, $validated['role_id'], $validated['department'] ?? null);
 
         $user->update([
-            ...collect($validated)->except(['final_permissions', 'is_commission_eligible'])->all(),
+            ...collect($validated)->except(['final_permissions', 'is_commission_eligible', 'enable_end_of_shift_report'])->all(),
+            'enable_end_of_shift_report' => $request->boolean('enable_end_of_shift_report'),
             'is_commission_eligible' => $request->boolean('is_commission_eligible'),
         ]);
         $this->syncUserPermissionOverrides($user, $request);

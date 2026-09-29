@@ -7,6 +7,7 @@ use App\Http\Controllers\AuthorBalanceController;
 use App\Http\Controllers\CalendarTodoController;
 use App\Http\Controllers\FinanceClientController;
 use App\Http\Controllers\FinanceContractController;
+use App\Http\Controllers\EndOfShiftReportController;
 use App\Http\Controllers\LeadController;
 use App\Http\Controllers\LeadGenerationActivityController;
 use App\Http\Controllers\LeadSaleCreditController;
@@ -437,6 +438,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/production/tasks', [ProductionProjectController::class, 'tasks'])->name('production.tasks.index');
     Route::get('/production/tasks/completed', [ProductionProjectController::class, 'completedTasks'])->name('production.tasks.completed');
     Route::get('/production/task-tracker', [ProductionProjectController::class, 'taskTracker'])->name('production.tasks.tracker');
+    Route::get('/production/end-of-shift', [EndOfShiftReportController::class, 'index'])->name('production.eos.index');
+    Route::post('/production/end-of-shift', [EndOfShiftReportController::class, 'store'])->name('production.eos.store');
     Route::put('/production/tasks', [ProductionProjectController::class, 'bulkTaskUpdate'])->name('production.tasks.bulk-update');
     Route::get('/production/sidebar-counts', [ProductionProjectController::class, 'sidebarCounts'])->name('production.sidebar-counts');
     Route::get('/production/projects', [ProductionProjectController::class, 'index'])->name('production.projects.index');

@@ -1,5 +1,6 @@
 <div class="rounded-2xl border border-slate-200 bg-slate-50 p-5">
     <input type="hidden" name="hris_employee_id" x-model="hrisEmployeeId">
+    <input type="hidden" name="reports_to_hris_employee_id" x-model="reportsToHrisEmployeeId">
 
     <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
@@ -68,6 +69,10 @@
             <span class="font-bold">Linked HRIS Employee:</span>
             <span x-text="hrisSelectedLabel"></span>
             <span class="font-semibold" x-text="'(' + hrisEmployeeId + ')'"></span>
+            <span x-show="reportsToLabel" class="mt-1 block text-xs text-emerald-700">
+                <span class="font-semibold">Reports to:</span>
+                <span x-text="reportsToLabel"></span>
+            </span>
         </div>
 
         <x-input-error :messages="$errors->get('hris_employee_id')" class="mt-2" />
@@ -82,6 +87,8 @@
             hrisSearchUrl: config.searchUrl,
             hrisShowUrlTemplate: config.showUrlTemplate,
             hrisEmployeeId: config.initialEmployeeId || '',
+            reportsToHrisEmployeeId: config.initialReportsToHrisEmployeeId || '',
+            reportsToLabel: '',
             hrisSelectedLabel: config.initialSelectedLabel || '',
             hrisQuery: '',
             hrisResults: [],
@@ -156,6 +163,8 @@
 
                     if (payload.employee && payload.employee.hris_employee_id) {
                         this.hrisSelectedLabel = payload.employee.phone_name || [payload.employee.first_name, payload.employee.last_name].filter(Boolean).join(' ');
+                        this.reportsToHrisEmployeeId = this.reportsToFromEmployee(payload.employee);
+                        this.reportsToLabel = this.reportsToLabelFromEmployee(payload.employee);
                         this.hrisLinkedWarning = '';
                     } else if (payload.message) {
                         this.hrisLinkedWarning = payload.message;
@@ -167,6 +176,8 @@
 
             selectHrisEmployee(employee) {
                 this.hrisEmployeeId = employee.hris_employee_id || '';
+                this.reportsToHrisEmployeeId = this.reportsToFromEmployee(employee);
+                this.reportsToLabel = this.reportsToLabelFromEmployee(employee);
                 this.hrisSelectedLabel = employee.phone_name || [employee.first_name, employee.last_name].filter(Boolean).join(' ') || this.hrisEmployeeId;
                 this.hrisQuery = '';
                 this.hrisResults = [];
@@ -194,6 +205,8 @@
 
             clearHrisEmployee() {
                 this.hrisEmployeeId = '';
+                this.reportsToHrisEmployeeId = '';
+                this.reportsToLabel = '';
                 this.hrisSelectedLabel = '';
                 this.hrisQuery = '';
                 this.hrisResults = [];
@@ -224,6 +237,45 @@
                 };
 
                 return map[normalized] || '';
+            },
+
+            reportsToFromEmployee(employee) {
+                const reportsTo = employee.reports_to_hris_employee_id
+                    || employee.reports_to_employee_id
+                    || employee.reports_to
+                    || employee.report_to_hris_employee_id
+                    || employee.report_to_employee_id
+                    || employee.report_to
+                    || employee.manager_hris_employee_id
+                    || employee.manager_employee_id
+                    || employee.manager_id
+                    || '';
+
+                if (typeof reportsTo === 'object' && reportsTo !== null) {
+                    return reportsTo.hris_employee_id || reportsTo.employee_id || reportsTo.id || '';
+                }
+
+                return String(reportsTo || '').trim();
+            },
+
+            reportsToLabelFromEmployee(employee) {
+                const reportsTo = employee.reports_to
+                    || employee.report_to
+                    || employee.manager
+                    || employee.supervisor
+                    || '';
+
+                if (typeof reportsTo === 'object' && reportsTo !== null) {
+                    return reportsTo.phone_name
+                        || reportsTo.name
+                        || [reportsTo.first_name, reportsTo.last_name].filter(Boolean).join(' ')
+                        || reportsTo.hris_employee_id
+                        || reportsTo.employee_id
+                        || reportsTo.id
+                        || '';
+                }
+
+                return String(reportsTo || this.reportsToHrisEmployeeId || '').trim();
             },
 
             crmNameFromEmployee(employee) {

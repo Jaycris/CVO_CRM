@@ -381,7 +381,13 @@
                 $canViewFulfillmentTracker = $canViewProductionTaskTracker
                     || auth()->user()->hasPermission('view_client_project_progress');
                 $canViewProductionTasks = auth()->user()->hasPermission('view_my_production_tasks');
-                $canViewProductionProjects = $canViewFulfillmentTracker || $canViewProductionTasks;
+                $canViewEndOfShiftReports = $isAdmin
+                    || (bool) auth()->user()->enable_end_of_shift_report
+                    || (
+                        filled(auth()->user()->hris_employee_id)
+                        && \App\Models\User::where('reports_to_hris_employee_id', auth()->user()->hris_employee_id)->exists()
+                    );
+                $canViewProductionProjects = $canViewFulfillmentTracker || $canViewProductionTasks || $canViewEndOfShiftReports;
                 $canManageUsers = $isAdmin || auth()->user()->hasPermission('manage_users');
                 $canManageRolesPermissions = $isAdmin || auth()->user()->hasPermission('manage_roles_permissions');
                 $canManageServices = $isAdmin || auth()->user()->hasPermission('manage_services');
@@ -1060,6 +1066,16 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                                 </svg>
                                 My Complete Tasks
+                            </a>
+                        @endif
+
+                        @if ($canViewEndOfShiftReports)
+                            <a href="{{ route('production.eos.index') }}" class="{{ $sidebarLink(request()->routeIs('production.eos.*')) }} mt-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ $sidebarIcon(request()->routeIs('production.eos.*')) }}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.75h9A2.25 2.25 0 0 1 18.75 6v12A2.25 2.25 0 0 1 16.5 20.25h-9A2.25 2.25 0 0 1 5.25 18V6A2.25 2.25 0 0 1 7.5 3.75Z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 8.25h7.5M8.25 12h7.5M8.25 15.75h4.5" />
+                                </svg>
+                                End of Shift
                             </a>
                         @endif
                     </div>

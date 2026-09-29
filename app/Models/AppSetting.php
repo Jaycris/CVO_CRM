@@ -15,6 +15,7 @@ class AppSetting extends Model
     public const HRIS_CRM_LOOKUP_TOKEN_KEY = 'hris_crm_lookup_token';
     public const MAINTENANCE_MODE_KEY = 'maintenance_mode';
     public const MAINTENANCE_RETURN_KEY = 'maintenance_return';
+    public const AUTO_RETURN_UNTOUCHED_LEADS_HOURS_KEY = 'auto_return_untouched_leads_hours';
 
     protected static array $runtimeCache = [];
 
@@ -105,8 +106,25 @@ class AppSetting extends Model
         return $value === '' ? null : $value;
     }
 
+    public static function autoReturnUntouchedLeadsHours(): int
+    {
+        $value = (int) static::get(static::AUTO_RETURN_UNTOUCHED_LEADS_HOURS_KEY, 0);
+
+        return static::validAutoReturnUntouchedLeadsHours($value) ? $value : 0;
+    }
+
+    public static function autoReturnUntouchedLeadsEnabled(): bool
+    {
+        return static::autoReturnUntouchedLeadsHours() > 0;
+    }
+
     private static function validRecordsPerPage(int $value): bool
     {
         return in_array($value, [10, 25, 50, 100], true);
+    }
+
+    public static function validAutoReturnUntouchedLeadsHours(int $value): bool
+    {
+        return in_array($value, [0, 12, 24, 48, 72, 168], true);
     }
 }
