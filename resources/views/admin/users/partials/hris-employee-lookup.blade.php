@@ -240,22 +240,92 @@
             },
 
             reportsToFromEmployee(employee) {
-                const reportsTo = employee.reports_to_hris_employee_id
-                    || employee.reports_to_employee_id
-                    || employee.reports_to
-                    || employee.report_to_hris_employee_id
-                    || employee.report_to_employee_id
-                    || employee.report_to
-                    || employee.manager_hris_employee_id
-                    || employee.manager_employee_id
-                    || employee.manager_id
-                    || '';
+                const reportsToKeys = [
+                    'reports_to_hris_employee_id',
+                    'reports_to_hris_id',
+                    'reports_to_employee_id',
+                    'reports_to_emp_id',
+                    'reports_to_id',
+                    'reports_to',
+                    'reportsToHrisEmployeeId',
+                    'reportsToEmployeeId',
+                    'reportsTo',
+                    'report_to_hris_employee_id',
+                    'report_to_employee_id',
+                    'report_to_id',
+                    'report_to',
+                    'reporting_to',
+                    'reporting_manager_hris_employee_id',
+                    'reporting_manager_employee_id',
+                    'reporting_manager_id',
+                    'reporting_manager',
+                    'manager_hris_employee_id',
+                    'manager_hris_id',
+                    'manager_employee_id',
+                    'manager_code',
+                    'manager_id',
+                    'manager',
+                    'manager_employee',
+                    'direct_manager_hris_employee_id',
+                    'direct_manager_employee_id',
+                    'direct_manager_id',
+                    'direct_manager',
+                    'supervisor_hris_employee_id',
+                    'supervisor_employee_id',
+                    'supervisor_id',
+                    'supervisor',
+                    'immediate_supervisor_hris_employee_id',
+                    'immediate_supervisor_employee_id',
+                    'immediate_supervisor_id',
+                    'immediate_supervisor',
+                ];
 
-                if (typeof reportsTo === 'object' && reportsTo !== null) {
-                    return reportsTo.hris_employee_id || reportsTo.employee_id || reportsTo.id || '';
+                const findReportsTo = (source) => {
+                    if (!source || typeof source !== 'object') {
+                        return '';
+                    }
+
+                    for (const key of reportsToKeys) {
+                        if (source[key]) {
+                            return source[key];
+                        }
+                    }
+
+                    return '';
+                };
+
+                let reportsTo = findReportsTo(employee);
+
+                if (!reportsTo) {
+                    for (const key of ['employment', 'job', 'position', 'organization', 'department', 'profile', 'employee', 'data', 'work']) {
+                        reportsTo = findReportsTo(employee[key]);
+
+                        if (reportsTo) {
+                            break;
+                        }
+                    }
                 }
 
-                return String(reportsTo || '').trim();
+                if (typeof reportsTo === 'object' && reportsTo !== null) {
+                    return reportsTo.hris_employee_id
+                        || reportsTo.employee_id
+                        || reportsTo.employee_no
+                        || reportsTo.employee_number
+                        || reportsTo.emp_id
+                        || reportsTo.id
+                        || reportsTo.code
+                        || '';
+                }
+
+                reportsTo = String(reportsTo || '').trim();
+
+                return this.looksLikeHrisEmployeeId(reportsTo) ? reportsTo : '';
+            },
+
+            looksLikeHrisEmployeeId(value) {
+                value = String(value || '').trim();
+
+                return value !== '' && !/\s/.test(value) && /\d/.test(value);
             },
 
             reportsToLabelFromEmployee(employee) {

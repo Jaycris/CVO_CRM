@@ -87,6 +87,11 @@ class SystemSettingController extends Controller
             'checked' => 0,
             'updated' => 0,
             'cleared' => 0,
+            'matched_by_hris_search' => 0,
+            'matched_by_name' => 0,
+            'unmatched_name' => 0,
+            'missing' => 0,
+            'unreadable' => 0,
             'failed' => 0,
         ];
 
@@ -105,12 +110,45 @@ class SystemSettingController extends Controller
                         continue;
                     }
 
-                    $employee = $result['payload']['data'] ?? $result['payload'] ?? [];
+                    $payload = $result['payload'] ?? [];
+                    $employee = is_array($payload)
+                        ? HrisReportsTo::employeeFromPayload($payload)
+                        : [];
+
+                    if ($employee === []) {
+                        $stats['unreadable']++;
+                        continue;
+                    }
+
                     $reportsToHrisEmployeeId = is_array($employee)
                         ? HrisReportsTo::extractHrisEmployeeId($employee)
                         : null;
+                    $reportsToName = null;
+
+                    if (! $reportsToHrisEmployeeId && is_array($employee)) {
+                        $reportsToName = HrisReportsTo::extractDisplayName($employee);
+                        $reportsToHrisEmployeeId = $this->resolveReportsToHrisEmployeeIdFromHris($reportsToName);
+
+                        if ($reportsToHrisEmployeeId) {
+                            $stats['matched_by_hris_search']++;
+                        } else {
+                            $reportsToHrisEmployeeId = $this->resolveReportsToHrisEmployeeId($reportsToName, $user);
+
+                            if ($reportsToHrisEmployeeId) {
+                                $stats['matched_by_name']++;
+                            }
+                        }
+                    }
 
                     if ($reportsToHrisEmployeeId === $user->reports_to_hris_employee_id) {
+                        if (! $reportsToHrisEmployeeId) {
+                            if ($reportsToName) {
+                                $stats['unmatched_name']++;
+                            } else {
+                                $stats['missing']++;
+                            }
+                        }
+
                         continue;
                     }
 
@@ -132,10 +170,125 @@ class SystemSettingController extends Controller
             $message .= ", {$stats['cleared']} cleared";
         }
 
+        if ($stats['matched_by_hris_search'] > 0) {
+            $message .= ", {$stats['matched_by_hris_search']} matched by PHREMS Reports To name";
+        }
+
+        if ($stats['matched_by_name'] > 0) {
+            $message .= ", {$stats['matched_by_name']} matched by CRM Reports To name";
+        }
+
+        if ($stats['unmatched_name'] > 0) {
+            $message .= ", {$stats['unmatched_name']} had a Reports To name that did not match one CRM user";
+        }
+
+        if ($stats['missing'] > 0) {
+            $message .= ", {$stats['missing']} had no Reports To from PHREMS/HRIS";
+        }
+
+        if ($stats['unreadable'] > 0) {
+            $message .= ", {$stats['unreadable']} skipped because PHREMS/HRIS returned an unreadable employee record";
+        }
+
         if ($stats['failed'] > 0) {
             $message .= ", {$stats['failed']} skipped because PHREMS/HRIS was unavailable";
         }
 
         return back()->with('success', $message.'.');
+    }
+
+    private function resolveReportsToHrisEmployeeIdFromHris(?string $reportsToName): ?string
+    {
+        $reportsToName = trim((string) $reportsToName);
+
+        if ($reportsToName === '') {
+            return null;
+        }
+
+        $result = $this->hrisEmployeeLookupClient->search($reportsToName, 10);
+
+        if (! $result['available']) {
+            return null;
+        }
+
+        $payload = $result['payload'] ?? [];
+        $employees = is_array($payload)
+            ? ($payload['data'] ?? $payload['employees'] ?? $payload['results'] ?? [])
+            : [];
+
+        if (! is_array($employees)) {
+            return null;
+        }
+
+        if (! array_is_list($employees)) {
+            $employees = [$employees];
+        }
+
+        $normalizedReportsToName = $this->normalizePersonName($reportsToName);
+        $matches = collect($employees)
+            ->filter(fn ($employee) => is_array($employee))
+            ->filter(fn (array $employee) => collect($this->hrisEmployeeNames($employee))
+                ->contains(fn (string $name) => $this->normalizePersonName($name) === $normalizedReportsToName))
+            ->values();
+
+        if ($matches->count() !== 1) {
+            return null;
+        }
+
+        return HrisReportsTo::extractEmployeeId($matches->first());
+    }
+
+    private function resolveReportsToHrisEmployeeId(?string $reportsToName, User $user): ?string
+    {
+        $reportsToName = trim((string) $reportsToName);
+
+        if ($reportsToName === '') {
+            return null;
+        }
+
+        $normalizedReportsToName = $this->normalizePersonName($reportsToName);
+
+        if ($normalizedReportsToName === '') {
+            return null;
+        }
+
+        $matches = User::query()
+            ->whereKeyNot($user->id)
+            ->whereNotNull('hris_employee_id')
+            ->where('hris_employee_id', '!=', '')
+            ->get(['first_name', 'last_name', 'hris_employee_id'])
+            ->filter(fn (User $candidate) => $this->normalizePersonName(
+                trim($candidate->first_name.' '.$candidate->last_name)
+            ) === $normalizedReportsToName)
+            ->values();
+
+        if ($matches->count() !== 1) {
+            return null;
+        }
+
+        return (string) $matches->first()->hris_employee_id;
+    }
+
+    private function normalizePersonName(string $name): string
+    {
+        return Str::of($name)
+            ->lower()
+            ->replaceMatches('/[^a-z0-9]+/', ' ')
+            ->squish()
+            ->toString();
+    }
+
+    private function hrisEmployeeNames(array $employee): array
+    {
+        return array_values(array_filter([
+            $employee['phone_name'] ?? null,
+            $employee['full_name'] ?? null,
+            $employee['name'] ?? null,
+            $employee['display_name'] ?? null,
+            trim(implode(' ', array_filter([
+                $employee['first_name'] ?? null,
+                $employee['last_name'] ?? null,
+            ]))),
+        ], fn ($name) => trim((string) $name) !== ''));
     }
 }

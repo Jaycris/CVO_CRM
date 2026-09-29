@@ -12,6 +12,7 @@ use App\Models\Permission;
 use App\Models\User;
 use App\Models\Role;
 use App\Support\HrisEmployeeLookupClient;
+use App\Support\HrisReportsTo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -487,7 +488,10 @@ class UserController extends Controller
             return null;
         }
 
-        $employee = $result['payload']['data'] ?? $result['payload'] ?? [];
+        $payload = $result['payload'] ?? [];
+        $employee = is_array($payload)
+            ? HrisReportsTo::employeeFromPayload($payload)
+            : [];
 
         if (! is_array($employee)) {
             return null;
