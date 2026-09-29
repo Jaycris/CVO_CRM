@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AppSetting;
+use App\Models\User;
+use App\Support\HrisEmployeeLookupClient;
+use App\Support\HrisReportsTo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -11,6 +14,10 @@ use Illuminate\View\View;
 
 class SystemSettingController extends Controller
 {
+    public function __construct(private readonly HrisEmployeeLookupClient $hrisEmployeeLookupClient)
+    {
+    }
+
     public function edit(Request $request): View
     {
         abort_unless($request->user()?->role?->name === 'Admin', 403);
@@ -70,5 +77,65 @@ class SystemSettingController extends Controller
         AppSetting::set(AppSetting::HRIS_API_TOKEN_KEY, Str::random(64));
 
         return back()->with('success', 'HRIS API token generated successfully.');
+    }
+
+    public function syncHrisReportsTo(Request $request): RedirectResponse
+    {
+        abort_unless($request->user()?->role?->name === 'Admin', 403);
+
+        $stats = [
+            'checked' => 0,
+            'updated' => 0,
+            'cleared' => 0,
+            'failed' => 0,
+        ];
+
+        User::query()
+            ->whereNotNull('hris_employee_id')
+            ->where('hris_employee_id', '!=', '')
+            ->orderBy('id')
+            ->chunkById(50, function ($users) use (&$stats): void {
+                foreach ($users as $user) {
+                    $stats['checked']++;
+
+                    $result = $this->hrisEmployeeLookupClient->show((string) $user->hris_employee_id);
+
+                    if (! $result['available']) {
+                        $stats['failed']++;
+                        continue;
+                    }
+
+                    $employee = $result['payload']['data'] ?? $result['payload'] ?? [];
+                    $reportsToHrisEmployeeId = is_array($employee)
+                        ? HrisReportsTo::extractHrisEmployeeId($employee)
+                        : null;
+
+                    if ($reportsToHrisEmployeeId === $user->reports_to_hris_employee_id) {
+                        continue;
+                    }
+
+                    $user->forceFill([
+                        'reports_to_hris_employee_id' => $reportsToHrisEmployeeId,
+                    ])->save();
+
+                    if ($reportsToHrisEmployeeId) {
+                        $stats['updated']++;
+                    } else {
+                        $stats['cleared']++;
+                    }
+                }
+            });
+
+        $message = "HRIS Reports To sync completed. {$stats['checked']} user(s) checked, {$stats['updated']} updated";
+
+        if ($stats['cleared'] > 0) {
+            $message .= ", {$stats['cleared']} cleared";
+        }
+
+        if ($stats['failed'] > 0) {
+            $message .= ", {$stats['failed']} skipped because PHREMS/HRIS was unavailable";
+        }
+
+        return back()->with('success', $message.'.');
     }
 }

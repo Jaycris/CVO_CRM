@@ -485,6 +485,7 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::get('/system-settings', [SystemSettingController::class, 'edit'])->name('system-settings.edit');
     Route::put('/system-settings', [SystemSettingController::class, 'update'])->name('system-settings.update');
     Route::post('/system-settings/hris-api-token', [SystemSettingController::class, 'regenerateApiToken'])->name('system-settings.hris-api-token.regenerate');
+    Route::post('/system-settings/hris-reports-to-sync', [SystemSettingController::class, 'syncHrisReportsTo'])->name('system-settings.hris-reports-to-sync');
     Route::get('/services', [ServiceController::class, 'index'])->name('services.index');
     Route::post('/services', [ServiceController::class, 'store'])->name('services.store');
     Route::put('/services/{service}', [ServiceController::class, 'update'])->name('services.update');

@@ -181,6 +181,23 @@
                     The integration lookup uses /api/crm/health, /api/crm/employees, and /api/crm/employees/{id} automatically.
                 </div>
 
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
+                    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                            <h3 class="text-sm font-semibold text-slate-900 dark:text-zinc-100">Sync HRIS Reports To</h3>
+                            <p class="mt-1 text-sm leading-6 text-slate-500 dark:text-zinc-400">
+                                Update existing CRM users with their latest Reports To value from PHREMS / HRIS.
+                            </p>
+                        </div>
+
+                        <button type="submit"
+                                form="sync-hris-reports-to-form"
+                                class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800 dark:ring-offset-zinc-900">
+                            Sync Reports To
+                        </button>
+                    </div>
+                </div>
+
                 <div class="flex justify-start sm:justify-end">
                     <button type="submit"
                             class="inline-flex min-h-11 items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold shadow-sm transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 dark:ring-offset-zinc-900"
@@ -188,6 +205,13 @@
                         Save Settings
                     </button>
                 </div>
+            </form>
+
+            <form id="sync-hris-reports-to-form"
+                  method="POST"
+                  action="{{ route('admin.system-settings.hris-reports-to-sync') }}"
+                  onsubmit="return confirm('Sync Reports To for all CRM users linked to HRIS?');">
+                @csrf
             </form>
         </div>
 
