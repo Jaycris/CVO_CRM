@@ -321,9 +321,9 @@
                     <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                         <label class="block">
                             <span class="text-sm font-semibold text-slate-700 dark:text-zinc-200">Global Target</span>
-                            <input type="text" inputmode="decimal" name="global_target" value="{{ number_format((float) $summary['global']['target'], 2) }}" autocomplete="off" data-money-input
-                                   x-bind:disabled="!editingTargets"
-                                   class="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-right text-sm font-semibold shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:disabled:bg-zinc-900 dark:disabled:text-zinc-300">
+                            <input type="text" value="{{ number_format((float) $summary['global']['target'], 2) }}" readonly
+                                   class="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-slate-50 px-4 text-right text-sm font-semibold text-slate-700 shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+                            <span class="mt-2 block text-xs text-slate-500 dark:text-zinc-400">Automatically calculated from Sales team targets.</span>
                         </label>
                     </div>
 

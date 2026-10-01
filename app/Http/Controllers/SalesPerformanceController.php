@@ -209,6 +209,15 @@ class SalesPerformanceController extends Controller
             ->sortByDesc('mtd')
             ->values();
 
+        $teamGlobalTarget = (float) $teamRows->sum('target');
+        $globalMtd = (float) ($summary['global']['mtd'] ?? 0);
+        $summary['global'] = [
+            'mtd' => $globalMtd,
+            'target' => $teamGlobalTarget,
+            'remaining' => max($teamGlobalTarget - $globalMtd, 0),
+            'percent' => $teamGlobalTarget > 0 ? round(($globalMtd / $teamGlobalTarget) * 100, 2) : 0,
+        ];
+
         $agentRows = $this->paginateCollection($agentRows, $request);
         $brands = $salesBrands;
         $brandContextName = $brandId
@@ -242,7 +251,6 @@ class SalesPerformanceController extends Controller
         abort_unless($this->canManageTargets($request->user()), 403);
 
         $request->merge([
-            'global_target' => $this->normalizedAmount($request->input('global_target')),
             'team_targets' => collect($request->input('team_targets', []))
                 ->map(fn ($value) => $this->normalizedAmount($value))
                 ->all(),
@@ -251,7 +259,6 @@ class SalesPerformanceController extends Controller
         $validated = $request->validate([
             'month' => ['required', 'date_format:Y-m'],
             'brand_id' => ['nullable', 'exists:brands,id'],
-            'global_target' => ['nullable', 'numeric', 'min:0'],
             'team_targets' => ['nullable', 'array'],
             'team_targets.*' => ['nullable', 'numeric', 'min:0'],
         ]);
@@ -264,19 +271,6 @@ class SalesPerformanceController extends Controller
         if ($brandId && BrandScope::canAccessAllBrands($request->user())) {
             abort_unless(Brand::query()->whereKey($brandId)->where('is_sales_brand', true)->exists(), 422);
         }
-
-        SalesTarget::updateOrCreate(
-            [
-                'brand_id' => $brandId,
-                'target_month' => $month->toDateString(),
-                'target_type' => 'global',
-                'user_id' => null,
-                'team_id' => null,
-            ],
-            [
-                'amount' => $validated['global_target'] ?? 0,
-            ]
-        );
 
         $teamTargets = collect($validated['team_targets'] ?? [])
             ->mapWithKeys(fn ($amount, $teamId) => [(int) $teamId => (float) $amount]);

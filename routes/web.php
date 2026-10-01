@@ -295,6 +295,15 @@ Route::get('/dashboard', function () {
             })
             ->sortByDesc('mtd')
             ->values();
+
+        $homeTeamGlobalTarget = (float) $homeTeamSalesMtdSnapshots->sum('target');
+        $homeGlobalMtd = (float) ($homeSalesMtdSummary['global']['mtd'] ?? 0);
+        $homeSalesMtdSummary['global'] = [
+            'mtd' => $homeGlobalMtd,
+            'target' => $homeTeamGlobalTarget,
+            'remaining' => max($homeTeamGlobalTarget - $homeGlobalMtd, 0),
+            'percent' => $homeTeamGlobalTarget > 0 ? round(($homeGlobalMtd / $homeTeamGlobalTarget) * 100, 2) : 0,
+        ];
     }
 
     $agentCredits = $salesMtdSummary['agentCredits'];
