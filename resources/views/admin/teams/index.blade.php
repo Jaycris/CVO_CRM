@@ -93,6 +93,18 @@
                     <x-input-error :messages="$errors->get('name')" class="mt-2" />
                 </div>
 
+                <label x-show="department === 'Sales'" x-cloak class="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
+                    <input type="checkbox"
+                           name="show_on_sales_dashboard"
+                           value="1"
+                           @checked(old('show_on_sales_dashboard'))
+                           class="mt-1 rounded border-slate-300 text-[var(--brand-primary)] shadow-sm focus:ring-[var(--brand-primary)]">
+                    <span>
+                        <span class="block font-semibold text-slate-900 dark:text-zinc-100">Show on Sales Dashboard MTD</span>
+                        <span class="mt-1 block text-sm text-slate-500 dark:text-zinc-400">Use this only for real Sales teams that should appear in Sales Team MTD totals.</span>
+                    </span>
+                </label>
+
                 <div>
                     <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-200">Manager</label>
                     <select name="manager_id"
@@ -197,7 +209,14 @@
                                 <tr>
                                     <td class="px-6 py-4 font-semibold text-slate-900 dark:text-zinc-100">{{ $team->name }}</td>
                                     <td class="px-6 py-4 text-slate-600 dark:text-zinc-300">{{ $team->brand?->imprint_name }}</td>
-                                    <td class="px-6 py-4 text-slate-600 dark:text-zinc-300">{{ $team->department }}</td>
+                                    <td class="px-6 py-4 text-slate-600 dark:text-zinc-300">
+                                        <div class="space-y-2">
+                                            <span>{{ $team->department }}</span>
+                                            @if ($team->show_on_sales_dashboard)
+                                                <span class="block w-max rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-400/10 dark:text-emerald-200 dark:ring-emerald-400/20">Sales Dashboard</span>
+                                            @endif
+                                        </div>
+                                    </td>
                                     <td class="px-6 py-4 text-slate-600 dark:text-zinc-300">{{ $team->manager?->first_name }} {{ $team->manager?->last_name }}</td>
                                     <td class="px-6 py-4 text-slate-600 dark:text-zinc-300">{{ $team->teamLeader?->first_name }} {{ $team->teamLeader?->last_name }}</td>
                                     <td class="px-6 py-4">
@@ -227,12 +246,12 @@
 
                                             <div x-show="editOpen"
                                                  x-cloak
-                                                 class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                                                 class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4"
                                                  x-on:keydown.escape.window="editOpen = false">
                                                 <form method="POST"
                                                       action="{{ route('admin.teams.update', $team) }}"
                                                       x-on:click.outside="editOpen = false"
-                                                      class="w-full max-w-2xl space-y-4 rounded-2xl bg-white p-6 text-left shadow-2xl dark:bg-zinc-900"
+                                                      class="my-6 max-h-[calc(100vh-3rem)] w-full max-w-2xl space-y-4 overflow-y-auto rounded-2xl bg-white p-6 text-left shadow-2xl dark:bg-zinc-900"
                                                       x-data="teamForm({
                                                           users: @js($users->map(fn ($user) => [
                                                               'id' => (string) $user->id,
@@ -293,6 +312,18 @@
                                                         <input name="name" value="{{ $team->name }}" required class="w-full rounded-xl border-slate-300 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
                                                     </div>
 
+                                                    <label x-show="department === 'Sales'" x-cloak class="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
+                                                        <input type="checkbox"
+                                                               name="show_on_sales_dashboard"
+                                                               value="1"
+                                                               @checked($team->show_on_sales_dashboard)
+                                                               class="mt-1 rounded border-slate-300 text-[var(--brand-primary)] shadow-sm focus:ring-[var(--brand-primary)]">
+                                                        <span>
+                                                            <span class="block font-semibold text-slate-900 dark:text-zinc-100">Show on Sales Dashboard MTD</span>
+                                                            <span class="mt-1 block text-sm text-slate-500 dark:text-zinc-400">Use this only for real Sales teams that should appear in Sales Team MTD totals.</span>
+                                                        </span>
+                                                    </label>
+
                                                     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                                                         <div>
                                                             <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-200">Manager</label>
@@ -350,7 +381,7 @@
                                                                 </template>
                                                             </div>
 
-                                                            <div class="mt-3 flex flex-wrap gap-2" x-show="selectedMembers.length" x-cloak>
+                                                            <div class="mt-3 flex max-h-44 flex-wrap gap-2 overflow-y-auto rounded-xl bg-white/60 p-2 dark:bg-zinc-900/60" x-show="selectedMembers.length" x-cloak>
                                                                 <template x-for="memberId in selectedMembers" :key="`edit-selected-member-${memberId}`">
                                                                     <span class="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-200">
                                                                         <span x-text="memberName(memberId)"></span>

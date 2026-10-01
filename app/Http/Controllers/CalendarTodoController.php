@@ -19,8 +19,8 @@ class CalendarTodoController extends Controller
         }
 
         $month = Carbon::createFromFormat('!Y-m', $monthInput)->startOfMonth();
-        $calendarStart = $month->copy()->startOfWeek();
-        $calendarEnd = $month->copy()->endOfMonth()->endOfWeek();
+        $calendarStart = $month->copy()->startOfWeek(Carbon::SUNDAY);
+        $calendarEnd = $month->copy()->endOfMonth()->endOfWeek(Carbon::SATURDAY);
 
         $todos = CalendarTodo::where('user_id', $request->user()->id)
             ->whereBetween('due_date', [$calendarStart->toDateString(), $calendarEnd->toDateString()])

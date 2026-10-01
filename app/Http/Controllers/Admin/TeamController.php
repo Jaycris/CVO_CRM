@@ -95,7 +95,11 @@ class TeamController extends Controller
             'member_ids' => ['nullable', 'array'],
             'member_ids.*' => ['integer', 'exists:users,id'],
             'description' => ['nullable', 'string', 'max:1000'],
+            'show_on_sales_dashboard' => ['nullable', 'boolean'],
         ]);
+
+        $validated['show_on_sales_dashboard'] = $validated['department'] === 'Sales'
+            && $request->boolean('show_on_sales_dashboard');
 
         $this->ensureUsersMatchTeamData($validated);
 

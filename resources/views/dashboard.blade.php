@@ -294,6 +294,79 @@
                 </div>
                 @endif
             </section>
+
+            @if (($homeTeamSalesMtdSnapshots ?? collect())->isNotEmpty())
+                <section class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <p class="text-sm font-semibold uppercase tracking-wide text-[var(--brand-primary)] dark:text-[var(--brand-accent)]">
+                                Team Sales MTD Snapshot
+                            </p>
+                            <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
+                                Teams marked for Sales Dashboard MTD are shown here.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                        @foreach ($homeTeamSalesMtdSnapshots as $snapshot)
+                            @php
+                                $teamQuotaHit = (float) ($snapshot['target'] ?? 0) > 0
+                                    && (float) ($snapshot['remaining'] ?? 0) <= 0;
+                            @endphp
+
+                            <article @class([
+                                'rounded-xl border p-4',
+                                'border-emerald-200 bg-emerald-50/70 dark:border-emerald-400/30 dark:bg-emerald-400/10' => $teamQuotaHit,
+                                'border-slate-200 bg-slate-50 dark:border-zinc-800 dark:bg-zinc-950' => ! $teamQuotaHit,
+                            ])>
+                                <div class="flex items-start justify-between gap-3">
+                                    <div>
+                                        <h3 class="font-bold text-slate-900 dark:text-zinc-100">{{ $snapshot['team']->name }}</h3>
+                                        <p class="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">
+                                            {{ $snapshot['team']->brand?->imprint_name ?? 'Sales Brand' }} &middot; {{ $snapshot['members'] }} member{{ $snapshot['members'] === 1 ? '' : 's' }}
+                                        </p>
+                                    </div>
+                                    <div class="text-right">
+                                        @if ($teamQuotaHit)
+                                            <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-400/20 dark:text-emerald-200">
+                                                Quota hit
+                                            </span>
+                                        @endif
+                                        <span class="mt-1 block text-sm font-bold text-slate-900 dark:text-zinc-100">
+                                            {{ number_format((float) $snapshot['percent'], 2) }}%
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <h4 class="mt-4 text-2xl font-bold text-slate-900 dark:text-zinc-100">
+                                    ${{ number_format((float) $snapshot['mtd'], 2) }}
+                                </h4>
+                                <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
+                                    of ${{ number_format((float) $snapshot['target'], 2) }} target
+                                </p>
+
+                                <div class="mt-4 h-3 overflow-hidden rounded-full bg-white dark:bg-zinc-800">
+                                    <div @class([
+                                        'h-3 rounded-full transition-all',
+                                        'bg-gradient-to-r from-emerald-500 to-lime-400' => $teamQuotaHit,
+                                        'bg-[var(--brand-primary)]' => ! $teamQuotaHit,
+                                    ]) style="width: {{ min((float) $snapshot['percent'], 100) }}%;"></div>
+                                </div>
+
+                                <p class="mt-3 text-sm text-slate-500 dark:text-zinc-400">
+                                    @if ($teamQuotaHit)
+                                        <span class="font-bold text-emerald-700 dark:text-emerald-200">Target reached.</span>
+                                    @else
+                                        Remaining:
+                                        <span class="font-bold text-rose-600 dark:text-rose-300">${{ number_format((float) $snapshot['remaining'], 2) }}</span>
+                                    @endif
+                                </p>
+                            </article>
+                        @endforeach
+                    </div>
+                </section>
+            @endif
         @endif
 
         @if (($canViewHomeSalesMtdSnapshot ?? false) && $salesMtdGlobalHit)

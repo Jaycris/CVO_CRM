@@ -132,6 +132,44 @@
             </section>
         </div>
 
+        @if (($teamRows ?? collect())->isNotEmpty())
+            <section class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Sales Team MTD</h2>
+                        <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Team totals based on the sales team assigned to each agent.</p>
+                    </div>
+                </div>
+
+                <div class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    @foreach ($teamRows as $team)
+                        <article class="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
+                            <div class="flex items-start justify-between gap-3">
+                                <div>
+                                    <h3 class="font-bold text-slate-900 dark:text-zinc-100">{{ $team['name'] }}</h3>
+                                    <p class="mt-1 text-xs font-semibold uppercase text-slate-500 dark:text-zinc-400">{{ $team['members'] }} member{{ $team['members'] === 1 ? '' : 's' }}</p>
+                                </div>
+                                <span class="text-sm font-bold text-[var(--brand-primary)] dark:text-[var(--brand-accent)]">{{ number_format($team['percent'], 2) }}%</span>
+                            </div>
+                            <div class="mt-4 flex items-end justify-between gap-3">
+                                <div>
+                                    <p class="text-xs text-slate-500 dark:text-zinc-400">MTD</p>
+                                    <p class="mt-1 text-xl font-bold text-slate-900 dark:text-zinc-100">{{ $money($team['mtd']) }}</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-xs text-slate-500 dark:text-zinc-400">Target</p>
+                                    <p class="mt-1 font-semibold text-slate-700 dark:text-zinc-200">{{ $money($team['target']) }}</p>
+                                </div>
+                            </div>
+                            <div class="mt-4 h-2 rounded-full bg-white dark:bg-zinc-800">
+                                <div class="h-2 rounded-full bg-[var(--brand-primary)]" style="width: {{ min($team['percent'], 100) }}%;"></div>
+                            </div>
+                        </article>
+                    @endforeach
+                </div>
+            </section>
+        @endif
+
         <section class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
             <div class="border-b border-slate-200 px-6 py-4 dark:border-zinc-800">
                 <div class="flex flex-wrap items-center justify-between gap-3">
@@ -160,10 +198,11 @@
             </div>
 
             <div class="overflow-x-auto overscroll-x-contain [scrollbar-gutter:stable]" data-agent-mtd-scroll-table>
-                <table class="min-w-[1900px] divide-y divide-slate-200 text-sm dark:divide-zinc-800">
+                <table class="min-w-[2050px] divide-y divide-slate-200 text-sm dark:divide-zinc-800">
                     <thead class="bg-slate-50 text-left text-xs font-bold uppercase text-slate-500 dark:bg-zinc-900/80 dark:text-zinc-400">
                         <tr>
                             <th class="sticky left-0 z-20 min-w-44 bg-slate-50 px-5 py-3 dark:bg-zinc-900">Agent</th>
+                            <th class="min-w-44 px-5 py-3">Team</th>
                             <th class="min-w-32 px-5 py-3">Work Arrangement</th>
                             <th class="min-w-32 px-5 py-3">MTD</th>
                             <th class="min-w-44 px-5 py-3">Service MTD</th>
@@ -187,6 +226,11 @@
                                 <td class="sticky left-0 z-10 bg-white px-5 py-5 font-semibold text-slate-900 shadow-[1px_0_0_0_rgba(226,232,240,1)] dark:bg-zinc-900 dark:text-zinc-100 dark:shadow-[1px_0_0_0_rgba(39,39,42,1)]">
                                     {{ trim(($row['agent']->first_name ?? '') . ' ' . ($row['agent']->last_name ?? '')) ?: 'Unknown Agent' }}
                                     <p class="mt-1 text-xs font-medium text-slate-500 dark:text-zinc-400">{{ $row['agent']->brand?->imprint_name ?? '-' }}</p>
+                                </td>
+                                <td class="px-5 py-5">
+                                    <span class="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-400/10 dark:text-emerald-200 dark:ring-emerald-400/20">
+                                        {{ $row['sales_team_name'] ?: 'No sales team' }}
+                                    </span>
                                 </td>
                                 <td class="px-5 py-5">
                                     <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 dark:bg-zinc-800 dark:text-zinc-300">
@@ -278,7 +322,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="13" class="px-6 py-16 text-center text-slate-500 dark:text-zinc-400">No sales agents found.</td>
+                                <td colspan="14" class="px-6 py-16 text-center text-slate-500 dark:text-zinc-400">No sales agents found.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -286,7 +330,7 @@
             </div>
 
             <div class="fixed bottom-0 z-[60] hidden overflow-x-auto border-t border-slate-200 bg-slate-50/95 shadow-[0_-8px_20px_rgba(15,23,42,0.08)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95 [scrollbar-gutter:stable]" data-agent-mtd-scroll-bottom>
-                <div class="h-4 min-w-[1900px]" data-agent-mtd-scroll-spacer></div>
+                <div class="h-4 min-w-[2050px]" data-agent-mtd-scroll-spacer></div>
             </div>
 
             @if ($agentRows->hasPages())

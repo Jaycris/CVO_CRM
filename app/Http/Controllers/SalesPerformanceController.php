@@ -55,7 +55,7 @@ class SalesPerformanceController extends Controller
             ->values();
 
         $agentsQuery = User::query()
-            ->with(['brand', 'role', 'commissionProfile'])
+            ->with(['brand', 'role', 'commissionProfile', 'team'])
             ->where(function ($query) use ($visibleAgentIds) {
                 $query->where('department', 'Sales');
 
@@ -100,10 +100,16 @@ class SalesPerformanceController extends Controller
             ]);
             $mtd = (float) $credit['mtd'];
             $targetAmount = (float) ($target?->amount ?? 0);
+            $isSalesTeamAgent = $agent->department === 'Sales'
+                && $agent->team?->department === 'Sales'
+                && (bool) $agent->team?->show_on_sales_dashboard
+                && (bool) $agent->is_commission_eligible;
 
             return [
                 'id' => $agent->id,
                 'agent' => $agent,
+                'team_name' => $agent->team?->name,
+                'sales_team_name' => $isSalesTeamAgent ? $agent->team?->name : null,
                 'work_type' => $agent->work_type,
                 'mtd' => $mtd,
                 'service_mtd' => (float) $credit['service_mtd'],
@@ -153,6 +159,24 @@ class SalesPerformanceController extends Controller
             return $row;
         })->values();
 
+        $teamRows = $agentRows
+            ->filter(fn (array $row) => filled($row['sales_team_name']))
+            ->groupBy(fn (array $row) => (string) $row['sales_team_name'])
+            ->map(fn (Collection $rows, string $teamName) => [
+                'name' => $teamName,
+                'mtd' => (float) $rows->sum('mtd'),
+                'target' => (float) $rows->sum('target'),
+                'members' => $rows->count(),
+            ])
+            ->map(function (array $team) {
+                $team['remaining'] = max($team['target'] - $team['mtd'], 0);
+                $team['percent'] = $team['target'] > 0 ? round(($team['mtd'] / $team['target']) * 100, 2) : 0;
+
+                return $team;
+            })
+            ->sortByDesc('mtd')
+            ->values();
+
         $agentRows = $this->paginateCollection($agentRows, $request);
         $brands = $salesBrands;
         $brandContextName = $brandId
@@ -162,6 +186,7 @@ class SalesPerformanceController extends Controller
         return view('reports.sales-performance', [
             'summary' => $summary,
             'agentRows' => $agentRows,
+            'teamRows' => $teamRows,
             'brands' => $brands,
             'brandContextName' => $brandContextName,
             'month' => $month,

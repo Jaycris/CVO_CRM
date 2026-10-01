@@ -31,6 +31,8 @@ use App\Models\PersonalNote;
 use App\Models\ProductionProject;
 use App\Models\SalesEndorsement;
 use App\Models\SalesPayment;
+use App\Models\Team;
+use App\Models\User;
 use App\Support\BrandScope;
 use App\Support\RewardProgress;
 use App\Support\SalesMtdCalculator;
@@ -230,6 +232,7 @@ Route::get('/dashboard', function () {
     }
 
     $salesMtdBrandSnapshots = collect();
+    $homeTeamSalesMtdSnapshots = collect();
 
     if ($isAdmin) {
         $salesMtdBrandSnapshots = Brand::query()
@@ -242,13 +245,52 @@ Route::get('/dashboard', function () {
             ]);
     }
 
+    if ($canViewHomeSalesMtdSnapshot) {
+        $homeTeamBrandId = ($isAdmin || BrandScope::canAccessAllBrands($user))
+            ? null
+            : $dashboardBrandId;
+        $homeAgentCredits = $homeSalesMtdSummary['agentCredits'] ?? collect();
+        $homeAgentTargets = $homeSalesMtdSummary['agentTargets'] ?? collect();
+
+        $salesDashboardTeams = Team::query()
+            ->with(['brand', 'members' => fn ($query) => $query
+                ->where('department', 'Sales')
+                ->where('is_commission_eligible', true)
+                ->select(['id', 'team_id', 'first_name', 'last_name'])])
+            ->where('department', 'Sales')
+            ->where('show_on_sales_dashboard', true)
+            ->whereHas('brand', fn ($query) => $query->where('is_sales_brand', true))
+            ->when($homeTeamBrandId, fn ($query) => $query->where('brand_id', $homeTeamBrandId))
+            ->orderBy('name')
+            ->get();
+
+        $homeTeamSalesMtdSnapshots = $salesDashboardTeams
+            ->map(function (Team $team) use ($homeAgentCredits, $homeAgentTargets) {
+                $memberIds = $team->members->pluck('id');
+                $mtd = (float) $memberIds->sum(fn ($agentId) => (float) ($homeAgentCredits->get($agentId)['mtd'] ?? 0));
+                $target = (float) $memberIds->sum(fn ($agentId) => (float) ($homeAgentTargets->get($agentId)?->amount ?? 0));
+                $remaining = max($target - $mtd, 0);
+
+                return [
+                    'team' => $team,
+                    'members' => $memberIds->count(),
+                    'mtd' => $mtd,
+                    'target' => $target,
+                    'remaining' => $remaining,
+                    'percent' => $target > 0 ? round(($mtd / $target) * 100, 2) : 0,
+                ];
+            })
+            ->sortByDesc('mtd')
+            ->values();
+    }
+
     $agentCredits = $salesMtdSummary['agentCredits'];
 
     if (! $canViewAllMtdRows && $user) {
         $agentCredits = $agentCredits->only([$user->id]);
     }
 
-    $agentsById = \App\Models\User::query()
+    $agentsById = User::query()
         ->whereIn('id', $agentCredits->keys()->filter()->all())
         ->get(['id', 'first_name', 'last_name'])
         ->keyBy('id');
@@ -324,6 +366,7 @@ Route::get('/dashboard', function () {
         'canViewHomeSalesMtdSnapshot',
         'dashboardBrandName',
         'salesMtdBrandSnapshots',
+        'homeTeamSalesMtdSnapshots',
         'recentNotes',
         'upcomingCalendarTodos',
         'dashboardBanners',

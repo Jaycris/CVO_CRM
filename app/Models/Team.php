@@ -13,6 +13,11 @@ class Team extends Model
         'manager_id',
         'team_leader_id',
         'description',
+        'show_on_sales_dashboard',
+    ];
+
+    protected $casts = [
+        'show_on_sales_dashboard' => 'boolean',
     ];
 
     public function brand()
