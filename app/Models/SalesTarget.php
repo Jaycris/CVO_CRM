@@ -11,6 +11,7 @@ class SalesTarget extends Model
         'target_month',
         'target_type',
         'user_id',
+        'team_id',
         'work_setup',
         'amount',
     ];
@@ -31,5 +32,10 @@ class SalesTarget extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function team()
+    {
+        return $this->belongsTo(Team::class);
     }
 }

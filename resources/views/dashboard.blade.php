@@ -296,6 +296,9 @@
             </section>
 
             @if (($homeTeamSalesMtdSnapshots ?? collect())->isNotEmpty())
+                @php
+                    $teamSnapshotCount = $homeTeamSalesMtdSnapshots->count();
+                @endphp
                 <section class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
                     <div class="flex flex-wrap items-start justify-between gap-3">
                         <div>
@@ -308,7 +311,11 @@
                         </div>
                     </div>
 
-                    <div class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                    <div @class([
+                        'mt-5 grid grid-cols-1 gap-4',
+                        'md:grid-cols-2' => $teamSnapshotCount === 2,
+                        'md:grid-cols-2 2xl:grid-cols-3' => $teamSnapshotCount >= 3,
+                    ])>
                         @foreach ($homeTeamSalesMtdSnapshots as $snapshot)
                             @php
                                 $teamQuotaHit = (float) ($snapshot['target'] ?? 0) > 0

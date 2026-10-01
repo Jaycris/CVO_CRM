@@ -31,6 +31,7 @@ use App\Models\PersonalNote;
 use App\Models\ProductionProject;
 use App\Models\SalesEndorsement;
 use App\Models\SalesPayment;
+use App\Models\SalesTarget;
 use App\Models\Team;
 use App\Models\User;
 use App\Support\BrandScope;
@@ -250,7 +251,19 @@ Route::get('/dashboard', function () {
             ? null
             : $dashboardBrandId;
         $homeAgentCredits = $homeSalesMtdSummary['agentCredits'] ?? collect();
-        $homeAgentTargets = $homeSalesMtdSummary['agentTargets'] ?? collect();
+        $homeTeamTargets = SalesTarget::query()
+            ->whereDate('target_month', now()->startOfMonth()->toDateString())
+            ->where('target_type', 'team')
+            ->whereNotNull('team_id')
+            ->when($homeTeamBrandId, fn ($query) => $query->where('brand_id', $homeTeamBrandId))
+            ->when(! $homeTeamBrandId && BrandScope::canAccessAllBrands($user), function ($query) {
+                $query->where(function ($query) {
+                    $query->whereNull('brand_id')
+                        ->orWhereHas('brand', fn ($query) => $query->where('is_sales_brand', true));
+                });
+            })
+            ->get()
+            ->keyBy('team_id');
 
         $salesDashboardTeams = Team::query()
             ->with(['brand', 'members' => fn ($query) => $query
@@ -265,10 +278,10 @@ Route::get('/dashboard', function () {
             ->get();
 
         $homeTeamSalesMtdSnapshots = $salesDashboardTeams
-            ->map(function (Team $team) use ($homeAgentCredits, $homeAgentTargets) {
+            ->map(function (Team $team) use ($homeAgentCredits, $homeTeamTargets) {
                 $memberIds = $team->members->pluck('id');
                 $mtd = (float) $memberIds->sum(fn ($agentId) => (float) ($homeAgentCredits->get($agentId)['mtd'] ?? 0));
-                $target = (float) $memberIds->sum(fn ($agentId) => (float) ($homeAgentTargets->get($agentId)?->amount ?? 0));
+                $target = (float) ($homeTeamTargets->get($team->id)?->amount ?? 0);
                 $remaining = max($target - $mtd, 0);
 
                 return [

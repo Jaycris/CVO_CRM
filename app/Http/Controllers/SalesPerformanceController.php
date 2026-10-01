@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Brand;
 use App\Models\SalesTarget;
+use App\Models\Team;
 use App\Models\User;
 use App\Support\BrandScope;
 use App\Support\SalesMtdCalculator;
@@ -48,6 +49,33 @@ class SalesPerformanceController extends Controller
             && ! $brandId;
         $summaryUser = $canUseSalesBrandFilter ? null : $user;
         $summary = SalesMtdCalculator::summary($summaryUser, $month, $brandId, $includeOwnCreditsAcrossBrands, $canUseSalesBrandFilter && ! $brandId);
+        $teamTargets = SalesTarget::query()
+            ->whereDate('target_month', $month->toDateString())
+            ->where('target_type', 'team')
+            ->whereNotNull('team_id')
+            ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
+            ->when($canUseSalesBrandFilter && ! $brandId, function ($query) {
+                $query->where(function ($query) {
+                    $query->whereNull('brand_id')
+                        ->orWhereHas('brand', fn ($query) => $query->where('is_sales_brand', true));
+                });
+            })
+            ->when(! $brandId && ! $canUseSalesBrandFilter, fn ($query) => BrandScope::apply($query, $user))
+            ->get()
+            ->keyBy('team_id');
+        $targetTeams = Team::query()
+            ->with(['brand', 'members' => fn ($query) => $query
+                ->where('department', 'Sales')
+                ->where('is_commission_eligible', true)
+                ->select(['id', 'team_id', 'first_name', 'last_name'])])
+            ->where('department', 'Sales')
+            ->where('show_on_sales_dashboard', true)
+            ->whereHas('brand', fn ($query) => $query->where('is_sales_brand', true))
+            ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
+            ->when($canUseSalesBrandFilter && ! $brandId, fn ($query) => $query->whereHas('brand', fn ($query) => $query->where('is_sales_brand', true)))
+            ->when(! $brandId && ! $canUseSalesBrandFilter, fn ($query) => BrandScope::apply($query, $user))
+            ->orderBy('name')
+            ->get();
         $visibleAgentIds = $summary['agentCredits']->keys()
             ->merge($summary['agentTargets']->keys())
             ->filter()
@@ -108,6 +136,7 @@ class SalesPerformanceController extends Controller
             return [
                 'id' => $agent->id,
                 'agent' => $agent,
+                'team_id' => $isSalesTeamAgent ? $agent->team?->id : null,
                 'team_name' => $agent->team?->name,
                 'sales_team_name' => $isSalesTeamAgent ? $agent->team?->name : null,
                 'work_type' => $agent->work_type,
@@ -159,15 +188,18 @@ class SalesPerformanceController extends Controller
             return $row;
         })->values();
 
-        $teamRows = $agentRows
-            ->filter(fn (array $row) => filled($row['sales_team_name']))
-            ->groupBy(fn (array $row) => (string) $row['sales_team_name'])
-            ->map(fn (Collection $rows, string $teamName) => [
-                'name' => $teamName,
-                'mtd' => (float) $rows->sum('mtd'),
-                'target' => (float) $rows->sum('target'),
-                'members' => $rows->count(),
-            ])
+        $teamRows = $targetTeams
+            ->map(function (Team $team) use ($summary, $teamTargets) {
+                $memberIds = $team->members->pluck('id');
+
+                return [
+                    'id' => $team->id,
+                    'name' => $team->name,
+                    'mtd' => (float) $memberIds->sum(fn ($agentId) => (float) ($summary['agentCredits']->get($agentId)['mtd'] ?? 0)),
+                    'target' => (float) ($teamTargets->get($team->id)?->amount ?? 0),
+                    'members' => $memberIds->count(),
+                ];
+            })
             ->map(function (array $team) {
                 $team['remaining'] = max($team['target'] - $team['mtd'], 0);
                 $team['percent'] = $team['target'] > 0 ? round(($team['mtd'] / $team['target']) * 100, 2) : 0;
@@ -182,11 +214,19 @@ class SalesPerformanceController extends Controller
         $brandContextName = $brandId
             ? Brand::query()->whereKey($brandId)->value('imprint_name')
             : 'All Brands';
+        $targetTeamRows = $targetTeams
+            ->map(fn (Team $team) => [
+                'id' => $team->id,
+                'name' => $team->name,
+                'brand' => $team->brand?->imprint_name,
+                'target' => (float) ($teamTargets->get($team->id)?->amount ?? 0),
+            ]);
 
         return view('reports.sales-performance', [
             'summary' => $summary,
             'agentRows' => $agentRows,
             'teamRows' => $teamRows,
+            'targetTeamRows' => $targetTeamRows,
             'brands' => $brands,
             'brandContextName' => $brandContextName,
             'month' => $month,
@@ -203,16 +243,17 @@ class SalesPerformanceController extends Controller
 
         $request->merge([
             'global_target' => $this->normalizedAmount($request->input('global_target')),
-            'remote_target' => $this->normalizedAmount($request->input('remote_target')),
-            'site_target' => $this->normalizedAmount($request->input('site_target')),
+            'team_targets' => collect($request->input('team_targets', []))
+                ->map(fn ($value) => $this->normalizedAmount($value))
+                ->all(),
         ]);
 
         $validated = $request->validate([
             'month' => ['required', 'date_format:Y-m'],
             'brand_id' => ['nullable', 'exists:brands,id'],
             'global_target' => ['nullable', 'numeric', 'min:0'],
-            'remote_target' => ['nullable', 'numeric', 'min:0'],
-            'site_target' => ['nullable', 'numeric', 'min:0'],
+            'team_targets' => ['nullable', 'array'],
+            'team_targets.*' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $month = Carbon::createFromFormat('!Y-m', $validated['month'])->startOfMonth();
@@ -224,22 +265,48 @@ class SalesPerformanceController extends Controller
             abort_unless(Brand::query()->whereKey($brandId)->where('is_sales_brand', true)->exists(), 422);
         }
 
-        foreach ([
-            'global' => $validated['global_target'] ?? 0,
-            'remote' => $validated['remote_target'] ?? 0,
-            'site' => $validated['site_target'] ?? 0,
-        ] as $type => $amount) {
-            SalesTarget::updateOrCreate(
-                [
-                    'brand_id' => $brandId,
-                    'target_month' => $month->toDateString(),
-                    'target_type' => $type,
-                    'user_id' => null,
-                ],
-                [
-                    'amount' => $amount,
-                ]
-            );
+        SalesTarget::updateOrCreate(
+            [
+                'brand_id' => $brandId,
+                'target_month' => $month->toDateString(),
+                'target_type' => 'global',
+                'user_id' => null,
+                'team_id' => null,
+            ],
+            [
+                'amount' => $validated['global_target'] ?? 0,
+            ]
+        );
+
+        $teamTargets = collect($validated['team_targets'] ?? [])
+            ->mapWithKeys(fn ($amount, $teamId) => [(int) $teamId => (float) $amount]);
+
+        if ($teamTargets->isNotEmpty()) {
+            $allowedTeamIds = Team::query()
+                ->whereIn('id', $teamTargets->keys())
+                ->where('department', 'Sales')
+                ->where('show_on_sales_dashboard', true)
+                ->whereHas('brand', fn ($query) => $query->where('is_sales_brand', true))
+                ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
+                ->when(! $brandId && ! BrandScope::canAccessAllBrands($request->user()), fn ($query) => BrandScope::apply($query, $request->user()))
+                ->pluck('id');
+
+            foreach ($teamTargets->only($allowedTeamIds->all()) as $teamId => $amount) {
+                $team = Team::query()->find($teamId);
+
+                SalesTarget::updateOrCreate(
+                    [
+                        'brand_id' => $team?->brand_id,
+                        'target_month' => $month->toDateString(),
+                        'target_type' => 'team',
+                        'user_id' => null,
+                        'team_id' => $teamId,
+                    ],
+                    [
+                        'amount' => $amount,
+                    ]
+                );
+            }
         }
 
         return redirect()

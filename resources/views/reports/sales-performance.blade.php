@@ -11,6 +11,7 @@
         $isAdmin = auth()->user()?->role?->name === 'Admin';
         $canViewAllCommissionNumbers = $canViewAllCommissionNumbers ?? false;
         $teamRows = $teamRows ?? collect();
+        $targetTeamRows = $targetTeamRows ?? collect();
         $summaryCards = [
             ['label' => 'Global MTD', 'value' => $summary['global']['mtd'], 'hint' => 'All credited sales this month', 'tone' => 'emerald'],
             ['label' => 'Remaining Target MTD', 'value' => $summary['global']['remaining'], 'hint' => 'Remaining against global target', 'tone' => 'rose'],
@@ -293,7 +294,7 @@
                     <div>
                         <h2 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Manage Monthly Targets</h2>
                         <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
-                            Set dashboard targets here. Agent target, commission profile, markup percentage, threshold, and exemption are managed in each user's commission profile.
+                            Set global and Sales team targets here. Individual agent targets remain managed in each user's commission profile.
                         </p>
                         <p class="mt-2 text-xs font-bold uppercase tracking-wide text-[var(--brand-primary)] dark:text-[var(--brand-accent)]">
                             {{ $brandContextName ?? 'All Brands' }}
@@ -317,67 +318,50 @@
                         <input type="hidden" name="brand_id" value="{{ $brandId }}">
                     @endif
 
-                    <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                         <label class="block">
                             <span class="text-sm font-semibold text-slate-700 dark:text-zinc-200">Global Target</span>
                             <input type="text" inputmode="decimal" name="global_target" value="{{ number_format((float) $summary['global']['target'], 2) }}" autocomplete="off" data-money-input
                                    x-bind:disabled="!editingTargets"
                                    class="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-right text-sm font-semibold shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:disabled:bg-zinc-900 dark:disabled:text-zinc-300">
                         </label>
-                        <label class="block">
-                            <span class="text-sm font-semibold text-slate-700 dark:text-zinc-200">Remote Target</span>
-                            <input type="text" inputmode="decimal" name="remote_target" value="{{ number_format((float) $summary['remote']['target'], 2) }}" autocomplete="off" data-money-input
-                                   x-bind:disabled="!editingTargets"
-                                   class="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-right text-sm font-semibold shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:disabled:bg-zinc-900 dark:disabled:text-zinc-300">
-                        </label>
-                        <label class="block">
-                            <span class="text-sm font-semibold text-slate-700 dark:text-zinc-200">Site Target</span>
-                            <input type="text" inputmode="decimal" name="site_target" value="{{ number_format((float) $summary['site']['target'], 2) }}" autocomplete="off" data-money-input
-                                   x-bind:disabled="!editingTargets"
-                                   class="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-right text-sm font-semibold shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:disabled:bg-zinc-900 dark:disabled:text-zinc-300">
-                        </label>
                     </div>
 
-                    <div class="overflow-hidden rounded-xl border border-slate-200 dark:border-zinc-800">
-                        <table class="min-w-[780px] divide-y divide-slate-200 text-sm dark:divide-zinc-800">
-                            <thead class="bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500 dark:bg-zinc-950 dark:text-zinc-400">
-                                <tr>
-                                    <th class="px-5 py-3">Agent</th>
-                                    <th class="px-5 py-3">Work Arrangement</th>
-                                    <th class="px-5 py-3">Agent Target</th>
-                                    <th class="px-5 py-3">Commission Scheme</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-slate-200 dark:divide-zinc-800">
-                                @foreach ($agentRows as $row)
+                    @if ($targetTeamRows->isNotEmpty())
+                        <div class="overflow-hidden rounded-xl border border-slate-200 dark:border-zinc-800">
+                            <table class="min-w-[760px] divide-y divide-slate-200 text-sm dark:divide-zinc-800">
+                                <thead class="bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500 dark:bg-zinc-950 dark:text-zinc-400">
                                     <tr>
-                                        <td class="px-5 py-4 font-semibold text-slate-900 dark:text-zinc-100">
-                                            {{ trim(($row['agent']->first_name ?? '') . ' ' . ($row['agent']->last_name ?? '')) }}
-                                        </td>
-                                        <td class="px-5 py-4">
-                                            <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 dark:bg-zinc-800 dark:text-zinc-300">
-                                                {{ match($row['work_type']) {
-                                                    'remote' => 'Remote',
-                                                    'hybrid' => 'Hybrid',
-                                                    'site' => 'On-site',
-                                                    default => 'Not set',
-                                                } }}
-                                            </span>
-                                            <p class="mt-1 text-xs text-slate-500 dark:text-zinc-500">Set in User Record</p>
-                                        </td>
-                                        <td class="px-5 py-4 font-bold text-slate-900 dark:text-zinc-100">
-                                            {{ $money($row['target']) }}
-                                            <p class="mt-1 text-xs font-medium text-slate-500 dark:text-zinc-400">Managed in User Commission Profile</p>
-                                        </td>
-                                        <td class="px-5 py-4">
-                                            <span class="font-semibold text-slate-900 dark:text-zinc-100">{{ $row['commission_profile_name'] ?? 'Default Service Tiers' }}</span>
-                                            <p class="mt-1 text-xs text-slate-500 dark:text-zinc-400">Managed in User Commission Profile</p>
-                                        </td>
+                                        <th class="px-5 py-3">Sales Team</th>
+                                        <th class="px-5 py-3">Brand</th>
+                                        <th class="px-5 py-3">Team Target</th>
                                     </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
+                                </thead>
+                                <tbody class="divide-y divide-slate-200 dark:divide-zinc-800">
+                                    @foreach ($targetTeamRows as $team)
+                                        <tr>
+                                            <td class="px-5 py-4 font-semibold text-slate-900 dark:text-zinc-100">{{ $team['name'] }}</td>
+                                            <td class="px-5 py-4 text-slate-500 dark:text-zinc-400">{{ $team['brand'] ?? '-' }}</td>
+                                            <td class="px-5 py-4">
+                                                <input type="text"
+                                                       inputmode="decimal"
+                                                       name="team_targets[{{ $team['id'] }}]"
+                                                       value="{{ number_format((float) $team['target'], 2) }}"
+                                                       autocomplete="off"
+                                                       data-money-input
+                                                       x-bind:disabled="!editingTargets"
+                                                       class="h-12 w-full max-w-48 rounded-xl border border-slate-300 bg-white px-4 text-right text-sm font-semibold shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:disabled:bg-zinc-900 dark:disabled:text-zinc-300">
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @else
+                        <div class="rounded-xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">
+                            No Sales teams are marked for Sales Dashboard MTD yet.
+                        </div>
+                    @endif
 
                     <div x-show="editingTargets" x-cloak class="flex justify-end gap-3">
                         <button type="button"
