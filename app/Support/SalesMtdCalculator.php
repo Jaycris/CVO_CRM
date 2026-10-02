@@ -193,13 +193,21 @@ class SalesMtdCalculator
 
     private static function creditRow(SalesActivity $activity, ?User $agent, float $creditAmount, string $shareRole, ?array $activitySplit = null): array
     {
+        $isChargeback = $activity->activity_type === 'chargeback';
         $saleAmount = max((float) $activity->amount, 0);
-        $shareRatio = $saleAmount > 0 ? min($creditAmount / $saleAmount, 1) : 0;
+        $absoluteSaleAmount = max(abs((float) $activity->amount), 0);
+        $shareRatio = $absoluteSaleAmount > 0 ? min(abs($creditAmount) / $absoluteSaleAmount, 1) : 0;
         $serviceBase = (float) ($activitySplit['service_amount'] ?? $saleAmount);
         $markup = (float) ($activitySplit['markup_amount'] ?? 0);
 
-        $serviceAmount = round($serviceBase * $shareRatio, 2);
-        $markupAmount = round($markup * $shareRatio, 2);
+        if ($isChargeback) {
+            $serviceBase = $absoluteSaleAmount;
+            $markup = 0;
+        }
+
+        $sign = $isChargeback ? -1 : 1;
+        $serviceAmount = round($serviceBase * $shareRatio * $sign, 2);
+        $markupAmount = round($markup * $shareRatio * $sign, 2);
         $serviceRate = self::SERVICE_RATE_LOW;
         $markupRate = (float) ($agent?->markup_commission_percent ?? 50);
         $profile = self::commissionProfilesEnabled() ? $agent?->commissionProfile : null;
@@ -210,7 +218,7 @@ class SalesMtdCalculator
             'agent_id' => $agent?->id ?? $activity->agent_id,
             'share_role' => $shareRole,
             'share_percent' => round($shareRatio * 100, 2),
-            'sale_amount' => $saleAmount,
+            'sale_amount' => $isChargeback ? -$absoluteSaleAmount : $saleAmount,
             'amount' => $creditAmount,
             'credit_amount' => $creditAmount,
             'payment_method' => $activity->payment_method,
@@ -387,13 +395,20 @@ class SalesMtdCalculator
                 return $agentRows->map(function (array $row) use (&$remainingThreshold, $serviceRate, $exchangeRate) {
                     $serviceAmount = (float) $row['service_amount'];
                     $markupAmount = (float) $row['markup_amount'];
-                    $serviceThresholdApplied = min($serviceAmount, $remainingThreshold);
-                    $remainingThreshold = max($remainingThreshold - $serviceThresholdApplied, 0);
-                    $markupThresholdApplied = min($markupAmount, $remainingThreshold);
-                    $remainingThreshold = max($remainingThreshold - $markupThresholdApplied, 0);
+                    if ($serviceAmount < 0 || $markupAmount < 0) {
+                        $serviceThresholdApplied = 0;
+                        $markupThresholdApplied = 0;
+                        $commissionableServiceAmount = $serviceAmount;
+                        $commissionableMarkupAmount = $markupAmount;
+                    } else {
+                        $serviceThresholdApplied = min($serviceAmount, $remainingThreshold);
+                        $remainingThreshold = max($remainingThreshold - $serviceThresholdApplied, 0);
+                        $markupThresholdApplied = min($markupAmount, $remainingThreshold);
+                        $remainingThreshold = max($remainingThreshold - $markupThresholdApplied, 0);
 
-                    $commissionableServiceAmount = max($serviceAmount - $serviceThresholdApplied, 0);
-                    $commissionableMarkupAmount = max($markupAmount - $markupThresholdApplied, 0);
+                        $commissionableServiceAmount = max($serviceAmount - $serviceThresholdApplied, 0);
+                        $commissionableMarkupAmount = max($markupAmount - $markupThresholdApplied, 0);
+                    }
 
                     $markupRate = (float) $row['markup_commission_percent'];
                     $serviceCommission = round($commissionableServiceAmount * ($serviceRate / 100), 2);

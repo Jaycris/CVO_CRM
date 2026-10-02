@@ -520,6 +520,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/sold-mined', [LeadSaleCreditController::class, 'soldMined'])->name('sold-mined');
         Route::get('/verified-sold', [LeadSaleCreditController::class, 'verifiedSold'])->name('verified-sold');
         Route::get('/sales-activity', [SalesActivityController::class, 'index'])->name('sales-activity.index');
+        Route::post('/sales-activity/chargebacks', [SalesActivityController::class, 'storeChargeback'])->name('sales-activity.chargebacks.store');
         Route::get('/lead-generation-activity', [LeadGenerationActivityController::class, 'index'])->name('lead-generation-activity.index');
         Route::get('/sales-performance', [SalesPerformanceController::class, 'index'])->name('sales-performance.index');
         Route::put('/sales-performance/targets', [SalesPerformanceController::class, 'updateTargets'])->name('sales-performance.targets');

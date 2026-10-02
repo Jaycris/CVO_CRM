@@ -29,6 +29,8 @@ class SalesActivity extends Model
         'payment_method',
         'payment_status',
         'sold_date',
+        'original_sold_date',
+        'chargeback_reason',
     ];
 
     protected function casts(): array
@@ -39,6 +41,7 @@ class SalesActivity extends Model
             'frankie_credit_amount' => 'decimal:2',
             'frankie_commission_percent' => 'decimal:2',
             'sold_date' => 'date',
+            'original_sold_date' => 'date',
         ];
     }
 
