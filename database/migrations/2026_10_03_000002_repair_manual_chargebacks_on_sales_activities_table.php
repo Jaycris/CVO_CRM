@@ -50,7 +50,9 @@ return new class extends Migration
         }
 
         if (DB::connection()->getDriverName() === 'mysql') {
+            $this->dropSalesPaymentForeignKeyIfExists();
             DB::statement('ALTER TABLE sales_activities MODIFY sales_payment_id BIGINT UNSIGNED NULL');
+            $this->addSalesPaymentForeignKeyIfMissing();
 
             return;
         }
@@ -58,5 +60,44 @@ return new class extends Migration
         Schema::table('sales_activities', function (Blueprint $table) {
             $table->unsignedBigInteger('sales_payment_id')->nullable()->change();
         });
+    }
+
+    private function dropSalesPaymentForeignKeyIfExists(): void
+    {
+        $constraint = DB::selectOne(
+            "SELECT CONSTRAINT_NAME AS name
+             FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'sales_activities'
+               AND COLUMN_NAME = 'sales_payment_id'
+               AND REFERENCED_TABLE_NAME IS NOT NULL
+             LIMIT 1"
+        );
+
+        if ($constraint?->name) {
+            DB::statement(sprintf('ALTER TABLE sales_activities DROP FOREIGN KEY `%s`', str_replace('`', '``', $constraint->name)));
+        }
+    }
+
+    private function addSalesPaymentForeignKeyIfMissing(): void
+    {
+        $constraint = DB::selectOne(
+            "SELECT CONSTRAINT_NAME AS name
+             FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'sales_activities'
+               AND COLUMN_NAME = 'sales_payment_id'
+               AND REFERENCED_TABLE_NAME IS NOT NULL
+             LIMIT 1"
+        );
+
+        if (! $constraint?->name) {
+            DB::statement(
+                'ALTER TABLE sales_activities
+                 ADD CONSTRAINT sales_activities_sales_payment_id_foreign
+                 FOREIGN KEY (sales_payment_id) REFERENCES sales_payments(id)
+                 ON DELETE CASCADE'
+            );
+        }
     }
 };
