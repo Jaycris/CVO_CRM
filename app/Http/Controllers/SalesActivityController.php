@@ -62,7 +62,7 @@ class SalesActivityController extends Controller
             'search' => $search,
             'canManageChargebacks' => $canManageChargebacks,
             'brands' => $canManageChargebacks
-                ? BrandScope::apply(Brand::query(), $request->user())->where('is_sales_brand', true)->orderBy('imprint_name')->get()
+                ? $this->accessibleSalesBrands($request)
                 : collect(),
             'agents' => $canManageChargebacks
                 ? BrandScope::apply(User::query()->with('brand'), $request->user())
@@ -144,5 +144,17 @@ class SalesActivityController extends Controller
     {
         return BrandScope::canAccessAllBrands($request->user())
             || (int) $brandId === (int) BrandScope::userBrandId($request->user());
+    }
+
+    private function accessibleSalesBrands(Request $request)
+    {
+        return Brand::query()
+            ->when(
+                ! BrandScope::canAccessAllBrands($request->user()),
+                fn ($query) => $query->whereKey(BrandScope::userBrandId($request->user()))
+            )
+            ->where('is_sales_brand', true)
+            ->orderBy('imprint_name')
+            ->get();
     }
 }
