@@ -222,22 +222,7 @@ class ProductionProjectController extends Controller
             'canDeleteProjects' => $this->canDelete($request),
             'canSelectProjects' => $this->canSelectProjects($request),
             'showAgentColumn' => $this->showAgentColumn($request),
-            'productionStaff' => User::with('role')
-                ->where('department', 'Production')
-                ->whereNull('suspended_at')
-                ->when(! BrandScope::canAccessAllBrands($request->user()), function ($query) use ($request) {
-                    $query->where(function ($query) use ($request) {
-                        $query->where('brand_id', $request->user()->brand_id)
-                            ->orWhere('brand_id', BrandScope::parentBrandId());
-                    });
-                })
-                ->whereHas('role', fn ($query) => $query->whereIn('name', [
-                    'Fulfillment Officer',
-                    'Web Designer',
-                    'Video Editor',
-                    'Writer',
-                    'Graphic Designer',
-                ]))
+            'productionStaff' => $this->productionAssigneeQuery($request)
                 ->orderBy('first_name')
                 ->orderBy('last_name')
                 ->get(),
@@ -947,24 +932,51 @@ class ProductionProjectController extends Controller
                 ->all();
         }
 
-        return User::query()
+        return $this->productionAssigneeQuery($request)
             ->whereKey($userId)
-            ->where('department', 'Production')
-            ->whereNull('suspended_at')
             ->when($allowedBrandIds !== [] && ! BrandScope::canAccessAllBrands($request?->user()), function ($query) use ($allowedBrandIds) {
                 $query->where(function ($query) use ($allowedBrandIds) {
                     $query->whereIn('brand_id', $allowedBrandIds)
                         ->orWhere('brand_id', BrandScope::parentBrandId());
                 });
             })
-            ->whereHas('role', fn ($query) => $query->whereIn('name', [
-                'Fulfillment Officer',
-                'Web Designer',
-                'Video Editor',
-                'Writer',
-                'Graphic Designer',
-            ]))
             ->exists();
+    }
+
+    private function productionAssigneeQuery(?Request $request)
+    {
+        return User::with('role')
+            ->whereNull('suspended_at')
+            ->when(! BrandScope::canAccessAllBrands($request?->user()), function ($query) use ($request) {
+                $query->where(function ($query) use ($request) {
+                    $query->where('brand_id', $request?->user()?->brand_id)
+                        ->orWhere('brand_id', BrandScope::parentBrandId());
+                });
+            })
+            ->where(function ($query) {
+                $query->where('department', 'Production')
+                    ->orWhereHas('role', fn ($roleQuery) => $roleQuery->whereIn('name', $this->productionLeadershipAssigneeRoles()));
+            })
+            ->whereHas('role', fn ($query) => $query->whereIn('name', $this->productionTaskAssigneeRoles()));
+    }
+
+    private function productionTaskAssigneeRoles(): array
+    {
+        return [
+            'Admin',
+            'Fulfillment Officer',
+            'Web Designer',
+            'Video Editor',
+            'Writer',
+            'Graphic Designer',
+        ];
+    }
+
+    private function productionLeadershipAssigneeRoles(): array
+    {
+        return [
+            'Admin',
+        ];
     }
 
     private function canViewOwnProductionTasks(Request $request): bool

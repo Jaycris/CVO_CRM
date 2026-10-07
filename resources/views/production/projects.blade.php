@@ -499,7 +499,7 @@
                     <div>
                         <h3 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Create Production Task</h3>
                         <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
-                            Group service inclusions and assign the work to one Production member.
+                            Group service inclusions and assign the work to one eligible assignee.
                         </p>
                     </div>
                     <button type="button" x-on:click="assignOpen = false" class="text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-zinc-100">
@@ -521,7 +521,7 @@
                         <select name="assigned_to"
                                 required
                                 class="mt-2 w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
-                            <option value="">Select production staff</option>
+                            <option value="">Select assignee</option>
                             @foreach ($productionStaff as $staff)
                                 <option value="{{ $staff->id }}">{{ $staff->first_name }} {{ $staff->last_name }} - {{ $staff->role?->name }}</option>
                             @endforeach
