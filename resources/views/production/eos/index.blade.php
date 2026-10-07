@@ -103,7 +103,8 @@
             </div>
         @endif
 
-        <div class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
+        <div class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800"
+             x-data="{ activeReport: null }">
             <div class="border-b border-slate-200 px-6 py-4 dark:border-zinc-800">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div>
@@ -132,62 +133,74 @@
                 </div>
             </div>
 
-            <div class="divide-y divide-slate-200 dark:divide-zinc-800">
-                @forelse ($reports as $report)
-                    <article class="p-6">
-                        <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                            <div>
-                                <h3 class="text-lg font-bold text-slate-900 dark:text-zinc-100">
-                                    {{ $report->user?->first_name }} {{ $report->user?->last_name }}
-                                </h3>
-                                <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
-                                    {{ $report->user?->brand?->imprint_name ?? 'No brand' }} · {{ $report->shift_date?->format('M d, Y') }} · Submitted {{ $report->submitted_at?->format('M d, Y h:i A') }}
-                                </p>
-                                @if ($report->reportToUser)
-                                    <p class="mt-1 text-xs font-semibold uppercase text-slate-400 dark:text-zinc-500">
-                                        Reports to {{ $report->reportToUser->first_name }} {{ $report->reportToUser->last_name }}
-                                    </p>
-                                @elseif ($report->report_to_hris_employee_id)
-                                    <p class="mt-1 text-xs font-semibold uppercase text-slate-400 dark:text-zinc-500">
-                                        Reports to HRIS ID {{ $report->report_to_hris_employee_id }}
-                                    </p>
-                                @endif
-                            </div>
-                        </div>
-
-                        <div class="mt-5 grid gap-4 lg:grid-cols-2">
-                            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
-                                <p class="text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Work Done</p>
-                                <p class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700 dark:text-zinc-300">{{ $report->work_done }}</p>
-                            </div>
-
-                            <div class="space-y-4">
-                                @if ($report->pending_work)
-                                    <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-                                        <p class="text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Pending Work</p>
-                                        <p class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700 dark:text-zinc-300">{{ $report->pending_work }}</p>
-                                    </div>
-                                @endif
-                                @if ($report->blockers)
-                                    <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-400/30 dark:bg-amber-400/10">
-                                        <p class="text-xs font-bold uppercase text-amber-700 dark:text-amber-200">Blockers / Concerns</p>
-                                        <p class="mt-2 whitespace-pre-line text-sm leading-6 text-amber-900 dark:text-amber-100">{{ $report->blockers }}</p>
-                                    </div>
-                                @endif
-                                @if ($report->notes)
-                                    <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-                                        <p class="text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Notes</p>
-                                        <p class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700 dark:text-zinc-300">{{ $report->notes }}</p>
-                                    </div>
-                                @endif
-                            </div>
-                        </div>
-                    </article>
-                @empty
-                    <div class="px-6 py-12 text-center text-sm text-slate-500 dark:text-zinc-400">
-                        No End of Shift reports yet.
-                    </div>
-                @endforelse
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-zinc-800">
+                    <thead class="bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500 dark:bg-zinc-900/80 dark:text-zinc-400">
+                        <tr>
+                            <th class="px-6 py-4">Staff</th>
+                            <th class="px-6 py-4">Brand</th>
+                            <th class="px-6 py-4">Shift Date</th>
+                            <th class="px-6 py-4">Submitted</th>
+                            <th class="px-6 py-4">Reports To</th>
+                            <th class="px-6 py-4 text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 dark:divide-zinc-800">
+                        @forelse ($reports as $report)
+                            @php
+                                $staffName = trim(($report->user?->first_name ?? '') . ' ' . ($report->user?->last_name ?? '')) ?: 'Unknown user';
+                                $reportsTo = $report->reportToUser
+                                    ? trim(($report->reportToUser->first_name ?? '') . ' ' . ($report->reportToUser->last_name ?? ''))
+                                    : ($report->report_to_hris_employee_id ? 'HRIS ID ' . $report->report_to_hris_employee_id : 'Not set');
+                            @endphp
+                            <tr class="hover:bg-slate-50/70 dark:hover:bg-zinc-800/60">
+                                <td class="px-6 py-4">
+                                    <p class="font-semibold text-slate-900 dark:text-zinc-100">{{ $staffName }}</p>
+                                </td>
+                                <td class="px-6 py-4 text-slate-600 dark:text-zinc-300">
+                                    {{ $report->user?->brand?->imprint_name ?? 'No brand' }}
+                                </td>
+                                <td class="px-6 py-4 font-medium text-slate-900 dark:text-zinc-100">
+                                    {{ $report->shift_date?->format('M d, Y') ?? '-' }}
+                                </td>
+                                <td class="px-6 py-4 text-slate-600 dark:text-zinc-300">
+                                    {{ $report->submitted_at?->format('M d, Y h:i A') ?? '-' }}
+                                </td>
+                                <td class="px-6 py-4 text-slate-600 dark:text-zinc-300">
+                                    {{ $reportsTo }}
+                                </td>
+                                <td class="px-6 py-4 text-right">
+                                    <button type="button"
+                                            x-on:click="activeReport = @js([
+                                                'staff' => $staffName,
+                                                'brand' => $report->user?->brand?->imprint_name ?? 'No brand',
+                                                'shiftDate' => $report->shift_date?->format('M d, Y') ?? '-',
+                                                'submittedAt' => $report->submitted_at?->format('M d, Y h:i A') ?? '-',
+                                                'reportsTo' => $reportsTo,
+                                                'workDone' => $report->work_done,
+                                                'pendingWork' => $report->pending_work,
+                                                'blockers' => $report->blockers,
+                                                'notes' => $report->notes,
+                                            ])"
+                                            class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 hover:text-[var(--brand-primary)] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                                            title="View report"
+                                            aria-label="View report">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12s3.75-6.75 9.75-6.75S21.75 12 21.75 12 18 18.75 12 18.75 2.25 12 2.25 12Z" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                                        </svg>
+                                    </button>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="6" class="px-6 py-12 text-center text-sm text-slate-500 dark:text-zinc-400">
+                                    No End of Shift reports yet.
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
             </div>
 
             @if ($reports->hasPages())
@@ -195,6 +208,66 @@
                     {{ $reports->links() }}
                 </div>
             @endif
+
+            <div x-show="activeReport"
+                 x-cloak
+                 x-transition.opacity
+                 x-on:keydown.escape.window="activeReport = null"
+                 class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+                <div x-show="activeReport"
+                     x-transition
+                     x-on:click.outside="activeReport = null"
+                     class="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900">
+                    <div class="shrink-0 border-b border-slate-200 p-6 dark:border-zinc-800">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <h3 class="text-lg font-bold text-slate-900 dark:text-zinc-100" x-text="activeReport?.staff"></h3>
+                                <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
+                                    <span x-text="activeReport?.brand"></span>
+                                    <span> · </span>
+                                    <span x-text="activeReport?.shiftDate"></span>
+                                    <span> · Submitted </span>
+                                    <span x-text="activeReport?.submittedAt"></span>
+                                </p>
+                                <p class="mt-1 text-xs font-semibold uppercase text-slate-400 dark:text-zinc-500">
+                                    Reports to <span x-text="activeReport?.reportsTo"></span>
+                                </p>
+                            </div>
+
+                            <button type="button"
+                                    x-on:click="activeReport = null"
+                                    class="text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                                    aria-label="Close report">
+                                &times;
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
+                        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
+                            <p class="text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Work Done</p>
+                            <p class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700 dark:text-zinc-300" x-text="activeReport?.workDone || '-'"></p>
+                        </div>
+
+                        <div class="grid gap-4 lg:grid-cols-2">
+                            <div x-show="activeReport?.pendingWork" class="rounded-xl border border-slate-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                                <p class="text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Pending Work</p>
+                                <p class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700 dark:text-zinc-300" x-text="activeReport?.pendingWork"></p>
+                            </div>
+
+                            <div x-show="activeReport?.blockers" class="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-400/30 dark:bg-amber-400/10">
+                                <p class="text-xs font-bold uppercase text-amber-700 dark:text-amber-200">Blockers / Concerns</p>
+                                <p class="mt-2 whitespace-pre-line text-sm leading-6 text-amber-900 dark:text-amber-100" x-text="activeReport?.blockers"></p>
+                            </div>
+
+                            <div x-show="activeReport?.notes" class="rounded-xl border border-slate-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 lg:col-span-2">
+                                <p class="text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Notes</p>
+                                <p class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700 dark:text-zinc-300" x-text="activeReport?.notes"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </x-app-layout>
