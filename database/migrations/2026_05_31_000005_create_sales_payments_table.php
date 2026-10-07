@@ -11,7 +11,7 @@ return new class extends Migration
     {
         Schema::create('sales_payments', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('sales_endorsement_id')->unique()->constrained('sales_endorsements')->cascadeOnDelete();
+            $table->foreignId('sales_endorsement_id')->constrained('sales_endorsements')->cascadeOnDelete();
             $table->string('payment_method');
             $table->date('sold_date');
             $table->string('status');
