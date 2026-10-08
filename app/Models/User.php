@@ -60,6 +60,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->belongsTo(Brand::class);
     }
 
+    public function emailAccounts()
+    {
+        return $this->hasMany(EmailAccount::class);
+    }
+
     public function team()
     {
         return $this->belongsTo(Team::class);

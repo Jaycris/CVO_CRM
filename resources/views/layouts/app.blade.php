@@ -506,6 +506,14 @@
                         Notes
                     </a>
 
+                    <a href="{{ route('email.index') }}" class="{{ $sidebarLink(request()->routeIs('email.*')) }}">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ $sidebarIcon(request()->routeIs('email.*')) }}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 6.75h15A2.25 2.25 0 0 1 21.75 9v7.5A2.25 2.25 0 0 1 19.5 18.75h-15A2.25 2.25 0 0 1 2.25 16.5V9A2.25 2.25 0 0 1 4.5 6.75Z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m3 8.25 7.8 5.85a2 2 0 0 0 2.4 0L21 8.25" />
+                        </svg>
+                        Email
+                    </a>
+
                     <a href="{{ route('calendar.index') }}" class="{{ $sidebarLink(request()->routeIs('calendar.*')) }}">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ $sidebarIcon(request()->routeIs('calendar.*')) }}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3.75v2.5m10.5-2.5v2.5M4.5 9.25h15" />

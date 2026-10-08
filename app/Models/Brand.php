@@ -34,4 +34,9 @@ class Brand extends Model
     {
         return $this->hasMany(User::class);
     }
+
+    public function emailAccounts()
+    {
+        return $this->hasMany(EmailAccount::class);
+    }
 }
