@@ -111,38 +111,60 @@
                 this.fields = this.fields.filter((field) => field.id !== this.selectedId);
                 this.selectedId = null;
             },
+            eventPoint(event) {
+                const touch = event.touches?.[0] || event.changedTouches?.[0];
+
+                return {
+                    clientX: touch ? touch.clientX : event.clientX,
+                    clientY: touch ? touch.clientY : event.clientY,
+                };
+            },
             startDrag(event, field, pageNumber = null) {
+                event.preventDefault();
+                event.stopPropagation();
                 if (this.resizing) return;
                 if (this.dragging) return;
                 const page = event.currentTarget.closest('[data-page-surface]') || this.$refs.fieldPage;
                 if (! page) return;
                 const rect = page.getBoundingClientRect();
+                const point = this.eventPoint(event);
                 field.page = Number(pageNumber || page.dataset.page || this.currentPage || 1);
                 this.selectedId = field.id;
                 this.$el.__dragPageElement = page;
                 this.dragging = {
                     id: field.id,
-                    offsetX: event.clientX - (rect.left + (Number(field.x) / 100) * rect.width),
-                    offsetY: event.clientY - (rect.top + (Number(field.y) / 100) * rect.height),
+                    offsetX: point.clientX - (rect.left + (Number(field.x) / 100) * rect.width),
+                    offsetY: point.clientY - (rect.top + (Number(field.y) / 100) * rect.height),
                 };
+                document.body.style.cursor = 'move';
+                document.body.style.userSelect = 'none';
                 if (event.pointerId !== undefined) {
-                    event.currentTarget.setPointerCapture?.(event.pointerId);
+                    try {
+                        event.currentTarget.setPointerCapture?.(event.pointerId);
+                    } catch (error) {
+                        // Some browsers release pointer capture when the pointer leaves an embedded surface.
+                    }
                 }
                 this.$el.__dragMoveHandler = (moveEvent) => this.drag(moveEvent);
                 this.$el.__dragStopHandler = () => this.stopDrag();
                 window.addEventListener('pointermove', this.$el.__dragMoveHandler);
                 window.addEventListener('mousemove', this.$el.__dragMoveHandler);
+                window.addEventListener('touchmove', this.$el.__dragMoveHandler, { passive: false });
                 window.addEventListener('pointerup', this.$el.__dragStopHandler, { once: true });
                 window.addEventListener('mouseup', this.$el.__dragStopHandler, { once: true });
+                window.addEventListener('touchend', this.$el.__dragStopHandler, { once: true });
+                window.addEventListener('touchcancel', this.$el.__dragStopHandler, { once: true });
             },
             drag(event) {
                 if (! this.dragging) return;
+                event.preventDefault();
                 const page = this.$el.__dragPageElement || this.$refs.fieldPage;
                 const field = this.fields.find((item) => item.id === this.dragging.id);
                 if (! page || ! field) return;
                 const rect = page.getBoundingClientRect();
-                const x = ((event.clientX - this.dragging.offsetX - rect.left) / rect.width) * 100;
-                const y = ((event.clientY - this.dragging.offsetY - rect.top) / rect.height) * 100;
+                const point = this.eventPoint(event);
+                const x = ((point.clientX - this.dragging.offsetX - rect.left) / rect.width) * 100;
+                const y = ((point.clientY - this.dragging.offsetY - rect.top) / rect.height) * 100;
                 field.x = Math.max(0, Math.min(100 - Number(field.w), Number(x.toFixed(2))));
                 field.y = Math.max(0, Math.min(100 - Number(field.h), Number(y.toFixed(2))));
             },
@@ -150,22 +172,28 @@
                 if (this.$el.__dragMoveHandler) {
                     window.removeEventListener('pointermove', this.$el.__dragMoveHandler);
                     window.removeEventListener('mousemove', this.$el.__dragMoveHandler);
+                    window.removeEventListener('touchmove', this.$el.__dragMoveHandler);
                 }
                 this.dragging = null;
                 this.$el.__dragPageElement = null;
                 this.$el.__dragMoveHandler = null;
                 this.$el.__dragStopHandler = null;
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
             },
             startResize(event, field) {
+                event.preventDefault();
+                event.stopPropagation();
                 const page = event.currentTarget.closest('[data-page-surface]') || this.$refs.fieldPage;
                 if (! page) return;
                 const rect = page.getBoundingClientRect();
+                const point = this.eventPoint(event);
                 this.selectedId = field.id;
                 this.$el.__resizePageElement = page;
                 this.resizing = {
                     id: field.id,
-                    startX: event.clientX,
-                    startY: event.clientY,
+                    startX: point.clientX,
+                    startY: point.clientY,
                     startW: Number(field.w),
                     startH: Number(field.h),
                     pageW: rect.width,
@@ -177,10 +205,12 @@
             },
             resize(event) {
                 if (! this.resizing) return;
+                event.preventDefault();
                 const field = this.fields.find((item) => item.id === this.resizing.id);
                 if (! field) return;
-                const deltaW = ((event.clientX - this.resizing.startX) / this.resizing.pageW) * 100;
-                const deltaH = ((event.clientY - this.resizing.startY) / this.resizing.pageH) * 100;
+                const point = this.eventPoint(event);
+                const deltaW = ((point.clientX - this.resizing.startX) / this.resizing.pageW) * 100;
+                const deltaH = ((point.clientY - this.resizing.startY) / this.resizing.pageH) * 100;
                 field.w = Math.max(6, Math.min(100 - Number(field.x), Number((this.resizing.startW + deltaW).toFixed(2))));
                 field.h = Math.max(4, Math.min(100 - Number(field.y), Number((this.resizing.startH + deltaH).toFixed(2))));
             },
@@ -305,7 +335,10 @@
         x-on:pointermove.window="drag($event); resize($event)"
         x-on:pointerup.window="stopDrag(); stopResize()"
         x-on:mousemove.window="drag($event); resize($event)"
-        x-on:mouseup.window="stopDrag(); stopResize()">
+        x-on:mouseup.window="stopDrag(); stopResize()"
+        x-on:touchmove.window="drag($event); resize($event)"
+        x-on:touchend.window="stopDrag(); stopResize()"
+        x-on:touchcancel.window="stopDrag(); stopResize()">
         <div class="flex flex-wrap items-center justify-between gap-4">
             <div>
                 <p class="text-sm font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Edit & Fill</p>
@@ -389,6 +422,8 @@
                                                             draggable="false"
                                                             x-on:dragstart.prevent
                                                             x-on:pointerdown.prevent="startDrag($event, field, pageNumber)"
+                                                            x-on:mousedown.prevent="startDrag($event, field, pageNumber)"
+                                                            x-on:touchstart.prevent="startDrag($event, field, pageNumber)"
                                                             x-bind:style="`left:${field.x}%; top:${field.y}%; width:${field.w}%; height:${field.h}%; font-size:${field.fontSize || 14}px;`"
                                                             x-bind:class="selectedId === field.id ? 'border-blue-600 bg-blue-400/50' : 'border-blue-500 bg-blue-300/40'"
                                                             class="pointer-events-auto absolute z-10 flex cursor-move select-none items-center justify-center overflow-hidden border-2 border-dashed px-2 font-bold leading-none text-slate-950 [touch-action:none]">
@@ -396,6 +431,7 @@
                                                         <span x-show="selectedId === field.id"
                                                               x-on:pointerdown.stop.prevent="startResize($event, field)"
                                                               x-on:mousedown.stop.prevent="startResize($event, field)"
+                                                              x-on:touchstart.stop.prevent="startResize($event, field)"
                                                               class="absolute bottom-[-0.45rem] right-[-0.45rem] h-4 w-4 cursor-se-resize rounded-full border-2 border-white bg-blue-600 shadow"></span>
                                                     </button>
                                                 </template>
@@ -413,6 +449,8 @@
                                                 draggable="false"
                                                 x-on:dragstart.prevent
                                                 x-on:pointerdown.prevent="startDrag($event, field)"
+                                                x-on:mousedown.prevent="startDrag($event, field)"
+                                                x-on:touchstart.prevent="startDrag($event, field)"
                                                 x-bind:style="`left:${field.x}%; top:${field.y}%; width:${field.w}%; height:${field.h}%; font-size:${field.fontSize || 14}px;`"
                                                 x-bind:class="selectedId === field.id ? 'border-blue-600 bg-blue-400/50' : 'border-blue-500 bg-blue-300/40'"
                                                 class="pointer-events-auto absolute z-10 flex cursor-move select-none items-center justify-center overflow-hidden border-2 border-dashed px-2 font-bold leading-none text-slate-950 [touch-action:none]">
@@ -420,6 +458,7 @@
                                             <span x-show="selectedId === field.id"
                                                   x-on:pointerdown.stop.prevent="startResize($event, field)"
                                                   x-on:mousedown.stop.prevent="startResize($event, field)"
+                                                  x-on:touchstart.stop.prevent="startResize($event, field)"
                                                   class="absolute bottom-[-0.45rem] right-[-0.45rem] h-4 w-4 cursor-se-resize rounded-full border-2 border-white bg-blue-600 shadow"></span>
                                         </button>
                                     </template>
