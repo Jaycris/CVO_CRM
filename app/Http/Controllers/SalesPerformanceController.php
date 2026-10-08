@@ -13,6 +13,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class SalesPerformanceController extends Controller
@@ -49,33 +50,39 @@ class SalesPerformanceController extends Controller
             && ! $brandId;
         $summaryUser = $canUseSalesBrandFilter ? null : $user;
         $summary = SalesMtdCalculator::summary($summaryUser, $month, $brandId, $includeOwnCreditsAcrossBrands, $canUseSalesBrandFilter && ! $brandId);
-        $teamTargets = SalesTarget::query()
-            ->whereDate('target_month', $month->toDateString())
-            ->where('target_type', 'team')
-            ->whereNotNull('team_id')
-            ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
-            ->when($canUseSalesBrandFilter && ! $brandId, function ($query) {
-                $query->where(function ($query) {
-                    $query->whereNull('brand_id')
-                        ->orWhereHas('brand', fn ($query) => $query->where('is_sales_brand', true));
-                });
-            })
-            ->when(! $brandId && ! $canUseSalesBrandFilter, fn ($query) => BrandScope::apply($query, $user))
-            ->get()
-            ->keyBy('team_id');
-        $targetTeams = Team::query()
-            ->with(['brand', 'members' => fn ($query) => $query
+        $hasTeamTargets = Schema::hasColumn('sales_targets', 'team_id');
+        $teamTargets = collect();
+        $targetTeams = collect();
+
+        if ($hasTeamTargets) {
+            $teamTargets = SalesTarget::query()
+                ->whereDate('target_month', $month->toDateString())
+                ->where('target_type', 'team')
+                ->whereNotNull('team_id')
+                ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
+                ->when($canUseSalesBrandFilter && ! $brandId, function ($query) {
+                    $query->where(function ($query) {
+                        $query->whereNull('brand_id')
+                            ->orWhereHas('brand', fn ($query) => $query->where('is_sales_brand', true));
+                    });
+                })
+                ->when(! $brandId && ! $canUseSalesBrandFilter, fn ($query) => BrandScope::apply($query, $user))
+                ->get()
+                ->keyBy('team_id');
+            $targetTeams = Team::query()
+                ->with(['brand', 'members' => fn ($query) => $query
+                    ->where('department', 'Sales')
+                    ->where('is_commission_eligible', true)
+                    ->select(['id', 'team_id', 'first_name', 'last_name'])])
                 ->where('department', 'Sales')
-                ->where('is_commission_eligible', true)
-                ->select(['id', 'team_id', 'first_name', 'last_name'])])
-            ->where('department', 'Sales')
-            ->where('show_on_sales_dashboard', true)
-            ->whereHas('brand', fn ($query) => $query->where('is_sales_brand', true))
-            ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
-            ->when($canUseSalesBrandFilter && ! $brandId, fn ($query) => $query->whereHas('brand', fn ($query) => $query->where('is_sales_brand', true)))
-            ->when(! $brandId && ! $canUseSalesBrandFilter, fn ($query) => BrandScope::apply($query, $user))
-            ->orderBy('name')
-            ->get();
+                ->where('show_on_sales_dashboard', true)
+                ->whereHas('brand', fn ($query) => $query->where('is_sales_brand', true))
+                ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
+                ->when($canUseSalesBrandFilter && ! $brandId, fn ($query) => $query->whereHas('brand', fn ($query) => $query->where('is_sales_brand', true)))
+                ->when(! $brandId && ! $canUseSalesBrandFilter, fn ($query) => BrandScope::apply($query, $user))
+                ->orderBy('name')
+                ->get();
+        }
         $visibleAgentIds = $summary['agentCredits']->keys()
             ->merge($summary['agentTargets']->keys())
             ->filter()
@@ -249,6 +256,10 @@ class SalesPerformanceController extends Controller
     public function updateTargets(Request $request): RedirectResponse
     {
         abort_unless($this->canManageTargets($request->user()), 403);
+
+        if (! Schema::hasColumn('sales_targets', 'team_id')) {
+            return back()->with('status', 'Please run the latest migrations before updating team targets.');
+        }
 
         $request->merge([
             'team_targets' => collect($request->input('team_targets', []))

@@ -271,7 +271,9 @@
         </div>
     </div>
 
-    <div class="flex min-h-screen">
+    <div class="min-h-screen lg:flex"
+         x-data="{ mobileSidebarOpen: false }"
+         x-on:keydown.escape.window="mobileSidebarOpen = false">
         @php
             $currentBrand = auth()->user()->brand;
             $currentBrandName = $currentBrand?->imprint_name ?? 'CreatiVision Outsourcing';
@@ -288,10 +290,20 @@
             $brandButtonTextColor = $currentBrand?->button_text_color ?? $brandPrimaryColor;
         @endphp
 
-        <aside class="fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-slate-200 bg-[#f6f7fb] dark:border-zinc-800 dark:bg-zinc-950"
+        <div x-show="mobileSidebarOpen"
+             x-cloak
+             x-transition.opacity
+             x-on:click="mobileSidebarOpen = false"
+             class="fixed inset-0 z-30 bg-slate-950/50 backdrop-blur-sm lg:hidden"
+             aria-hidden="true"></div>
+
+        <aside x-bind:class="mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
+               x-on:click="if ($event.target.closest('a[href]')) mobileSidebarOpen = false"
+               class="fixed inset-y-0 left-0 z-40 flex w-[min(18rem,calc(100vw-3rem))] flex-col border-r border-slate-200 bg-[#f6f7fb] transition-transform duration-200 ease-out dark:border-zinc-800 dark:bg-zinc-950 lg:w-72 lg:translate-x-0"
                style="--brand-primary: {{ $brandPrimaryColor }}; --brand-accent: {{ $brandAccentColor }}; --brand-text: {{ $brandTextColor }}; --brand-button-text: {{ $brandButtonTextColor }}; --brand-active-dark-bg: color-mix(in srgb, {{ $brandPrimaryColor }} 22%, transparent);">
             <div class="shrink-0 border-b border-slate-200 px-5 pb-5 pt-5 dark:border-zinc-800">
-                <a href="{{ route('dashboard') }}" class="block">
+                <div class="flex items-start justify-between gap-3">
+                <a href="{{ route('dashboard') }}" class="block min-w-0">
                     @if ($currentBrandLogo)
                         <div class="inline-flex max-w-full items-center justify-center">
                             <img src="{{ $currentBrandLogo }}"
@@ -304,6 +316,16 @@
                         </div>
                     @endif
                 </a>
+
+                <button type="button"
+                        x-on:click="mobileSidebarOpen = false"
+                        class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 lg:hidden"
+                        aria-label="Close menu">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                    </svg>
+                </button>
+                </div>
             </div>
 
             @php
@@ -1232,21 +1254,30 @@
             </nav>
         </aside>
 
-        <main class="ml-72 flex min-h-screen w-[calc(100%-18rem)] flex-col overflow-x-hidden">
-            <header class="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/90 px-8 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90">
-                <div>
-                    <h2 class="text-lg font-bold text-slate-900 dark:text-zinc-100">
+        <main class="flex min-h-screen w-full flex-col overflow-x-hidden lg:ml-72 lg:w-[calc(100%-18rem)]">
+            <header class="sticky top-0 z-30 flex min-h-16 items-center justify-between gap-3 border-b border-slate-200 bg-white/90 px-4 py-2 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90 sm:px-6 lg:px-8">
+                <div class="flex min-w-0 items-center gap-3">
+                    <button type="button"
+                            x-on:click="mobileSidebarOpen = true"
+                            class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 lg:hidden"
+                            aria-label="Open menu">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                    </button>
+
+                    <h2 class="truncate text-base font-bold text-slate-900 dark:text-zinc-100 sm:text-lg">
                         {{ $header ?? 'Dashboard' }}
                     </h2>
                 </div>
 
-                <div class="flex items-center gap-4">
+                <div class="flex shrink-0 items-center gap-2 sm:gap-3 lg:gap-4">
                     <button type="button"
                             x-on:click="darkMode = !darkMode"
-                            class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-amber-200 dark:hover:bg-zinc-800"
+                            class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-amber-200 dark:hover:bg-zinc-800 sm:px-4"
                             aria-label="Toggle theme">
-                        <span x-show="!darkMode">🌙 Dark</span>
-                        <span x-show="darkMode" x-cloak>☀ Light</span>
+                        <span x-show="!darkMode"><span class="sm:hidden">🌙</span><span class="hidden sm:inline">🌙 Dark</span></span>
+                        <span x-show="darkMode" x-cloak><span class="sm:hidden">☀</span><span class="hidden sm:inline">☀ Light</span></span>
                     </button>
 
                     <div class="relative"
@@ -1323,7 +1354,7 @@
                              x-cloak
                              x-transition.origin.top.right
                              x-on:click.outside="open = false"
-                             class="absolute right-0 mt-2 w-80 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+                              class="absolute right-0 mt-2 w-[calc(100vw-2rem)] max-w-80 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
                             <div class="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-zinc-800">
                                 <p class="text-sm font-semibold text-slate-900 dark:text-zinc-100">Notifications</p>
                                 <button type="button"
@@ -1392,7 +1423,7 @@
                                 </div>
                             @endif
 
-                            <div class="text-left">
+                            <div class="hidden text-left sm:block">
                                 <p class="text-sm font-semibold text-slate-800 dark:text-zinc-100">
                                     {{ auth()->user()->first_name ?? 'User' }} {{ auth()->user()->last_name ?? '' }}
                                 </p>
@@ -1453,7 +1484,7 @@
                 </div>
             </header>
 
-            <section class="flex-1 overflow-x-hidden p-8">
+            <section class="flex-1 overflow-x-hidden px-4 py-5 sm:px-6 lg:p-8">
                 {{ $slot }}
             </section>
 

@@ -186,6 +186,7 @@ class FinanceContractController extends Controller
             'documents' => ['required', 'array', 'min:1', 'max:25'],
             'documents.*' => ['required', 'file', 'mimes:pdf,doc,docx,jpg,jpeg,png', 'max:10240'],
             'status' => ['nullable', 'in:all,sent,signed'],
+            'return_to_esign' => ['nullable', 'boolean'],
         ]);
 
         foreach ($validated['documents'] as $file) {
@@ -209,9 +210,11 @@ class FinanceContractController extends Controller
             }
         }
 
-        return redirect()
-            ->route('finance.contracts.index', ['status' => $validated['status'] ?? 'all'])
-            ->with('success', SalesEndorsementDocument::TYPES[$validated['document_type']] . ' document(s) uploaded successfully.');
+        $redirect = ($validated['return_to_esign'] ?? false)
+            ? redirect()->route('finance.contracts.esign', $endorsement)
+            : redirect()->route('finance.contracts.index', ['status' => $validated['status'] ?? 'all']);
+
+        return $redirect->with('success', SalesEndorsementDocument::TYPES[$validated['document_type']] . ' document(s) uploaded successfully.');
     }
 
     public function downloadDocument(Request $request, SalesEndorsementDocument $document): StreamedResponse

@@ -8,6 +8,7 @@ use App\Notifications\EndOfShiftReportSubmittedNotification;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 
 class EndOfShiftReportController extends Controller
@@ -60,7 +61,15 @@ class EndOfShiftReportController extends Controller
             'submitted_at' => now(),
         ])->load('user');
 
-        $this->notifyReportViewers($report, $reportToUser);
+        try {
+            $this->notifyReportViewers($report, $reportToUser);
+        } catch (\Throwable $exception) {
+            Log::warning('End of Shift report notification failed after report was saved.', [
+                'report_id' => $report->id,
+                'user_id' => $user->id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
 
         return back()->with('success', 'End of Shift report submitted successfully.');
     }
@@ -112,6 +121,8 @@ class EndOfShiftReportController extends Controller
 
     private function notifyReportViewers(EndOfShiftReport $report, ?User $reportToUser): void
     {
+        $report->loadMissing('user');
+
         $recipients = User::query()
             ->with('role')
             ->whereNull('suspended_at')

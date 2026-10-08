@@ -38,6 +38,16 @@ class SalesEndorsement extends Model
         'contract_status',
         'contract_sent_at',
         'contract_signed_at',
+        'contract_signer_name',
+        'contract_signer_email',
+        'contract_signature_text',
+        'contract_signer_ip',
+        'contract_signer_user_agent',
+        'contract_esign_fields',
+        'contract_esign_field_values',
+        'contract_recipient_email',
+        'contract_cc_emails',
+        'contract_sent_by',
         'contract_file_path',
         'contract_file_name',
         'contract_file_uploaded_at',
@@ -52,6 +62,9 @@ class SalesEndorsement extends Model
             'amount_to_be_paid' => 'decimal:2',
             'contract_sent_at' => 'datetime',
             'contract_signed_at' => 'datetime',
+            'contract_esign_fields' => 'array',
+            'contract_esign_field_values' => 'array',
+            'contract_cc_emails' => 'array',
             'contract_file_uploaded_at' => 'datetime',
         ];
     }
@@ -64,6 +77,11 @@ class SalesEndorsement extends Model
     public function frankieAgent(): BelongsTo
     {
         return $this->belongsTo(User::class, 'frankie_agent_id');
+    }
+
+    public function contractSender(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'contract_sent_by');
     }
 
     public function brand(): BelongsTo

@@ -217,14 +217,24 @@
                                 <td class="break-words px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">{{ $endorsement->services }}</td>
                                 <td class="px-3 py-4 font-semibold leading-snug text-slate-900 dark:text-zinc-100">${{ number_format((float) $endorsement->amount, 2) }}</td>
                                 <td class="px-3 py-4">
-                                    <span @class([
-                                        'rounded-full px-2 py-1 text-[11px] font-semibold',
-                                        'bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300' => ! $endorsement->contract_status,
-                                        'bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-200' => $endorsement->contract_status === 'sent',
-                                        'bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-200' => $endorsement->contract_status === 'signed',
-                                    ])>
-                                        {{ $endorsement->contract_status ? ucfirst($endorsement->contract_status) : 'Not Sent' }}
-                                    </span>
+                                    <div class="space-y-2" x-on:click.stop>
+                                        <span @class([
+                                            'inline-flex rounded-full px-2 py-1 text-[11px] font-semibold',
+                                            'bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300' => ! $endorsement->contract_status,
+                                            'bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-200' => $endorsement->contract_status === 'sent',
+                                            'bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-200' => $endorsement->contract_status === 'signed',
+                                        ])>
+                                            {{ $endorsement->contract_status ? ucfirst($endorsement->contract_status) : 'Not Sent' }}
+                                        </span>
+
+                                        <a href="{{ route('finance.contracts.esign', $endorsement) }}"
+                                           class="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline dark:text-emerald-300">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487 18.55 2.8a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
+                                            </svg>
+                                            Signature
+                                        </a>
+                                    </div>
                                 </td>
                                 <td class="px-3 py-4" x-on:click.stop>
                                     @php

@@ -5,6 +5,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\AuthorBalanceController;
 use App\Http\Controllers\CalendarTodoController;
+use App\Http\Controllers\ContractSignatureController;
 use App\Http\Controllers\FinanceClientController;
 use App\Http\Controllers\FinanceContractController;
 use App\Http\Controllers\EndOfShiftReportController;
@@ -38,6 +39,7 @@ use App\Support\BrandScope;
 use App\Support\RewardProgress;
 use App\Support\SalesMtdCalculator;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 use App\Http\Controllers\Admin\RolePermissionController;
 use App\Http\Controllers\Admin\TrashController;
 use App\Http\Controllers\Admin\UserController;
@@ -61,6 +63,13 @@ Route::get('/maintenance', MaintenanceController::class)->name('maintenance');
 Route::get('/maintenance/preview', [MaintenanceController::class, 'preview'])
     ->middleware('auth')
     ->name('maintenance.preview');
+
+Route::middleware('signed')->group(function () {
+    Route::get('/contracts/sign/{endorsement}', [ContractSignatureController::class, 'show'])->name('contracts.sign.show');
+    Route::post('/contracts/sign/{endorsement}', [ContractSignatureController::class, 'submit'])->name('contracts.sign.submit');
+    Route::get('/contracts/sign/{endorsement}/preview', [ContractSignatureController::class, 'publicPreview'])->name('contracts.sign.preview');
+    Route::get('/contracts/sign/{endorsement}/download', [ContractSignatureController::class, 'publicDownload'])->name('contracts.sign.download');
+});
 
 Route::get('/dashboard', function () {
     $user = request()->user();
@@ -246,7 +255,7 @@ Route::get('/dashboard', function () {
             ]);
     }
 
-    if ($canViewHomeSalesMtdSnapshot) {
+    if ($canViewHomeSalesMtdSnapshot && Schema::hasColumn('sales_targets', 'team_id')) {
         $homeTeamBrandId = ($isAdmin || BrandScope::canAccessAllBrands($user))
             ? null
             : $dashboardBrandId;
@@ -496,6 +505,12 @@ Route::middleware('auth')->group(function () {
     Route::post('/finance/contracts/{endorsement}/documents', [FinanceContractController::class, 'storeDocument'])->name('finance.contracts.documents.store');
     Route::get('/finance/contract-documents/{document}', [FinanceContractController::class, 'downloadDocument'])->name('finance.contracts.documents.download');
     Route::delete('/finance/contract-documents/{document}', [FinanceContractController::class, 'removeDocument'])->name('finance.contracts.documents.destroy');
+    Route::get('/finance/contracts/{endorsement}/esign', [ContractSignatureController::class, 'overview'])->name('finance.contracts.esign');
+    Route::get('/finance/contracts/{endorsement}/esign/editor', [ContractSignatureController::class, 'editor'])->name('finance.contracts.esign.editor');
+    Route::post('/finance/contracts/{endorsement}/esign/send', [ContractSignatureController::class, 'send'])->name('finance.contracts.esign.send');
+    Route::put('/finance/contracts/{endorsement}/esign/fields', [ContractSignatureController::class, 'updateFields'])->name('finance.contracts.esign.fields');
+    Route::get('/finance/contracts/{endorsement}/esign/preview', [ContractSignatureController::class, 'preview'])->name('finance.contracts.esign.preview');
+    Route::get('/finance/contracts/{endorsement}/esign/download', [ContractSignatureController::class, 'download'])->name('finance.contracts.esign.download');
     Route::post('/finance/contracts/{endorsement}/attachment', [FinanceContractController::class, 'attach'])->name('finance.contracts.attachment.store');
     Route::get('/finance/contracts/{endorsement}/attachment', [FinanceContractController::class, 'download'])->name('finance.contracts.attachment.download');
     Route::delete('/finance/contracts/{endorsement}/attachment', [FinanceContractController::class, 'removeAttachment'])->name('finance.contracts.attachment.destroy');
