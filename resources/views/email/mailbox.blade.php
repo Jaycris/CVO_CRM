@@ -3,7 +3,7 @@
         Email
     </x-slot>
 
-    <div class="space-y-6" x-data="{ composeOpen: @js($errors->has('to') || $errors->has('subject') || $errors->has('body')), settingsOpen: @js($errors->has('email_address') || ! $account) }">
+    <div class="space-y-6" x-data="{ composeOpen: @js($errors->has('to') || $errors->has('subject') || $errors->has('body')), settingsOpen: @js($canManageEmailAccounts && ($errors->has('email_address') || request()->boolean('settings') || ! $account)) }">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
                 <h1 class="text-2xl font-bold text-slate-900 dark:text-zinc-100">Email</h1>
@@ -24,9 +24,14 @@
                         Compose
                     </button>
                 @endif
-                <button type="button" x-on:click="settingsOpen = true" class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800">
-                    Mail Settings
-                </button>
+                @if ($canManageEmailAccounts)
+                    <a href="{{ route('email.index', ['settings' => 1, 'new' => 1]) }}" class="inline-flex h-11 items-center justify-center rounded-xl bg-zinc-950 px-4 text-sm font-semibold text-amber-100 shadow-sm hover:bg-zinc-800 dark:bg-amber-400 dark:text-zinc-950">
+                        Add Brand Mailbox
+                    </a>
+                    <button type="button" x-on:click="settingsOpen = true" class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                        Admin Mail Settings
+                    </button>
+                @endif
             </div>
         </div>
 
@@ -96,11 +101,17 @@
                 @if (! $account)
                     <div class="flex h-full min-h-[20rem] items-center justify-center p-8 text-center">
                         <div>
-                            <h2 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Connect your first mailbox</h2>
-                            <p class="mt-2 text-sm text-slate-500 dark:text-zinc-400">Use the SiteGround email address and password for the brand or employee mailbox.</p>
-                            <button type="button" x-on:click="settingsOpen = true" class="mt-5 inline-flex h-11 items-center justify-center rounded-xl bg-zinc-950 px-5 text-sm font-semibold text-amber-100 shadow-sm dark:bg-amber-400 dark:text-zinc-950">
-                                Add Mailbox
-                            </button>
+                            <h2 class="text-lg font-bold text-slate-900 dark:text-zinc-100">
+                                {{ $canManageEmailAccounts ? 'Connect the first brand mailbox' : 'Email is not configured yet' }}
+                            </h2>
+                            <p class="mt-2 text-sm text-slate-500 dark:text-zinc-400">
+                                {{ $canManageEmailAccounts ? 'Add a SiteGround mailbox for a brand so employees can use email immediately.' : 'Please ask an admin to connect the mailbox for your brand.' }}
+                            </p>
+                            @if ($canManageEmailAccounts)
+                                <button type="button" x-on:click="settingsOpen = true" class="mt-5 inline-flex h-11 items-center justify-center rounded-xl bg-zinc-950 px-5 text-sm font-semibold text-amber-100 shadow-sm dark:bg-amber-400 dark:text-zinc-950">
+                                    Add Brand Mailbox
+                                </button>
+                            @endif
                         </div>
                     </div>
                 @else
@@ -207,58 +218,76 @@
             </form>
         </div>
 
-        <div x-show="settingsOpen"
-             x-cloak
-             x-transition.opacity
-             class="crm-top-modal-backdrop flex items-start justify-center overflow-y-auto bg-slate-950/60 p-4 sm:p-6">
-            <div class="crm-modal-panel w-full max-w-4xl rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
-                <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-zinc-800">
-                    <div>
-                        <h2 class="font-bold text-slate-900 dark:text-zinc-100">{{ $account ? 'Mail Settings' : 'Connect Mailbox' }}</h2>
-                        <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Use the email address and password from SiteGround webmail.</p>
+        @if ($canManageEmailAccounts)
+            <div x-show="settingsOpen"
+                 x-cloak
+                 x-transition.opacity
+                 class="crm-top-modal-backdrop flex items-start justify-center overflow-y-auto bg-slate-950/60 p-4 sm:p-6">
+                <div class="crm-modal-panel w-full max-w-4xl rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
+                    <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-zinc-800">
+                        <div>
+                            <h2 class="font-bold text-slate-900 dark:text-zinc-100">{{ $settingsAccount ? 'Admin Mail Settings' : 'Connect Brand Mailbox' }}</h2>
+                            <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Configure the brand mailbox once. Employees assigned to that brand will see email ready to use.</p>
+                        </div>
+                        <button type="button" x-on:click="settingsOpen = false" class="rounded-lg px-3 py-1 text-sm font-semibold text-slate-500 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Close</button>
                     </div>
-                    <button type="button" x-on:click="settingsOpen = false" class="rounded-lg px-3 py-1 text-sm font-semibold text-slate-500 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Close</button>
-                </div>
 
-                <form method="POST" action="{{ $account ? route('email.accounts.update', $account) : route('email.accounts.store') }}" class="p-5">
-                    @csrf
-                    @if ($account)
-                        @method('PUT')
-                    @endif
+                    <form method="POST" action="{{ $settingsAccount ? route('email.accounts.update', $settingsAccount) : route('email.accounts.store') }}" class="p-5">
+                        @csrf
+                        @if ($settingsAccount)
+                            @method('PUT')
+                        @endif
 
-                    <div class="grid gap-4 md:grid-cols-2">
+                        <div class="mb-5">
+                            <label for="brand_id" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Brand</label>
+                            @if ($settingsAccount)
+                                <input type="hidden" name="brand_id" value="{{ $settingsAccount->brand_id }}">
+                                <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                                    {{ $settingsAccount->brand?->imprint_name ?? 'Brand mailbox' }}
+                                </div>
+                            @else
+                                <select id="brand_id" name="brand_id" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                                    @foreach ($brands as $brand)
+                                        <option value="{{ $brand->id }}" @selected(old('brand_id', auth()->user()->brand_id) == $brand->id)>{{ $brand->imprint_name }}</option>
+                                    @endforeach
+                                </select>
+                                <x-input-error :messages="$errors->get('brand_id')" class="mt-2" />
+                            @endif
+                        </div>
+
+                        <div class="grid gap-4 md:grid-cols-2">
                         <div>
                             <label for="display_name" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Display Name</label>
-                            <input id="display_name" name="display_name" value="{{ old('display_name', $account?->display_name ?? auth()->user()->brand?->imprint_name ?? auth()->user()->first_name) }}" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                            <input id="display_name" name="display_name" value="{{ old('display_name', $settingsAccount?->display_name ?? auth()->user()->brand?->imprint_name ?? auth()->user()->first_name) }}" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
                             <x-input-error :messages="$errors->get('display_name')" class="mt-2" />
                         </div>
                         <div>
                             <label for="email_address" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Email Address</label>
-                            <input id="email_address" name="email_address" type="email" value="{{ old('email_address', $account?->email_address ?? auth()->user()->email) }}" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                            <input id="email_address" name="email_address" type="email" value="{{ old('email_address', $settingsAccount?->email_address ?? auth()->user()->email) }}" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
                             <x-input-error :messages="$errors->get('email_address')" class="mt-2" />
                         </div>
                         <div>
                             <label for="username" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Username</label>
-                            <input id="username" name="username" value="{{ old('username', $account?->username ?? $account?->email_address ?? auth()->user()->email) }}" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                            <input id="username" name="username" value="{{ old('username', $settingsAccount?->username ?? $settingsAccount?->email_address ?? auth()->user()->email) }}" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
                             <x-input-error :messages="$errors->get('username')" class="mt-2" />
                         </div>
                         <div>
                             <label for="password" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Mailbox Password</label>
-                            <input id="password" name="password" type="password" placeholder="{{ $account ? 'Leave blank to keep current password' : '' }}" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                            <input id="password" name="password" type="password" placeholder="{{ $settingsAccount ? 'Leave blank to keep current password' : '' }}" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
                             <x-input-error :messages="$errors->get('password')" class="mt-2" />
                         </div>
-                    </div>
+                        </div>
 
-                    <div class="mt-6 grid gap-4 md:grid-cols-2">
+                        <div class="mt-6 grid gap-4 md:grid-cols-2">
                         <div class="rounded-xl border border-slate-200 p-4 dark:border-zinc-800">
                             <h3 class="font-semibold text-slate-900 dark:text-zinc-100">Incoming IMAP</h3>
                             <p class="mt-1 text-xs text-slate-500 dark:text-zinc-400">Use the exact incoming server from SiteGround Mail Configuration.</p>
                             <div class="mt-4 grid gap-4 sm:grid-cols-[1fr_7rem_8rem]">
-                                <input name="imap_host" value="{{ old('imap_host', $account?->imap_host ?? 'mail.siteground.net') }}" class="rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-                                <input name="imap_port" type="number" value="{{ old('imap_port', $account?->imap_port ?? 993) }}" class="rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                                <input name="imap_host" value="{{ old('imap_host', $settingsAccount?->imap_host ?? 'mail.siteground.net') }}" class="rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                                <input name="imap_port" type="number" value="{{ old('imap_port', $settingsAccount?->imap_port ?? 993) }}" class="rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
                                 <select name="imap_encryption" class="rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
                                     @foreach (['ssl' => 'SSL', 'tls' => 'TLS', 'none' => 'None'] as $value => $label)
-                                        <option value="{{ $value }}" @selected(old('imap_encryption', $account?->imap_encryption ?? 'ssl') === $value)>{{ $label }}</option>
+                                        <option value="{{ $value }}" @selected(old('imap_encryption', $settingsAccount?->imap_encryption ?? 'ssl') === $value)>{{ $label }}</option>
                                     @endforeach
                                 </select>
                             </div>
@@ -268,42 +297,26 @@
                             <h3 class="font-semibold text-slate-900 dark:text-zinc-100">Outgoing SMTP</h3>
                             <p class="mt-1 text-xs text-slate-500 dark:text-zinc-400">SiteGround commonly uses SMTP port 465 with SSL.</p>
                             <div class="mt-4 grid gap-4 sm:grid-cols-[1fr_7rem_8rem]">
-                                <input name="smtp_host" value="{{ old('smtp_host', $account?->smtp_host ?? 'mail.siteground.net') }}" class="rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-                                <input name="smtp_port" type="number" value="{{ old('smtp_port', $account?->smtp_port ?? 465) }}" class="rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                                <input name="smtp_host" value="{{ old('smtp_host', $settingsAccount?->smtp_host ?? 'mail.siteground.net') }}" class="rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                                <input name="smtp_port" type="number" value="{{ old('smtp_port', $settingsAccount?->smtp_port ?? 465) }}" class="rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
                                 <select name="smtp_encryption" class="rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
                                     @foreach (['ssl' => 'SSL', 'tls' => 'TLS', 'none' => 'None'] as $value => $label)
-                                        <option value="{{ $value }}" @selected(old('smtp_encryption', $account?->smtp_encryption ?? 'ssl') === $value)>{{ $label }}</option>
+                                        <option value="{{ $value }}" @selected(old('smtp_encryption', $settingsAccount?->smtp_encryption ?? 'ssl') === $value)>{{ $label }}</option>
                                     @endforeach
                                 </select>
                             </div>
                         </div>
-                    </div>
-
-                    @if ($canShareAccount && ! $account)
-                        <div class="mt-5 rounded-xl border border-slate-200 p-4 dark:border-zinc-800">
-                            <label class="flex items-start gap-3 text-sm">
-                                <input type="checkbox" name="is_shared" value="1" class="mt-1 rounded border-slate-300 text-amber-600 focus:ring-amber-500" @checked(old('is_shared'))>
-                                <span>
-                                    <span class="block font-semibold text-slate-900 dark:text-zinc-100">Share this mailbox with the brand</span>
-                                    <span class="mt-1 block text-slate-500 dark:text-zinc-400">Use this for brand accounts like Inkspire or a future Horizon Maple Media mailbox.</span>
-                                </span>
-                            </label>
-                            <select name="brand_id" class="mt-4 w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-                                @foreach ($brands as $brand)
-                                    <option value="{{ $brand->id }}" @selected(old('brand_id', auth()->user()->brand_id) == $brand->id)>{{ $brand->imprint_name }}</option>
-                                @endforeach
-                            </select>
                         </div>
-                    @endif
 
-                    <div class="mt-6 flex justify-end gap-3">
-                        <button type="button" x-on:click="settingsOpen = false" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-zinc-800 dark:text-zinc-200">Cancel</button>
-                        <button type="submit" class="rounded-xl bg-zinc-950 px-5 py-2 text-sm font-semibold text-amber-100 dark:bg-amber-400 dark:text-zinc-950">
-                            {{ $account ? 'Save Settings' : 'Connect Mailbox' }}
-                        </button>
-                    </div>
-                </form>
+                        <div class="mt-6 flex justify-end gap-3">
+                            <button type="button" x-on:click="settingsOpen = false" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-zinc-800 dark:text-zinc-200">Cancel</button>
+                            <button type="submit" class="rounded-xl bg-zinc-950 px-5 py-2 text-sm font-semibold text-amber-100 dark:bg-amber-400 dark:text-zinc-950">
+                                {{ $settingsAccount ? 'Save Settings' : 'Connect Brand Mailbox' }}
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
-        </div>
+        @endif
     </div>
 </x-app-layout>
