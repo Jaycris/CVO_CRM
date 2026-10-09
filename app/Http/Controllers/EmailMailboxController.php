@@ -415,7 +415,9 @@ class EmailMailboxController extends Controller
             return $html;
         }
 
-        $html .= '<div style="margin-top:28px; color:#111827; font-family:Arial, Helvetica, sans-serif;">' . $signature['html'] . '</div>';
+        $html .= '<div style="margin-top:28px; color:#111827; font-family:Arial, Helvetica, sans-serif; line-height:1.4; text-align:left;">'
+            . $this->emailSafeSignatureHtml($signature['html'])
+            . '</div>';
 
         return $html;
     }
@@ -454,6 +456,31 @@ class EmailMailboxController extends Controller
         $html = preg_replace('/javascript\s*:/i', '', $html) ?? '';
 
         return trim($html) ?: null;
+    }
+
+    private function emailSafeSignatureHtml(string $html): string
+    {
+        $html = preg_replace('/text-align\s*:\s*(center|right|justify)\s*;?/i', 'text-align:left;', $html) ?? $html;
+        $html = preg_replace_callback('/<img\b([^>]*)>/i', function (array $matches) {
+            $attributes = $matches[1];
+            $style = '';
+
+            if (preg_match('/\sstyle\s*=\s*(["\'])(.*?)\1/i', $attributes, $styleMatch)) {
+                $style = rtrim($styleMatch[2], ';') . ';';
+                $attributes = str_replace($styleMatch[0], '', $attributes);
+            }
+
+            $style = preg_replace('/\bdisplay\s*:[^;]+;?/i', '', $style) ?? $style;
+            $style = preg_replace('/\bmargin-left\s*:[^;]+;?/i', '', $style) ?? $style;
+            $style = preg_replace('/\bmargin-right\s*:[^;]+;?/i', '', $style) ?? $style;
+            $style = preg_replace('/\bvertical-align\s*:[^;]+;?/i', '', $style) ?? $style;
+            $style = trim($style);
+            $style = ($style !== '' ? $style . '; ' : '') . 'display:block; margin-left:0; margin-right:auto; vertical-align:top;';
+
+            return '<img' . $attributes . ' style="' . e($style) . '">';
+        }, $html) ?? $html;
+
+        return $html;
     }
 
     private function syncInbox(EmailAccount $account): int
