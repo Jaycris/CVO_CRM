@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\ContractSignatureCcNotificationMail;
 use App\Mail\ContractSignatureRequestMail;
+use App\Models\EmailAccount;
 use App\Models\SalesEndorsement;
 use App\Models\User;
 use App\Notifications\ContractSignedNotification;
@@ -10,6 +12,7 @@ use App\Notifications\ContractSignatureRequestSentNotification;
 use App\Support\BrandScope;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Mail\Mailable;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
@@ -72,11 +75,15 @@ class ContractSignatureController extends Controller
             ->values()
             ->all();
         $packet = $this->packet($endorsement, $request->user());
+        $mailAccount = $this->contractMailAccount($endorsement);
+        $packet = $this->withContractMailAccount($packet, $mailAccount);
         $signUrl = URL::temporarySignedRoute('contracts.sign.show', now()->addDays(30), ['endorsement' => $endorsement]);
 
-        Mail::to($validated['recipient_email'])
-            ->cc($ccEmails)
-            ->send(new ContractSignatureRequestMail($endorsement, $signUrl, $packet));
+        $this->sendContractMail(
+            $mailAccount,
+            $validated['recipient_email'],
+            new ContractSignatureRequestMail($endorsement, $signUrl, $packet)
+        );
 
         $endorsement->forceFill([
             'contract_status' => $endorsement->contract_status === 'signed' ? 'signed' : 'sent',
@@ -86,6 +93,13 @@ class ContractSignatureController extends Controller
             'contract_sent_by' => $request->user()?->id,
         ])->save();
 
+        $this->sendContractCcMail(
+            $mailAccount,
+            $endorsement,
+            $ccEmails,
+            $packet,
+            $request->user()
+        );
         $this->notifyCcUsers($endorsement->fresh(['agent.team.manager', 'agent.team.teamLeader']), $ccEmails);
 
         return redirect()
@@ -276,6 +290,112 @@ class ContractSignatureController extends Controller
             'jpg', 'jpeg', 'png' => 'image',
             default => 'download',
         };
+    }
+
+    private function contractMailAccount(SalesEndorsement $endorsement): ?EmailAccount
+    {
+        return EmailAccount::query()
+            ->where('brand_id', $endorsement->brand_id)
+            ->where('is_shared', true)
+            ->orderBy('id')
+            ->first();
+    }
+
+    private function withContractMailAccount(array $packet, ?EmailAccount $account): array
+    {
+        if (! $account) {
+            return $packet;
+        }
+
+        $displayName = trim((string) $account->display_name);
+
+        return array_merge($packet, [
+            'senderName' => $displayName !== '' ? $displayName : $packet['senderName'],
+            'senderEmail' => $account->email_address,
+            'brandName' => $displayName !== '' ? $displayName : $packet['brandName'],
+        ]);
+    }
+
+    private function sendContractMail(?EmailAccount $account, string $to, Mailable $mailable): void
+    {
+        if (! $account) {
+            Mail::to($to)->send($mailable);
+
+            return;
+        }
+
+        $mailer = 'contract_brand_' . $account->id;
+
+        config([
+            'mail.mailers.' . $mailer => [
+                'transport' => 'smtp',
+                'scheme' => $account->smtp_encryption === 'ssl' ? 'smtps' : 'smtp',
+                'host' => $account->smtp_host,
+                'port' => $account->smtp_port,
+                'username' => $account->username,
+                'password' => $account->plainPassword() ?? '',
+                'timeout' => null,
+                'local_domain' => env('MAIL_EHLO_DOMAIN'),
+            ],
+        ]);
+
+        Mail::purge($mailer);
+        Mail::mailer($mailer)->to($to)->send($mailable);
+    }
+
+    private function sendContractCcMail(
+        ?EmailAccount $account,
+        SalesEndorsement $endorsement,
+        array $ccEmails,
+        array $packet,
+        ?User $sender
+    ): void {
+        if ($ccEmails === []) {
+            return;
+        }
+
+        $users = User::query()
+            ->whereIn('email', collect($ccEmails)->map(fn ($email) => strtolower($email))->all())
+            ->get()
+            ->keyBy(fn (User $user) => strtolower($user->email));
+
+        $senderName = $this->userDisplayName($sender) ?: ($packet['senderName'] ?? 'The sender');
+        $recipientName = $packet['signerName'] ?? $endorsement->author_name ?? $packet['recipientEmail'];
+
+        foreach ($ccEmails as $email) {
+            $user = $users->get(strtolower($email));
+            $ccName = $this->userDisplayName($user) ?: $this->nameFromEmail($email);
+
+            $this->sendContractMail(
+                $account,
+                $email,
+                new ContractSignatureCcNotificationMail(
+                    $endorsement,
+                    $packet,
+                    $ccName,
+                    $senderName,
+                    $recipientName
+                )
+            );
+        }
+    }
+
+    private function userDisplayName(?User $user): ?string
+    {
+        if (! $user) {
+            return null;
+        }
+
+        $name = trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? ''));
+
+        return $name !== '' ? $name : $user->email;
+    }
+
+    private function nameFromEmail(string $email): string
+    {
+        $name = trim(strstr($email, '@', true) ?: $email);
+
+        return $name !== '' ? $name : $email;
     }
 
     private function defaultCcEmails(SalesEndorsement $endorsement)
