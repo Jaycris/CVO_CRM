@@ -102,7 +102,7 @@ class EmailMailboxController extends Controller
         $account->save();
 
         return redirect()
-            ->route('email.index', ['account' => $account->id, 'settings' => 1])
+            ->route('email.index', ['account' => $account->id])
             ->with('success', 'Employee mailbox connected. Only the assigned employee will see it after login.');
     }
 
