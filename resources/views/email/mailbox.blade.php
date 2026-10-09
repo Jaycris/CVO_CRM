@@ -359,6 +359,9 @@
                 @if ($account)
                     <div class="mt-6 rounded-xl border border-slate-200 bg-white p-4 text-sm dark:border-zinc-800 dark:bg-zinc-900">
                         <p class="font-semibold text-slate-900 dark:text-zinc-100">{{ $account->email_address }}</p>
+                        <p class="mt-1 text-xs font-semibold text-slate-600 dark:text-zinc-300">
+                            Display Name: {{ $account->display_name ?: 'Not set' }}
+                        </p>
                         <p class="mt-1 text-xs text-slate-500 dark:text-zinc-400">
                             Employee mailbox
                             @if ($account->user)
