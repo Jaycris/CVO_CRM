@@ -227,7 +227,7 @@
             <div x-show="composeOpen"
                  x-cloak
                  x-transition.opacity
-                 class="crm-top-modal-backdrop flex items-end justify-end bg-slate-950/70 p-4 backdrop-blur-sm sm:items-center sm:p-6">
+                 class="crm-top-modal-backdrop flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm sm:p-6">
                 <form method="POST" action="{{ route('email.send') }}" data-no-page-loader class="crm-modal-panel w-full max-w-2xl rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
                     @csrf
                     <input type="hidden" name="email_account_id" value="{{ $account?->id }}">
