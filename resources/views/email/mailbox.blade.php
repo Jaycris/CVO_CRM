@@ -53,16 +53,16 @@
             </div>
         @endif
 
-        <div class="grid min-h-[calc(100vh-13rem)] grid-cols-1 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800 xl:grid-cols-[16rem_minmax(24rem,32rem)_minmax(0,1fr)] 2xl:grid-cols-[18rem_34rem_minmax(0,1fr)]">
+        <div class="grid min-h-[calc(100vh-13rem)] grid-cols-1 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800 xl:grid-cols-[18rem_minmax(0,1fr)]">
             <aside class="border-b border-slate-200 bg-slate-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-950/50 xl:border-b-0 xl:border-r">
                 <div class="space-y-3">
                     <label for="email_account" class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-zinc-400">Mailbox</label>
                     <select id="email_account"
                             onchange="if (this.value) window.location.href = this.value"
-                            class="w-full rounded-xl border-slate-200 bg-white text-sm font-semibold text-slate-900 shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
+                            class="w-full truncate rounded-xl border-slate-200 bg-white text-sm font-semibold text-slate-900 shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
                         @forelse ($accounts as $mailAccount)
                             <option value="{{ route('email.index', ['account' => $mailAccount->id, 'folder' => $folder]) }}" @selected($account?->id === $mailAccount->id)>
-                                {{ $mailAccount->display_name }} - {{ $mailAccount->email_address }}
+                                {{ $mailAccount->email_address }}
                             </option>
                         @empty
                             <option>No mailbox connected</option>
@@ -90,7 +90,7 @@
                         <p class="mt-1 text-xs text-slate-500 dark:text-zinc-400">
                             {{ $account->is_shared ? 'Brand mailbox' : 'Employee mailbox' }}
                             @if ($account->user)
-                                for {{ trim(($account->user->first_name ?? '') . ' ' . ($account->user->last_name ?? '')) ?: $account->user->email }}
+                                for {{ $account->user->email }}
                             @elseif ($account->brand)
                                 for {{ $account->brand->imprint_name }}
                             @endif
@@ -102,7 +102,7 @@
                 @endif
             </aside>
 
-            <section class="border-b border-slate-200 dark:border-zinc-800 xl:border-b-0 xl:border-r">
+            <section class="min-h-[32rem] bg-white dark:bg-zinc-900">
                 @if (! $account)
                     <div class="flex h-full min-h-[20rem] items-center justify-center p-8 text-center">
                         <div>
@@ -119,6 +119,57 @@
                             @endif
                         </div>
                     </div>
+                @elseif ($selectedMessage)
+                    <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-zinc-800">
+                        <div class="flex items-center gap-2">
+                            <a href="{{ route('email.index', ['account' => $account->id, 'folder' => $folder]) }}"
+                               class="inline-flex h-9 w-9 items-center justify-center rounded-full text-xl text-slate-600 hover:bg-slate-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                               aria-label="Back to inbox">
+                                &larr;
+                            </a>
+                            <form method="POST" action="{{ route('email.accounts.sync', $account) }}">
+                                @csrf
+                                <button type="submit" class="inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 shadow-sm hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                                    Refresh
+                                </button>
+                            </form>
+                        </div>
+                        <span class="text-xs font-medium text-slate-500 dark:text-zinc-400">
+                            {{ $selectedMessage->sent_at?->format('M d, Y h:i A') }}
+                        </span>
+                    </div>
+
+                    <article class="mx-auto max-w-6xl px-6 py-8">
+                        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div class="min-w-0">
+                                <h2 class="text-2xl font-normal leading-tight text-slate-950 dark:text-zinc-100">{{ $selectedMessage->subject ?: '(No subject)' }}</h2>
+                                <div class="mt-6 flex items-start gap-4">
+                                    <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700 dark:bg-blue-400/20 dark:text-blue-200">
+                                        {{ strtoupper(substr($selectedMessage->from_name ?: $selectedMessage->from_email ?: $account->display_name, 0, 1)) }}
+                                    </div>
+                                    <div class="min-w-0">
+                                        <p class="font-semibold text-slate-900 dark:text-zinc-100">
+                                            {{ $selectedMessage->from_name ?: $selectedMessage->from_email ?: $account?->display_name }}
+                                            @if ($selectedMessage->from_email)
+                                                <span class="font-normal text-slate-500 dark:text-zinc-400">&lt;{{ $selectedMessage->from_email }}&gt;</span>
+                                            @endif
+                                        </p>
+                                        <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
+                                            {{ $folder === 'Sent' ? 'sent from ' . $account->email_address : 'to ' . $account->email_address }}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-8 rounded-xl border border-slate-200 bg-white p-6 text-base leading-8 text-slate-800 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
+                            @if ($selectedMessage->body_html)
+                                {!! nl2br(e(strip_tags($selectedMessage->body_html))) !!}
+                            @else
+                                {!! nl2br(e($selectedMessage->body_text ?: 'No message body.')) !!}
+                            @endif
+                        </div>
+                    </article>
                 @else
                     <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-zinc-800">
                         <div>
@@ -168,35 +219,6 @@
                             {{ $messages->links() }}
                         </div>
                     @endif
-                @endif
-            </section>
-
-            <section class="min-h-[32rem] bg-white p-6 dark:bg-zinc-900">
-                @if ($selectedMessage)
-                    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                        <div class="min-w-0">
-                            <h2 class="text-xl font-bold text-slate-900 dark:text-zinc-100">{{ $selectedMessage->subject ?: '(No subject)' }}</h2>
-                            <p class="mt-2 text-sm text-slate-500 dark:text-zinc-400">
-                                {{ $selectedMessage->from_name ?: $selectedMessage->from_email ?: $account?->display_name }}
-                                @if ($selectedMessage->from_email)
-                                    <span>({{ $selectedMessage->from_email }})</span>
-                                @endif
-                            </p>
-                        </div>
-                        <span class="text-sm text-slate-500 dark:text-zinc-400">{{ $selectedMessage->sent_at?->format('m/d/Y @ h:i A') }}</span>
-                    </div>
-
-                    <div class="mt-6 max-h-[calc(100vh-21rem)] overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-6 text-base leading-8 text-slate-700 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
-                        @if ($selectedMessage->body_html)
-                            {!! nl2br(e(strip_tags($selectedMessage->body_html))) !!}
-                        @else
-                            {!! nl2br(e($selectedMessage->body_text ?: 'No message body.')) !!}
-                        @endif
-                    </div>
-                @else
-                    <div class="flex h-full min-h-[32rem] items-center justify-center text-center text-sm text-slate-500 dark:text-zinc-400">
-                        Select an email to read.
-                    </div>
                 @endif
             </section>
         </div>

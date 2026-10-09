@@ -35,7 +35,7 @@ class EmailMailboxController extends Controller
 
         $selectedMessage = $account && $request->filled('message')
             ? $account->messages()->whereKey($request->query('message'))->first()
-            : ($messages instanceof \Illuminate\Contracts\Pagination\Paginator ? $messages->first() : null);
+            : null;
 
         $brands = $this->canManageEmailAccounts($user)
             ? Brand::orderBy('imprint_name')->get()
