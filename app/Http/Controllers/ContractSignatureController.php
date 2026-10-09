@@ -676,10 +676,9 @@ class ContractSignatureController extends Controller
             $overlayRef = $nextObject++;
             $newObjects += $overlay['objects'];
             $newObjects[$overlayRef] = $this->pdfStreamObject($overlay['content']);
-            $newObjects[$pageRef] = $this->appendPdfPageContent(
-                $this->addPdfPageResources($page, $fontRegularRef, $fontBoldRef, $fontScriptRef, $overlay['xobjects']),
-                $overlayRef
-            );
+            $resourceUpdate = $this->addPdfPageResources($page, $objects, $fontRegularRef, $fontBoldRef, $fontScriptRef, $overlay['xobjects']);
+            $newObjects += $resourceUpdate['objects'];
+            $newObjects[$pageRef] = $this->appendPdfPageContent($resourceUpdate['page'], $overlayRef);
         }
 
         return [
@@ -792,60 +791,118 @@ class ContractSignatureController extends Controller
         return preg_replace('/>>\s*$/', '/Contents ' . $contentRef . ' 0 R >>', $page, 1);
     }
 
-    private function addPdfPageResources(string $page, int $fontRegularRef, int $fontBoldRef, int $fontScriptRef, array $xobjects = []): string
+    private function addPdfPageResources(string $page, array $objects, int $fontRegularRef, int $fontBoldRef, int $fontScriptRef, array $xobjects = []): array
     {
         $fontResources = '/ESR ' . $fontRegularRef . ' 0 R /ESB ' . $fontBoldRef . ' 0 R /ESS ' . $fontScriptRef . ' 0 R';
+        $newObjects = [];
+
+        if (! $this->pdfDictionaryBounds($page, '/Resources')
+            && preg_match('/\/Resources\s+(\d+)\s+\d+\s+R/', $page, $resourceMatch)) {
+            $resourceRef = (int) $resourceMatch[1];
+            $resources = $objects[$resourceRef] ?? '<< >>';
+            $resources = $this->addPdfFontResources($resources, $fontResources, $objects, $newObjects);
+            $resources = $this->addPdfXObjectResources($resources, $xobjects, $objects, $newObjects);
+            $newObjects[$resourceRef] = $resources;
+
+            return [
+                'page' => $page,
+                'objects' => $newObjects,
+            ];
+        }
+
         $resourceBounds = $this->pdfDictionaryBounds($page, '/Resources');
 
         if (! $resourceBounds) {
             $xobjectResources = $this->pdfXObjectResources($xobjects);
 
-            return preg_replace(
+            return [
+                'page' => preg_replace(
                 '/>>\s*$/',
                 '/Resources << /Font << ' . $fontResources . ' >>' . $xobjectResources . ' >> >>',
                 $page,
                 1
-            );
+                ),
+                'objects' => [],
+            ];
         }
 
         [$resourceStart, $resourceEnd] = $resourceBounds;
         $resources = substr($page, $resourceStart, $resourceEnd - $resourceStart);
+        $resources = $this->addPdfFontResources($resources, $fontResources, $objects, $newObjects);
+        $resources = $this->addPdfXObjectResources($resources, $xobjects, $objects, $newObjects);
+
+        return [
+            'page' => substr($page, 0, $resourceStart) . $resources . substr($page, $resourceEnd),
+            'objects' => $newObjects,
+        ];
+    }
+
+    private function addPdfFontResources(string $resources, string $fontResources, array $objects, array &$newObjects): string
+    {
         $fontBounds = $this->pdfDictionaryBounds($resources, '/Font');
 
         if ($fontBounds) {
-            [$fontStart, $fontEnd] = $fontBounds;
-            $resources = substr($resources, 0, $fontEnd - 2)
-                . ' ' . $fontResources . ' '
-                . substr($resources, $fontEnd - 2);
-        } else {
-            $resources = substr($resources, 0, -2)
-                . ' /Font << ' . $fontResources . ' >> '
-                . substr($resources, -2);
+            return $this->appendPdfDictionaryEntries($resources, $fontBounds, $fontResources);
         }
 
-        $resources = $this->addPdfXObjectResources($resources, $xobjects);
+        if (preg_match('/\/Font\s+(\d+)\s+\d+\s+R/', $resources, $fontRefMatch)) {
+            $fontRef = (int) $fontRefMatch[1];
+            $fontObject = $newObjects[$fontRef] ?? $objects[$fontRef] ?? null;
 
-        return substr($page, 0, $resourceStart) . $resources . substr($page, $resourceEnd);
+            if ($fontObject && str_starts_with(trim($fontObject), '<<')) {
+                $newObjects[$fontRef] = preg_replace(
+                    '/>>\s*$/',
+                    ' ' . $fontResources . ' >>',
+                    $fontObject,
+                    1
+                ) ?? $fontObject;
+
+                return $resources;
+            }
+        }
+
+        return preg_replace('/>>\s*$/', ' /Font << ' . $fontResources . ' >> >>', $resources, 1) ?? $resources;
     }
 
-    private function addPdfXObjectResources(string $resources, array $xobjects): string
+    private function addPdfXObjectResources(string $resources, array $xobjects, array $objects, array &$newObjects): string
     {
         if ($xobjects === []) {
             return $resources;
         }
 
-        $xobjectResources = trim($this->pdfXObjectResources($xobjects));
+        $xobjectEntries = $this->pdfXObjectResourceEntries($xobjects);
         $xobjectBounds = $this->pdfDictionaryBounds($resources, '/XObject');
 
         if ($xobjectBounds) {
-            [$xobjectStart, $xobjectEnd] = $xobjectBounds;
-
-            return substr($resources, 0, $xobjectEnd - 2)
-                . ' ' . trim(str_replace(['/XObject', '<<', '>>'], '', $xobjectResources)) . ' '
-                . substr($resources, $xobjectEnd - 2);
+            return $this->appendPdfDictionaryEntries($resources, $xobjectBounds, $xobjectEntries);
         }
 
-        return substr($resources, 0, -2) . ' ' . $xobjectResources . ' ' . substr($resources, -2);
+        if (preg_match('/\/XObject\s+(\d+)\s+\d+\s+R/', $resources, $xobjectRefMatch)) {
+            $xobjectRef = (int) $xobjectRefMatch[1];
+            $xobjectObject = $newObjects[$xobjectRef] ?? $objects[$xobjectRef] ?? null;
+
+            if ($xobjectObject && str_starts_with(trim($xobjectObject), '<<')) {
+                $newObjects[$xobjectRef] = preg_replace(
+                    '/>>\s*$/',
+                    ' ' . $xobjectEntries . ' >>',
+                    $xobjectObject,
+                    1
+                ) ?? $xobjectObject;
+
+                return $resources;
+            }
+        }
+
+        return preg_replace('/>>\s*$/', ' /XObject << ' . $xobjectEntries . ' >> >>', $resources, 1) ?? $resources;
+    }
+
+    private function appendPdfDictionaryEntries(string $content, array $bounds, string $entries): string
+    {
+        [, $end] = $bounds;
+
+        return substr($content, 0, $end - 2)
+            . ' ' . $entries . ' '
+            . substr($content, $end - 2);
     }
 
     private function pdfXObjectResources(array $xobjects): string
@@ -854,11 +911,16 @@ class ContractSignatureController extends Controller
             return '';
         }
 
+        return ' /XObject << ' . $this->pdfXObjectResourceEntries($xobjects) . ' >>';
+    }
+
+    private function pdfXObjectResourceEntries(array $xobjects): string
+    {
         $resources = collect($xobjects)
             ->map(fn ($ref, $name) => '/' . $name . ' ' . $ref . ' 0 R')
             ->implode(' ');
 
-        return ' /XObject << ' . $resources . ' >>';
+        return $resources;
     }
 
     private function signatureImagePdfObject(string $text, int $width, int $height): ?string
