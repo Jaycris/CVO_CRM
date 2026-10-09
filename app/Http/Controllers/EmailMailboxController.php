@@ -180,6 +180,10 @@ class EmailMailboxController extends Controller
             'cc' => ['nullable', 'string', 'max:1000'],
             'subject' => ['required', 'string', 'max:255'],
             'body' => ['required', 'string', 'max:20000'],
+            'attachments' => ['nullable', 'array'],
+            'attachments.*' => ['file', 'max:10240'],
+            'inline_images' => ['nullable', 'array'],
+            'inline_images.*' => ['image', 'max:10240'],
         ]);
 
         $account = EmailAccount::findOrFail($validated['email_account_id']);
@@ -195,7 +199,11 @@ class EmailMailboxController extends Controller
         }
 
         try {
-            $this->sendSmtpMessage($account, $to, $cc, $validated['subject'], $validated['body']);
+            $attachments = array_merge(
+                $request->file('attachments', []),
+                $request->file('inline_images', [])
+            );
+            $this->sendSmtpMessage($account, $to, $cc, $validated['subject'], $validated['body'], $attachments);
         } catch (\Throwable $exception) {
             report($exception);
 
@@ -216,6 +224,7 @@ class EmailMailboxController extends Controller
             'body_text' => $validated['body'],
             'sent_at' => now(),
             'is_seen' => true,
+            'has_attachments' => ! empty($attachments),
         ]);
 
         return redirect()
@@ -263,7 +272,7 @@ class EmailMailboxController extends Controller
         return $user->role?->name === 'Admin';
     }
 
-    private function sendSmtpMessage(EmailAccount $account, array $to, array $cc, string $subject, string $body): void
+    private function sendSmtpMessage(EmailAccount $account, array $to, array $cc, string $subject, string $body, array $attachments = []): void
     {
         $transport = new EsmtpTransport(
             $account->smtp_host,
@@ -285,6 +294,16 @@ class EmailMailboxController extends Controller
 
         foreach ($cc as $address) {
             $email->addCc($address);
+        }
+
+        foreach ($attachments as $attachment) {
+            if ($attachment && $attachment->isValid()) {
+                $email->attachFromPath(
+                    $attachment->getRealPath(),
+                    $attachment->getClientOriginalName(),
+                    $attachment->getMimeType()
+                );
+            }
         }
 
         (new Mailer($transport))->send($email);

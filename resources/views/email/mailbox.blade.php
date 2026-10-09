@@ -3,7 +3,58 @@
         Email
     </x-slot>
 
-    <div class="space-y-6" x-data="{ composeOpen: @js($errors->has('to') || $errors->has('subject') || $errors->has('body')), settingsOpen: @js($canManageEmailAccounts && ($errors->has('email_address') || request()->boolean('settings') || ! $account)), mailboxType: @js(old('mailbox_type', $settingsAccount?->user_id ? 'employee' : 'brand')) }">
+    <div class="space-y-6" x-data="{
+        composeOpen: @js($errors->has('to') || $errors->has('subject') || $errors->has('body')),
+        settingsOpen: @js($canManageEmailAccounts && ($errors->has('email_address') || request()->boolean('settings') || ! $account)),
+        mailboxType: @js(old('mailbox_type', $settingsAccount?->user_id ? 'employee' : 'brand')),
+        bodyText: @js(old('body', '')),
+        attachmentNames: [],
+        imageNames: [],
+        showMoreOptions: false,
+        showSendOptions: false,
+        insertText(text) {
+            const body = this.$refs.body;
+            const start = body?.selectionStart ?? this.bodyText.length;
+            const end = body?.selectionEnd ?? this.bodyText.length;
+            this.bodyText = this.bodyText.slice(0, start) + text + this.bodyText.slice(end);
+            this.$nextTick(() => {
+                if (body) {
+                    body.focus();
+                    body.selectionStart = body.selectionEnd = start + text.length;
+                }
+            });
+        },
+        handleComposeAction(action) {
+            this.showMoreOptions = false;
+            this.showSendOptions = false;
+            if (action === 'format') this.insertText('\n\n---\n');
+            if (action === 'attach') this.$refs.attachments.click();
+            if (action === 'link') {
+                const url = prompt('Paste the link URL');
+                if (url) this.insertText(url);
+            }
+            if (action === 'emoji') this.insertText(' 🙂');
+            if (action === 'drive') this.insertText('\nDrive file link: ');
+            if (action === 'image') this.$refs.images.click();
+            if (action === 'confidential') this.insertText('\n\nConfidential: Please do not forward this message without permission.');
+            if (action === 'signature') this.insertText(@js("\n\nRegards,\n" . trim((auth()->user()->first_name ?? '') . ' ' . (auth()->user()->last_name ?? '')) . "\n" . auth()->user()->email));
+            if (action === 'calendar') this.insertText('\n\nMeeting invite:\nDate:\nTime:\nAgenda:\n');
+            if (action === 'more') this.showMoreOptions = ! this.showMoreOptions;
+        },
+        updateFiles(type, event) {
+            const names = Array.from(event.target.files || []).map(file => file.name);
+            if (type === 'attachments') this.attachmentNames = names;
+            if (type === 'images') this.imageNames = names;
+        },
+        discardCompose() {
+            this.bodyText = '';
+            this.attachmentNames = [];
+            this.imageNames = [];
+            if (this.$refs.attachments) this.$refs.attachments.value = '';
+            if (this.$refs.images) this.$refs.images.value = '';
+            this.composeOpen = false;
+        }
+    }">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
                 <h1 class="text-2xl font-bold text-slate-900 dark:text-zinc-100">Email</h1>
@@ -228,9 +279,11 @@
                  x-cloak
                  x-transition.opacity
                  class="crm-top-modal-backdrop flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm sm:p-6">
-                <form method="POST" action="{{ route('email.send') }}" data-no-page-loader class="crm-modal-panel w-full max-w-2xl rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
+                <form method="POST" action="{{ route('email.send') }}" enctype="multipart/form-data" data-no-page-loader class="crm-modal-panel w-full max-w-2xl rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
                     @csrf
                     <input type="hidden" name="email_account_id" value="{{ $account?->id }}">
+                    <input x-ref="attachments" type="file" name="attachments[]" multiple class="hidden" x-on:change="updateFiles('attachments', $event)">
+                    <input x-ref="images" type="file" name="inline_images[]" accept="image/*" multiple class="hidden" x-on:change="updateFiles('images', $event)">
                     <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-zinc-800">
                         <h2 class="font-bold text-slate-900 dark:text-zinc-100">New Message</h2>
                         <button type="button" x-on:click="composeOpen = false" class="rounded-lg px-3 py-1 text-sm font-semibold text-slate-500 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Close</button>
@@ -252,8 +305,16 @@
                         </div>
                         <div>
                             <label for="body" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Message</label>
-                            <textarea id="body" name="body" rows="10" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">{{ old('body') }}</textarea>
+                            <textarea id="body" x-ref="body" x-model="bodyText" name="body" rows="10" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"></textarea>
                             <x-input-error :messages="$errors->get('body')" class="mt-2" />
+                        </div>
+                        <div x-show="attachmentNames.length || imageNames.length" x-cloak class="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
+                            <template x-if="attachmentNames.length">
+                                <p><span class="font-semibold">Attached:</span> <span x-text="attachmentNames.join(', ')"></span></p>
+                            </template>
+                            <template x-if="imageNames.length">
+                                <p><span class="font-semibold">Images:</span> <span x-text="imageNames.join(', ')"></span></p>
+                            </template>
                         </div>
                     </div>
                     <div class="flex items-center justify-between gap-3 border-t border-slate-200 px-5 py-4 dark:border-zinc-800">
@@ -262,7 +323,7 @@
                                 <button type="submit" class="h-11 px-5 text-sm font-semibold hover:bg-blue-700">
                                     Send
                                 </button>
-                                <button type="button" title="More send options" aria-label="More send options" class="flex h-11 w-10 items-center justify-center border-l border-blue-500 hover:bg-blue-700">
+                                <button type="button" x-on:click="showSendOptions = ! showSendOptions; showMoreOptions = false" title="More send options" aria-label="More send options" class="flex h-11 w-10 items-center justify-center border-l border-blue-500 hover:bg-blue-700">
                                     <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                         <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clip-rule="evenodd" />
                                     </svg>
@@ -271,21 +332,21 @@
 
                             @php
                                 $composeActions = [
-                                    ['title' => 'Formatting options', 'svg' => '<path d="M4 15.5 8.3 4h1.4L14 15.5h-1.4l-1.1-3H6.6l-1.1 3H4Zm3-4.2h4L9 5.8l-2 5.5Zm8.3 4.2V7.2h1.2v1.1a2.9 2.9 0 0 1 2.4-1.3v1.3a2.8 2.8 0 0 0-2.4 1.4v5.8h-1.2Z"/>'],
-                                    ['title' => 'Attach files', 'svg' => '<path d="M7.8 16.5a4.3 4.3 0 0 1 0-6.1l5.2-5.2a3 3 0 0 1 4.2 4.2l-6.1 6.1a1.8 1.8 0 0 1-2.5-2.5l5.5-5.5.9.9-5.5 5.5a.5.5 0 0 0 .7.7l6.1-6.1a1.7 1.7 0 0 0-2.4-2.4l-5.2 5.2a3 3 0 0 0 4.2 4.2l5.2-5.2.9.9-5.2 5.2a4.3 4.3 0 0 1-6.1 0Z"/>'],
-                                    ['title' => 'Insert link', 'svg' => '<path d="M7.2 13.4H5.8a3.4 3.4 0 1 1 0-6.8h4v1.3h-4a2.1 2.1 0 1 0 0 4.2h1.4v1.3Zm1.1-2.7V9.3h5.4v1.4H8.3Zm1.7 2.7v-1.3h4.2a2.1 2.1 0 1 0 0-4.2H10V6.6h4.2a3.4 3.4 0 1 1 0 6.8H10Z"/>'],
-                                    ['title' => 'Insert emoji', 'svg' => '<path d="M10 17a7 7 0 1 1 0-14 7 7 0 0 1 0 14Zm0-1.3A5.7 5.7 0 1 0 10 4.3a5.7 5.7 0 0 0 0 11.4Zm-2.5-6.2a.9.9 0 1 1 0-1.8.9.9 0 0 1 0 1.8Zm5 0a.9.9 0 1 1 0-1.8.9.9 0 0 1 0 1.8ZM7 11.2h6a3.2 3.2 0 0 1-6 0Z"/>'],
-                                    ['title' => 'Insert from Drive', 'svg' => '<path d="M7.4 3.5h5.2L18 13.1l-2.6 3.4H4.6L2 13.1l5.4-9.6Zm.8 1.4-4.6 8.2h3.8L12 4.9H8.2Zm5.4.7-4.3 7.5h7l-2.7-7.5Zm-8 9.5h8.8l.9-1.2H4.7l.9 1.2Z"/>'],
-                                    ['title' => 'Insert photo', 'svg' => '<path d="M4 5.2A1.2 1.2 0 0 1 5.2 4h9.6A1.2 1.2 0 0 1 16 5.2v9.6a1.2 1.2 0 0 1-1.2 1.2H5.2A1.2 1.2 0 0 1 4 14.8V5.2Zm1.4.2v7.4l2.4-2.4 2 2 2.7-3.4 2.1 2.7V5.4H5.4Zm9.2 8.9-2.1-2.8-2.5 3.1h4.6ZM5.4 14.6h2.8L7.8 12l-2.4 2.4v.2ZM8 8.3a1.1 1.1 0 1 1 0-2.2 1.1 1.1 0 0 1 0 2.2Z"/>'],
-                                    ['title' => 'Confidential mode', 'svg' => '<path d="M5.2 8.5V6.8a4.8 4.8 0 0 1 9.6 0v1.7H16V16H4V8.5h1.2Zm1.4 0h6.8V6.8a3.4 3.4 0 0 0-6.8 0v1.7Zm4.1 3.2a1 1 0 1 0-1.4 0v1.9h1.4v-1.9Z"/>'],
-                                    ['title' => 'Insert signature', 'svg' => '<path d="M4 14.8c2.2-2.8 3.8-4.7 4.7-5.7 1-1.1 1.9-1.5 2.6-1.1.9.5.6 1.7.2 2.7-.2.5-.5 1.2-.3 1.3.4.2 1.6-1.1 2.3-2l1 .8c-1.7 2.2-3.1 3-4 2.4-1-.6-.6-1.8-.2-2.9.2-.5.4-1.1.3-1.2-.1-.1-.5.1-1 .7-.9 1-2.5 2.9-4.6 5.6L4 14.8Zm10.7-.2H18V16h-3.3v-1.4Z"/>'],
-                                    ['title' => 'Insert calendar invite', 'svg' => '<path d="M6 3h1.4v2H13V3h1.4v2H17v12H3V5h3V3Zm9.6 5.4H4.4v7.2h11.2V8.4ZM4.4 6.4V7h11.2v-.6H4.4Z"/>'],
-                                    ['title' => 'More options', 'svg' => '<path d="M10 6.2a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4Zm0 5a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4Zm0 5a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4Z"/>'],
+                                    ['title' => 'Formatting options', 'action' => 'format', 'svg' => '<path d="M4 15.5 8.3 4h1.4L14 15.5h-1.4l-1.1-3H6.6l-1.1 3H4Zm3-4.2h4L9 5.8l-2 5.5Zm8.3 4.2V7.2h1.2v1.1a2.9 2.9 0 0 1 2.4-1.3v1.3a2.8 2.8 0 0 0-2.4 1.4v5.8h-1.2Z"/>'],
+                                    ['title' => 'Attach files', 'action' => 'attach', 'svg' => '<path d="M7.8 16.5a4.3 4.3 0 0 1 0-6.1l5.2-5.2a3 3 0 0 1 4.2 4.2l-6.1 6.1a1.8 1.8 0 0 1-2.5-2.5l5.5-5.5.9.9-5.5 5.5a.5.5 0 0 0 .7.7l6.1-6.1a1.7 1.7 0 0 0-2.4-2.4l-5.2 5.2a3 3 0 0 0 4.2 4.2l5.2-5.2.9.9-5.2 5.2a4.3 4.3 0 0 1-6.1 0Z"/>'],
+                                    ['title' => 'Insert link', 'action' => 'link', 'svg' => '<path d="M7.2 13.4H5.8a3.4 3.4 0 1 1 0-6.8h4v1.3h-4a2.1 2.1 0 1 0 0 4.2h1.4v1.3Zm1.1-2.7V9.3h5.4v1.4H8.3Zm1.7 2.7v-1.3h4.2a2.1 2.1 0 1 0 0-4.2H10V6.6h4.2a3.4 3.4 0 1 1 0 6.8H10Z"/>'],
+                                    ['title' => 'Insert emoji', 'action' => 'emoji', 'svg' => '<path d="M10 17a7 7 0 1 1 0-14 7 7 0 0 1 0 14Zm0-1.3A5.7 5.7 0 1 0 10 4.3a5.7 5.7 0 0 0 0 11.4Zm-2.5-6.2a.9.9 0 1 1 0-1.8.9.9 0 0 1 0 1.8Zm5 0a.9.9 0 1 1 0-1.8.9.9 0 0 1 0 1.8ZM7 11.2h6a3.2 3.2 0 0 1-6 0Z"/>'],
+                                    ['title' => 'Insert Drive link placeholder', 'action' => 'drive', 'svg' => '<path d="M7.4 3.5h5.2L18 13.1l-2.6 3.4H4.6L2 13.1l5.4-9.6Zm.8 1.4-4.6 8.2h3.8L12 4.9H8.2Zm5.4.7-4.3 7.5h7l-2.7-7.5Zm-8 9.5h8.8l.9-1.2H4.7l.9 1.2Z"/>'],
+                                    ['title' => 'Attach image', 'action' => 'image', 'svg' => '<path d="M4 5.2A1.2 1.2 0 0 1 5.2 4h9.6A1.2 1.2 0 0 1 16 5.2v9.6a1.2 1.2 0 0 1-1.2 1.2H5.2A1.2 1.2 0 0 1 4 14.8V5.2Zm1.4.2v7.4l2.4-2.4 2 2 2.7-3.4 2.1 2.7V5.4H5.4Zm9.2 8.9-2.1-2.8-2.5 3.1h4.6ZM5.4 14.6h2.8L7.8 12l-2.4 2.4v.2ZM8 8.3a1.1 1.1 0 1 1 0-2.2 1.1 1.1 0 0 1 0 2.2Z"/>'],
+                                    ['title' => 'Add confidential note', 'action' => 'confidential', 'svg' => '<path d="M5.2 8.5V6.8a4.8 4.8 0 0 1 9.6 0v1.7H16V16H4V8.5h1.2Zm1.4 0h6.8V6.8a3.4 3.4 0 0 0-6.8 0v1.7Zm4.1 3.2a1 1 0 1 0-1.4 0v1.9h1.4v-1.9Z"/>'],
+                                    ['title' => 'Insert signature', 'action' => 'signature', 'svg' => '<path d="M4 14.8c2.2-2.8 3.8-4.7 4.7-5.7 1-1.1 1.9-1.5 2.6-1.1.9.5.6 1.7.2 2.7-.2.5-.5 1.2-.3 1.3.4.2 1.6-1.1 2.3-2l1 .8c-1.7 2.2-3.1 3-4 2.4-1-.6-.6-1.8-.2-2.9.2-.5.4-1.1.3-1.2-.1-.1-.5.1-1 .7-.9 1-2.5 2.9-4.6 5.6L4 14.8Zm10.7-.2H18V16h-3.3v-1.4Z"/>'],
+                                    ['title' => 'Insert calendar invite template', 'action' => 'calendar', 'svg' => '<path d="M6 3h1.4v2H13V3h1.4v2H17v12H3V5h3V3Zm9.6 5.4H4.4v7.2h11.2V8.4ZM4.4 6.4V7h11.2v-.6H4.4Z"/>'],
+                                    ['title' => 'More options', 'action' => 'more', 'svg' => '<path d="M10 6.2a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4Zm0 5a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4Zm0 5a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4Z"/>'],
                                 ];
                             @endphp
 
                             @foreach ($composeActions as $action)
-                                <button type="button" title="{{ $action['title'] }}" aria-label="{{ $action['title'] }}" class="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100">
+                                <button type="button" x-on:click="handleComposeAction('{{ $action['action'] }}')" title="{{ $action['title'] }}" aria-label="{{ $action['title'] }}" class="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100">
                                     <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                         {!! $action['svg'] !!}
                                     </svg>
@@ -293,11 +354,20 @@
                             @endforeach
                         </div>
 
-                        <button type="button" x-on:click="composeOpen = false" title="Discard draft" aria-label="Discard draft" class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-rose-600 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-rose-300">
+                        <button type="button" x-on:click="discardCompose()" title="Discard draft" aria-label="Discard draft" class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-rose-600 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-rose-300">
                             <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                 <path d="M7 3.5h6l.6 1.5H17v1.4H3V5h3.4L7 3.5Zm-1.8 4h9.6l-.6 9H5.8l-.6-9Zm2.1 1.4.4 6.2h4.6l.4-6.2H7.3Z"/>
                             </svg>
                         </button>
+                    </div>
+                    <div x-show="showSendOptions || showMoreOptions" x-cloak class="border-t border-slate-200 bg-slate-50 px-5 py-3 text-sm text-slate-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
+                        <div x-show="showSendOptions">
+                            Send uses the selected CRM mailbox. Scheduled send can be added later when calendar scheduling is connected.
+                        </div>
+                        <div x-show="showMoreOptions" class="flex flex-wrap gap-2">
+                            <button type="button" x-on:click="insertText('\n\nPriority: High'); showMoreOptions = false" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold hover:bg-slate-100 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800">Mark high priority</button>
+                            <button type="button" x-on:click="insertText('\n\nPlease reply when received.'); showMoreOptions = false" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold hover:bg-slate-100 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800">Request reply</button>
+                        </div>
                     </div>
                 </form>
             </div>
