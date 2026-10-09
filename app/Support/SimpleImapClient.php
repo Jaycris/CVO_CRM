@@ -98,6 +98,7 @@ class SimpleImapClient
 
         [$rawHeaders, $rawBody] = $this->splitHeadersAndBody($rawMessage);
         $headers = $this->parseHeaders($rawHeaders);
+        $body = $this->extractBody($rawBody, $headers);
 
         return [
             'uid' => $uid,
@@ -105,7 +106,8 @@ class SimpleImapClient
             'subject' => $this->decodeHeader($headers['subject'] ?? '(No subject)') ?: '(No subject)',
             'from_name' => $this->fromName($headers['from'] ?? null),
             'from_email' => $this->fromEmail($headers['from'] ?? null),
-            'body_text' => $this->extractBody($rawBody, $headers),
+            'body_text' => $body['text'],
+            'body_html' => $body['html'],
             'sent_at' => $headers['date'] ?? null,
             'is_seen' => str_contains($response['raw'], '\\Seen'),
             'is_answered' => str_contains($response['raw'], '\\Answered'),
@@ -226,20 +228,33 @@ class SimpleImapClient
         return $messageId ? trim($messageId, " \t\n\r\0\x0B<>") : null;
     }
 
-    private function extractBody(string $rawBody, array $headers): string
+    private function extractBody(string $rawBody, array $headers): array
     {
-        $contentType = $headers['content-type'] ?? '';
+        $contentType = strtolower($headers['content-type'] ?? '');
 
         if (preg_match('/boundary="?([^";]+)"?/i', $contentType, $matches)) {
             return $this->extractMultipartBody($rawBody, $matches[1]);
         }
 
-        return $this->decodeBody($rawBody, $headers);
+        $decodedBody = $this->decodeBody($rawBody, $headers);
+
+        if (str_contains($contentType, 'text/html')) {
+            return [
+                'text' => $this->htmlToText($decodedBody),
+                'html' => $this->sanitizeHtml($decodedBody),
+            ];
+        }
+
+        return [
+            'text' => $decodedBody,
+            'html' => null,
+        ];
     }
 
-    private function extractMultipartBody(string $rawBody, string $boundary): string
+    private function extractMultipartBody(string $rawBody, string $boundary): array
     {
-        $fallback = '';
+        $html = null;
+        $text = '';
 
         foreach (explode('--'.$boundary, $rawBody) as $part) {
             if (trim($part) === '' || str_starts_with(trim($part), '--')) {
@@ -251,15 +266,19 @@ class SimpleImapClient
             $contentType = strtolower($partHeaders['content-type'] ?? '');
 
             if (str_contains($contentType, 'text/plain')) {
-                return $this->decodeBody($partBody, $partHeaders);
+                $text = $this->decodeBody($partBody, $partHeaders);
+                continue;
             }
 
-            if ($fallback === '' && str_contains($contentType, 'text/html')) {
-                $fallback = trim(html_entity_decode(strip_tags($this->decodeBody($partBody, $partHeaders))));
+            if ($html === null && str_contains($contentType, 'text/html')) {
+                $html = $this->sanitizeHtml($this->decodeBody($partBody, $partHeaders));
             }
         }
 
-        return $fallback;
+        return [
+            'text' => $text !== '' ? $text : $this->htmlToText($html ?? ''),
+            'html' => $html,
+        ];
     }
 
     private function decodeBody(string $body, array $headers): string
@@ -284,5 +303,22 @@ class SimpleImapClient
     private function hasAttachments(string $rawMessage): bool
     {
         return (bool) preg_match('/Content-Disposition:\s*attachment/i', $rawMessage);
+    }
+
+    private function htmlToText(string $html): string
+    {
+        $html = preg_replace('/<(br|\/p|\/div|\/tr|\/table)\b[^>]*>/i', "\n", $html) ?? $html;
+
+        return trim(html_entity_decode(strip_tags($html)));
+    }
+
+    private function sanitizeHtml(string $html): string
+    {
+        $html = preg_replace('/<\s*(script|iframe|object|embed|form|input|button)\b[^>]*>.*?<\s*\/\s*\1\s*>/is', '', $html) ?? $html;
+        $html = preg_replace('/<\s*(script|iframe|object|embed|form|input|button)\b[^>]*\/?\s*>/is', '', $html) ?? $html;
+        $html = preg_replace('/\s+on[a-z]+\s*=\s*(".*?"|\'.*?\'|[^\s>]+)/i', '', $html) ?? $html;
+        $html = preg_replace('/javascript\s*:/i', '', $html) ?? $html;
+
+        return trim($html);
     }
 }

@@ -446,6 +446,7 @@ class EmailMailboxController extends Controller
                         'from_name' => $message['from_name'],
                         'from_email' => $message['from_email'],
                         'body_text' => $message['body_text'],
+                        'body_html' => $message['body_html'],
                         'sent_at' => $this->parseMessageDate($message['sent_at']),
                         'is_seen' => $message['is_seen'],
                         'is_answered' => $message['is_answered'],

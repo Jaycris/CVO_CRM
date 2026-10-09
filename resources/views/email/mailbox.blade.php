@@ -329,11 +329,19 @@
                             </div>
                         </div>
 
+                        @php
+                            $messageHtml = $selectedMessage->body_html;
+                            $messageText = $selectedMessage->body_text ?: 'No message body.';
+                            $textLooksLikeHtml = is_string($messageText) && preg_match('/^\s*(<!doctype|<html|<body|<table|<div|<p)\b/i', $messageText);
+                        @endphp
                         <div class="mt-8 rounded-xl border border-slate-200 bg-white p-6 text-base leading-8 text-slate-800 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
-                            @if ($selectedMessage->body_html)
-                                {!! nl2br(e(strip_tags($selectedMessage->body_html))) !!}
+                            @if ($messageHtml || $textLooksLikeHtml)
+                                <iframe title="Email message body"
+                                        sandbox
+                                        srcdoc="{{ $messageHtml ?: $messageText }}"
+                                        class="h-[44rem] w-full rounded-lg border-0 bg-white"></iframe>
                             @else
-                                {!! nl2br(e($selectedMessage->body_text ?: 'No message body.')) !!}
+                                {!! nl2br(e($messageText)) !!}
                             @endif
                         </div>
                     </article>
