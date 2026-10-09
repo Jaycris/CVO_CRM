@@ -336,7 +336,7 @@
                  x-cloak
                  x-transition.opacity
                  class="crm-top-modal-backdrop flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm sm:p-6">
-                <form method="POST" action="{{ route('email.send') }}" enctype="multipart/form-data" data-no-page-loader class="crm-modal-panel w-full max-w-2xl rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
+                <form method="POST" action="{{ route('email.send') }}" enctype="multipart/form-data" data-no-page-loader class="crm-modal-panel max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
                     @csrf
                     <input type="hidden" name="email_account_id" value="{{ $account?->id }}">
                     <input x-ref="attachments" type="file" name="attachments[]" multiple class="hidden" x-on:change="updateFiles('attachments', $event)">
@@ -393,6 +393,28 @@
                         </div>
                     </div>
                     <div class="relative flex items-center justify-between gap-3 border-t border-slate-200 px-5 py-4 dark:border-zinc-800">
+                        <div x-show="showSendOptions" x-cloak x-transition class="absolute bottom-full left-5 z-10 mb-3 w-72 overflow-hidden rounded-xl bg-white shadow-xl ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
+                            <button type="button" x-on:click="chooseScheduleSend()" class="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:text-zinc-100 dark:hover:bg-zinc-800">
+                                <svg class="h-5 w-5 text-blue-600" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10 3a7 7 0 1 0 7 7h-1.4A5.6 5.6 0 1 1 10 4.4V7l3.5-3.3L10 .5V3Zm.8 4.5H9.4v3.3l3 1.8.7-1.2-2.3-1.4V7.5Z"/></svg>
+                                Schedule send
+                            </button>
+                        </div>
+                        <div x-show="showEmojiPicker" x-cloak x-transition class="absolute bottom-full left-40 z-10 mb-3 w-[22rem] max-w-[calc(100vw-3rem)] rounded-xl bg-white p-3 shadow-xl ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
+                            <input type="text" placeholder="Search emoji" class="mb-3 w-full rounded-full border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                            <p class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-zinc-400">Recently used</p>
+                            <div class="grid grid-cols-10 gap-1">
+                                <template x-for="emoji in emojis" :key="emoji">
+                                    <button type="button" x-on:click="pickEmoji(emoji)" class="flex h-8 w-8 items-center justify-center rounded-lg text-lg hover:bg-slate-100 dark:hover:bg-zinc-800" x-text="emoji"></button>
+                                </template>
+                            </div>
+                        </div>
+                        <div x-show="showMoreOptions" x-cloak x-transition class="absolute bottom-full left-48 z-10 mb-3 flex w-72 flex-col gap-2 rounded-xl bg-white p-3 shadow-xl ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
+                            <button type="button" x-on:click="insertText('\n\nPriority: High'); showMoreOptions = false" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800">Mark high priority</button>
+                            <button type="button" x-on:click="insertText('\n\nPlease reply when received.'); showMoreOptions = false" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800">Request reply</button>
+                        </div>
+                        <div x-show="scheduleNote || composeNotice" x-cloak x-transition class="absolute bottom-full left-5 z-10 mb-3 max-w-sm rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
+                            <span x-text="scheduleNote || composeNotice"></span>
+                        </div>
                         <div class="flex min-w-0 flex-wrap items-center gap-2">
                             <div class="inline-flex overflow-hidden rounded-full bg-blue-600 text-white shadow-sm">
                                 <button type="submit" class="h-11 px-5 text-sm font-semibold hover:bg-blue-700">
@@ -434,29 +456,6 @@
                                 <path d="M7 3.5h6l.6 1.5H17v1.4H3V5h3.4L7 3.5Zm-1.8 4h9.6l-.6 9H5.8l-.6-9Zm2.1 1.4.4 6.2h4.6l.4-6.2H7.3Z"/>
                             </svg>
                         </button>
-                    </div>
-                    <div x-show="showSendOptions || showMoreOptions || showEmojiPicker || scheduleNote || composeNotice" x-cloak class="border-t border-slate-200 bg-slate-50 px-5 py-3 text-sm text-slate-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
-                        <div x-show="showSendOptions" class="max-w-xs overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
-                            <button type="button" x-on:click="chooseScheduleSend()" class="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:text-zinc-100 dark:hover:bg-zinc-800">
-                                <svg class="h-5 w-5 text-blue-600" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10 3a7 7 0 1 0 7 7h-1.4A5.6 5.6 0 1 1 10 4.4V7l3.5-3.3L10 .5V3Zm.8 4.5H9.4v3.3l3 1.8.7-1.2-2.3-1.4V7.5Z"/></svg>
-                                Schedule send
-                            </button>
-                        </div>
-                        <div x-show="showEmojiPicker" class="max-w-md rounded-xl bg-white p-3 shadow-lg ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
-                            <input type="text" placeholder="Search emoji" class="mb-3 w-full rounded-full border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-                            <p class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-zinc-400">Recently used</p>
-                            <div class="grid grid-cols-10 gap-1">
-                                <template x-for="emoji in emojis" :key="emoji">
-                                    <button type="button" x-on:click="pickEmoji(emoji)" class="flex h-8 w-8 items-center justify-center rounded-lg text-lg hover:bg-slate-100 dark:hover:bg-zinc-800" x-text="emoji"></button>
-                                </template>
-                            </div>
-                        </div>
-                        <div x-show="scheduleNote" class="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-blue-700 dark:border-blue-400/30 dark:bg-blue-400/10 dark:text-blue-200" x-text="scheduleNote"></div>
-                        <div x-show="composeNotice" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300" x-text="composeNotice"></div>
-                        <div x-show="showMoreOptions" class="flex flex-wrap gap-2">
-                            <button type="button" x-on:click="insertText('\n\nPriority: High'); showMoreOptions = false" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold hover:bg-slate-100 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800">Mark high priority</button>
-                            <button type="button" x-on:click="insertText('\n\nPlease reply when received.'); showMoreOptions = false" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold hover:bg-slate-100 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800">Request reply</button>
-                        </div>
                     </div>
                 </form>
             </div>
