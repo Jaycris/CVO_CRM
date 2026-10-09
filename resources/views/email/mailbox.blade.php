@@ -6,7 +6,7 @@
     <div class="space-y-6" x-data="{
         composeOpen: @js($errors->has('to') || $errors->has('subject') || $errors->has('body')),
         settingsOpen: @js($canManageEmailAccounts && ($errors->has('email_address') || request()->boolean('settings') || ! $account)),
-        signatureSettingsOpen: @js($errors->has('email_signature_name') || $errors->has('email_signature_title') || $errors->has('email_signature_contact_number')),
+        signatureSettingsOpen: @js($errors->has('email_signature_html')),
         mailboxType: @js(old('mailbox_type', $settingsAccount?->user_id ? 'employee' : 'brand')),
         bodyText: @js(old('body', '')),
         includeSignature: @js((bool) $emailSignature),
@@ -736,20 +736,6 @@
                             Automatically insert this signature in new compose messages.
                         </label>
 
-                        <div class="grid gap-4 sm:grid-cols-3">
-                            <div>
-                                <label for="email_signature_name" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Name</label>
-                                <input id="email_signature_name" name="email_signature_name" value="{{ old('email_signature_name', auth()->user()->email_signature_name ?: trim(auth()->user()->first_name . ' ' . auth()->user()->last_name)) }}" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-                            </div>
-                            <div>
-                                <label for="email_signature_title" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Job Title</label>
-                                <input id="email_signature_title" name="email_signature_title" value="{{ old('email_signature_title', auth()->user()->email_signature_title) }}" placeholder="Admin Support" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-                            </div>
-                            <div>
-                                <label for="email_signature_contact_number" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Contact Number</label>
-                                <input id="email_signature_contact_number" name="email_signature_contact_number" value="{{ old('email_signature_contact_number', auth()->user()->email_signature_contact_number ?: auth()->user()->phone_number) }}" placeholder="307-224-3882" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-                            </div>
-                        </div>
                     </div>
                     <div class="flex justify-end gap-3 border-t border-slate-200 px-5 py-4 dark:border-zinc-800">
                         <button type="button" x-on:click="signatureSettingsOpen = false" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-zinc-800 dark:text-zinc-200">Cancel</button>
