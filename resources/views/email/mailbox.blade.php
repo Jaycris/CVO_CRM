@@ -152,7 +152,7 @@
         initEmailAutoRefresh() {
             if (! this.autoRefreshUrl || this.emailFolder !== 'INBOX') return;
 
-            this.autoRefreshTimer = window.setInterval(() => this.autoRefreshInbox(), 45000);
+            this.autoRefreshTimer = window.setInterval(() => this.autoRefreshInbox(), 3000);
             window.addEventListener('beforeunload', () => {
                 if (this.autoRefreshTimer) window.clearInterval(this.autoRefreshTimer);
             });
