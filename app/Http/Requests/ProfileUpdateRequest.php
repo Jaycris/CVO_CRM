@@ -31,7 +31,7 @@ class ProfileUpdateRequest extends FormRequest
             'email_signature_name' => ['nullable', 'string', 'max:255'],
             'email_signature_title' => ['nullable', 'string', 'max:255'],
             'email_signature_contact_number' => ['nullable', 'string', 'max:255'],
-            'email_signature_html' => ['nullable', 'string', 'max:100000'],
+            'email_signature_html' => ['nullable', 'string', 'max:2000000'],
             'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ];
     }
