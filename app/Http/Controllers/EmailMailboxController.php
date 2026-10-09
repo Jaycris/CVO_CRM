@@ -21,7 +21,20 @@ class EmailMailboxController extends Controller
     {
         $user = $request->user();
         $accounts = $this->accessibleAccounts($user)->get();
-        $account = $accounts->firstWhere('id', (int) $request->query('account')) ?? $accounts->first();
+        $selectedAccountKey = 'email.selected_account.' . $user->id;
+        $requestedAccountId = $request->query('account');
+        $rememberedAccountId = $request->session()->get($selectedAccountKey);
+        $account = $requestedAccountId
+            ? $accounts->firstWhere('id', (int) $requestedAccountId)
+            : $accounts->firstWhere('id', (int) $rememberedAccountId);
+        $account ??= $accounts->first();
+
+        if ($account) {
+            $request->session()->put($selectedAccountKey, $account->id);
+        } else {
+            $request->session()->forget($selectedAccountKey);
+        }
+
         $folder = in_array($request->query('folder'), ['INBOX', 'Sent'], true) ? $request->query('folder') : 'INBOX';
 
         $messages = $account
