@@ -415,8 +415,8 @@
                         <div x-show="scheduleNote || composeNotice" x-cloak x-transition class="absolute bottom-full left-5 z-10 mb-3 max-w-sm rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
                             <span x-text="scheduleNote || composeNotice"></span>
                         </div>
-                        <div class="flex min-w-0 flex-wrap items-center gap-2">
-                            <div class="inline-flex overflow-hidden rounded-full bg-blue-600 text-white shadow-sm">
+                        <div class="flex min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-x-auto pb-1">
+                            <div class="inline-flex shrink-0 overflow-hidden rounded-full bg-blue-600 text-white shadow-sm">
                                 <button type="submit" class="h-11 px-5 text-sm font-semibold hover:bg-blue-700">
                                     Send
                                 </button>
@@ -443,7 +443,7 @@
                             @endphp
 
                             @foreach ($composeActions as $action)
-                                <button type="button" x-on:click="handleComposeAction('{{ $action['action'] }}')" title="{{ $action['title'] }}" aria-label="{{ $action['title'] }}" class="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100">
+                                <button type="button" x-on:click="handleComposeAction('{{ $action['action'] }}')" title="{{ $action['title'] }}" aria-label="{{ $action['title'] }}" class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100">
                                     <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                         {!! $action['svg'] !!}
                                     </svg>
