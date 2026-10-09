@@ -479,7 +479,7 @@ class ContractSignatureController extends Controller
             $endorsement->loadMissing(['agent.team.manager', 'agent.team.teamLeader', 'brand', 'contractSender']);
 
             $signedFileName = Str::beforeLast($fileName, '.') ?: $fileName;
-            $signedFileName .= '-signed.pdf';
+            $signedFileName = Str::of($signedFileName)->replaceMatches('/(?:-signed)+$/i', '')->toString() . '-signed.pdf';
 
             return response($this->signedContractPdf($endorsement), 200, [
                 'Content-Type' => 'application/pdf',
@@ -813,6 +813,28 @@ class ContractSignatureController extends Controller
         $resourceBounds = $this->pdfDictionaryBounds($page, '/Resources');
 
         if (! $resourceBounds) {
+            $inheritedResources = $this->inheritedPdfPageResources($page, $objects);
+
+            if ($inheritedResources) {
+                [$resources, $resourceRef] = $inheritedResources;
+                $resources = $this->addPdfFontResources($resources, $fontResources, $objects, $newObjects);
+                $resources = $this->addPdfXObjectResources($resources, $xobjects, $objects, $newObjects);
+
+                if ($resourceRef) {
+                    $newObjects[$resourceRef] = $resources;
+
+                    return [
+                        'page' => $page,
+                        'objects' => $newObjects,
+                    ];
+                }
+
+                return [
+                    'page' => preg_replace('/>>\s*$/', '/Resources ' . $resources . ' >>', $page, 1),
+                    'objects' => $newObjects,
+                ];
+            }
+
             $xobjectResources = $this->pdfXObjectResources($xobjects);
 
             return [
@@ -835,6 +857,49 @@ class ContractSignatureController extends Controller
             'page' => substr($page, 0, $resourceStart) . $resources . substr($page, $resourceEnd),
             'objects' => $newObjects,
         ];
+    }
+
+    private function inheritedPdfPageResources(string $page, array $objects): ?array
+    {
+        $current = $page;
+        $visited = [];
+
+        while (preg_match('/\/Parent\s+(\d+)\s+\d+\s+R/', $current, $parentMatch)) {
+            $parentRef = (int) $parentMatch[1];
+
+            if (isset($visited[$parentRef])) {
+                return null;
+            }
+
+            $visited[$parentRef] = true;
+            $parent = $objects[$parentRef] ?? null;
+
+            if (! $parent) {
+                return null;
+            }
+
+            if (! $this->pdfDictionaryBounds($parent, '/Resources')
+                && preg_match('/\/Resources\s+(\d+)\s+\d+\s+R/', $parent, $resourceMatch)) {
+                $resourceRef = (int) $resourceMatch[1];
+                $resourceObject = $objects[$resourceRef] ?? null;
+
+                if ($resourceObject && str_starts_with(trim($resourceObject), '<<')) {
+                    return [$resourceObject, $resourceRef];
+                }
+            }
+
+            $resourceBounds = $this->pdfDictionaryBounds($parent, '/Resources');
+
+            if ($resourceBounds) {
+                [$resourceStart, $resourceEnd] = $resourceBounds;
+
+                return [substr($parent, $resourceStart, $resourceEnd - $resourceStart), null];
+            }
+
+            $current = $parent;
+        }
+
+        return null;
     }
 
     private function addPdfFontResources(string $resources, string $fontResources, array $objects, array &$newObjects): string
