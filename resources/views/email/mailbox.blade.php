@@ -12,6 +12,9 @@
         includeSignature: @js((bool) $emailSignature),
         signatureText: @js($emailSignature['text'] ?? ''),
         signatureHtml: @js(old('email_signature_html', $signatureEditorHtml)),
+        selectedSignatureImage: null,
+        selectedSignatureImageWidth: 240,
+        signatureImageSelected: false,
         attachmentNames: [],
         imageNames: [],
         showMoreOptions: false,
@@ -107,8 +110,48 @@
             document.execCommand(command, false, value);
             this.signatureHtml = this.$refs.signatureEditor?.innerHTML || '';
         },
+        insertSignatureImage() {
+            const url = prompt('Paste the image URL');
+            if (! url) return;
+            this.$refs.signatureEditor?.focus();
+            document.execCommand('insertHTML', false, `<img src=&quot;${url.replace(/&quot;/g, '')}&quot; style=&quot;display:block; margin-top:16px; width:240px; max-width:100%; height:auto;&quot; alt=&quot;Signature image&quot;>`);
+            this.syncSignatureEditor();
+        },
+        selectSignatureImage(event) {
+            if (event.target?.tagName !== 'IMG') {
+                this.clearSignatureImageSelection();
+                return;
+            }
+
+            this.selectedSignatureImage?.classList.remove('ring-2', 'ring-blue-500');
+            this.selectedSignatureImage = event.target;
+            this.selectedSignatureImage.classList.add('ring-2', 'ring-blue-500');
+            this.signatureImageSelected = true;
+            this.selectedSignatureImageWidth = parseInt(this.selectedSignatureImage.style.width || this.selectedSignatureImage.width || 240, 10);
+        },
+        clearSignatureImageSelection() {
+            this.selectedSignatureImage?.classList.remove('ring-2', 'ring-blue-500');
+            this.selectedSignatureImage = null;
+            this.signatureImageSelected = false;
+        },
+        resizeSignatureImage(width) {
+            if (! this.selectedSignatureImage) return;
+            this.selectedSignatureImageWidth = parseInt(width, 10);
+            this.selectedSignatureImage.style.width = `${this.selectedSignatureImageWidth}px`;
+            this.selectedSignatureImage.style.maxWidth = '100%';
+            this.selectedSignatureImage.style.height = 'auto';
+            this.syncSignatureEditor();
+        },
         syncSignatureEditor() {
-            this.signatureHtml = this.$refs.signatureEditor?.innerHTML || '';
+            const editor = this.$refs.signatureEditor;
+            if (! editor) {
+                this.signatureHtml = '';
+                return;
+            }
+
+            const clone = editor.cloneNode(true);
+            clone.querySelectorAll('img').forEach((image) => image.classList.remove('ring-2', 'ring-blue-500'));
+            this.signatureHtml = clone.innerHTML || '';
         },
         updateFiles(type, event) {
             const names = Array.from(event.target.files || []).map(file => file.name);
@@ -689,9 +732,19 @@
                                 <div x-ref="signatureEditor"
                                      x-init="$el.innerHTML = signatureHtml"
                                      x-on:input="syncSignatureEditor()"
+                                     x-on:click="selectSignatureImage($event)"
+                                     x-on:paste.debounce.100ms="syncSignatureEditor()"
                                      contenteditable="true"
                                      class="min-h-56 rounded-lg bg-white p-3 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-200 dark:bg-zinc-900 dark:text-zinc-100"></div>
                                 <x-input-error :messages="$errors->get('email_signature_html')" class="mt-2" />
+                            </div>
+                            <div x-show="signatureImageSelected" x-cloak class="flex flex-wrap items-center gap-3 border-t border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-100">
+                                <span class="font-semibold">Image size</span>
+                                <input type="range" min="80" max="500" step="10" x-model="selectedSignatureImageWidth" x-on:input="resizeSignatureImage($event.target.value)" class="w-48 accent-blue-600">
+                                <span class="w-14 text-xs font-semibold" x-text="`${selectedSignatureImageWidth}px`"></span>
+                                <button type="button" x-on:click="resizeSignatureImage(160)" class="rounded-lg bg-white px-3 py-1 text-xs font-semibold text-blue-700 shadow-sm ring-1 ring-blue-100 hover:bg-blue-50 dark:bg-zinc-900 dark:text-blue-100 dark:ring-blue-400/20">Small</button>
+                                <button type="button" x-on:click="resizeSignatureImage(240)" class="rounded-lg bg-white px-3 py-1 text-xs font-semibold text-blue-700 shadow-sm ring-1 ring-blue-100 hover:bg-blue-50 dark:bg-zinc-900 dark:text-blue-100 dark:ring-blue-400/20">Medium</button>
+                                <button type="button" x-on:click="resizeSignatureImage(360)" class="rounded-lg bg-white px-3 py-1 text-xs font-semibold text-blue-700 shadow-sm ring-1 ring-blue-100 hover:bg-blue-50 dark:bg-zinc-900 dark:text-blue-100 dark:ring-blue-400/20">Large</button>
                             </div>
                             <div class="flex flex-wrap items-center gap-1 border-t border-slate-200 bg-slate-50 px-3 py-2 text-slate-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
                                 <button type="button" class="rounded-lg px-2 py-1 text-sm font-semibold hover:bg-white dark:hover:bg-zinc-800">Sans Serif</button>
@@ -701,6 +754,9 @@
                                 <button type="button" x-on:click="formatSignature('foreColor', '#666666')" title="Gray text" class="inline-flex h-9 w-9 items-center justify-center rounded-lg hover:bg-white dark:hover:bg-zinc-800">A</button>
                                 <button type="button" x-on:click="formatSignature('createLink', prompt('Paste the link URL') || '')" title="Link" class="inline-flex h-9 w-9 items-center justify-center rounded-lg hover:bg-white dark:hover:bg-zinc-800">
                                     <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M7.2 13.4H5.8a3.4 3.4 0 1 1 0-6.8h4v1.3h-4a2.1 2.1 0 1 0 0 4.2h1.4v1.3Zm1.1-2.7V9.3h5.4v1.4H8.3Zm1.7 2.7v-1.3h4.2a2.1 2.1 0 1 0 0-4.2H10V6.6h4.2a3.4 3.4 0 1 1 0 6.8H10Z"/></svg>
+                                </button>
+                                <button type="button" x-on:click="insertSignatureImage()" title="Insert image" class="inline-flex h-9 w-9 items-center justify-center rounded-lg hover:bg-white dark:hover:bg-zinc-800">
+                                    <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M4 5.2A1.2 1.2 0 0 1 5.2 4h9.6A1.2 1.2 0 0 1 16 5.2v9.6a1.2 1.2 0 0 1-1.2 1.2H5.2A1.2 1.2 0 0 1 4 14.8V5.2Zm1.4.2v7.4l2.4-2.4 2 2 2.7-3.4 2.1 2.7V5.4H5.4Zm9.2 8.9-2.1-2.8-2.5 3.1h4.6ZM5.4 14.6h2.8L7.8 12l-2.4 2.4v.2ZM8 8.3a1.1 1.1 0 1 1 0-2.2 1.1 1.1 0 0 1 0 2.2Z"/></svg>
                                 </button>
                                 <button type="button" x-on:click="formatSignature('insertUnorderedList')" title="Bulleted list" class="inline-flex h-9 w-9 items-center justify-center rounded-lg hover:bg-white dark:hover:bg-zinc-800">
                                     <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M5 6a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm2-1h10v2H7V5Zm-2 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm2-1h10v2H7V9Zm-2 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm2-1h10v2H7v-2Z"/></svg>
