@@ -408,7 +408,7 @@ Route::get('/dashboard', function () {
 
 Route::middleware('auth')->group(function () {
     Route::post('/feature-tours/{featureKey}/seen', function (\Illuminate\Http\Request $request, string $featureKey) {
-        abort_unless(in_array($featureKey, ['disposed-leads-v1'], true), 404);
+        abort_unless(in_array($featureKey, ['disposed-leads-v1', 'email-menu-v1'], true), 404);
 
         \Illuminate\Support\Facades\DB::table('feature_tour_views')->updateOrInsert(
             [

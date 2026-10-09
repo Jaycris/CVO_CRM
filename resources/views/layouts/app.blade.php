@@ -511,7 +511,9 @@
                         Notes
                     </a>
 
-                    <a href="{{ route('email.index') }}" class="{{ $sidebarLink(request()->routeIs('email.*')) }}">
+                    <a href="{{ route('email.index') }}"
+                       data-feature-tour="email-menu"
+                       class="{{ $sidebarLink(request()->routeIs('email.*')) }}">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ $sidebarIcon(request()->routeIs('email.*')) }}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 6.75h15A2.25 2.25 0 0 1 21.75 9v7.5A2.25 2.25 0 0 1 19.5 18.75h-15A2.25 2.25 0 0 1 2.25 16.5V9A2.25 2.25 0 0 1 4.5 6.75Z" />
                             <path stroke-linecap="round" stroke-linejoin="round" d="m3 8.25 7.8 5.85a2 2 0 0 0 2.4 0L21 8.25" />
@@ -1516,6 +1518,121 @@
         </main>
     </div>
 
+    @php
+        $emailTourKey = 'email-menu-v1';
+        $emailTourSeen = \Illuminate\Support\Facades\Schema::hasTable('feature_tour_views')
+            && \Illuminate\Support\Facades\DB::table('feature_tour_views')
+                ->where('user_id', auth()->id())
+                ->where('feature_key', $emailTourKey)
+                ->exists();
+    @endphp
+
+    @if (! $emailTourSeen)
+        <div data-feature-tour-panel
+             data-feature-tour-key="email-menu-v1-user-{{ auth()->id() }}"
+             data-feature-tour-complete-url="{{ route('feature-tours.seen', $emailTourKey) }}"
+             data-feature-tour-target="email-menu"
+             x-data="{ open: false }"
+             x-cloak
+             class="fixed inset-0 z-[10000] hidden">
+            <div class="absolute inset-0"></div>
+            <div data-feature-tour-spotlight class="pointer-events-none absolute rounded-2xl ring-4 ring-white shadow-[0_0_0_9999px_rgba(15,23,42,0.72)]"></div>
+            <div data-feature-tour-card class="absolute max-w-sm rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-700">
+                <p class="text-xs font-bold uppercase tracking-wide text-[var(--brand-primary)] dark:text-[var(--brand-accent)]">New Feature</p>
+                <h2 class="mt-2 text-lg font-bold text-slate-900 dark:text-zinc-100">CRM Email</h2>
+                <p class="mt-2 text-sm leading-6 text-slate-600 dark:text-zinc-300">
+                    Your assigned company mailbox is now available from the Email menu.
+                </p>
+                <div class="mt-4 flex flex-wrap items-center justify-end gap-2">
+                    <button type="button"
+                            data-feature-tour-dismiss
+                            class="rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                        Got it
+                    </button>
+                    <a href="{{ route('email.index') }}"
+                       data-feature-tour-open
+                       class="rounded-xl bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:brightness-95">
+                        Open Email
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            (() => {
+                const panel = document.querySelector('[data-feature-tour-panel][data-feature-tour-target="email-menu"]');
+                const storageKey = panel?.dataset.featureTourKey;
+                const completeUrl = panel?.dataset.featureTourCompleteUrl;
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+                const target = document.querySelector('[data-feature-tour="email-menu"]');
+                const spotlight = panel?.querySelector('[data-feature-tour-spotlight]');
+                const card = panel?.querySelector('[data-feature-tour-card]');
+
+                if (!panel || !storageKey || localStorage.getItem(storageKey) === 'seen' || !target || !spotlight || !card) {
+                    return;
+                }
+
+                const markTourSeen = () => {
+                    localStorage.setItem(storageKey, 'seen');
+
+                    if (!completeUrl || !csrfToken) {
+                        return;
+                    }
+
+                    fetch(completeUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                        },
+                        keepalive: true,
+                    }).catch(() => {});
+                };
+
+                const closeTour = () => {
+                    markTourSeen();
+                    panel.classList.add('hidden');
+                };
+
+                const placeTour = () => {
+                    const rect = target.getBoundingClientRect();
+                    const padding = 8;
+                    const top = Math.max(rect.top - padding, 12);
+                    const left = Math.max(rect.left - padding, 12);
+                    const width = rect.width + padding * 2;
+                    const height = rect.height + padding * 2;
+
+                    spotlight.style.top = `${top}px`;
+                    spotlight.style.left = `${left}px`;
+                    spotlight.style.width = `${width}px`;
+                    spotlight.style.height = `${height}px`;
+
+                    const cardWidth = 360;
+                    const gap = 18;
+                    const besideLeft = left + width + gap;
+                    const fitsRight = besideLeft + cardWidth < window.innerWidth - 16;
+
+                    card.style.width = `${Math.min(cardWidth, window.innerWidth - 32)}px`;
+                    card.style.left = `${fitsRight ? besideLeft : Math.max(16, left)}px`;
+                    card.style.top = `${Math.min(Math.max(16, top), window.innerHeight - card.offsetHeight - 16)}px`;
+                };
+
+                window.requestAnimationFrame(() => {
+                    target.scrollIntoView({ block: 'center', inline: 'nearest' });
+                    window.requestAnimationFrame(() => {
+                        panel.classList.remove('hidden');
+                        placeTour();
+                    });
+                });
+
+                window.addEventListener('resize', placeTour);
+                window.addEventListener('scroll', placeTour, { passive: true });
+                panel.querySelector('[data-feature-tour-dismiss]')?.addEventListener('click', closeTour);
+                panel.querySelector('[data-feature-tour-open]')?.addEventListener('click', markTourSeen);
+            })();
+        </script>
+    @endif
+
     @if ($canViewDisposedLeads)
         @php
             $disposedLeadsTourKey = 'disposed-leads-v1';
@@ -1534,7 +1651,7 @@
         @endphp
     @endif
 
-    @if ($canViewDisposedLeads && ! $disposedLeadsTourSeen)
+    @if ($canViewDisposedLeads && ! $disposedLeadsTourSeen && $emailTourSeen)
         <div data-feature-tour-panel
              data-feature-tour-key="disposed-leads-v1-user-{{ auth()->id() }}"
              data-feature-tour-complete-url="{{ route('feature-tours.seen', $disposedLeadsTourKey) }}"
