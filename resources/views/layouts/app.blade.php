@@ -188,6 +188,11 @@
                 }
 
                 const nextUrl = new URL(link.href, window.location.href);
+                const isEmailNavigation = window.location.pathname === '/email' && nextUrl.pathname === '/email';
+
+                if (isEmailNavigation) {
+                    return;
+                }
 
                 if (nextUrl.origin === window.location.origin && nextUrl.href !== window.location.href) {
                     pageLoading = true;
