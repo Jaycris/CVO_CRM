@@ -696,25 +696,86 @@ class ContractSignatureController extends Controller
             }
 
             [$pageWidth, $pageHeight] = $this->pdfPageSize($page, $objects);
-            $overlay = $this->signatureFieldPdfContent($pageFields, $values, $endorsement, $pageWidth, $pageHeight, $nextObject);
-            $nextObject = $overlay['nextObject'];
+            $annotationRefs = [];
+            $signedDate = $endorsement->contract_signed_at?->copy()->timezone('America/New_York')->format('m/d/Y') ?: now('America/New_York')->format('m/d/Y');
+            $signatureIndex = 1;
 
-            if ($overlay['content'] === '') {
+            foreach ($pageFields as $field) {
+                $type = (string) ($field['type'] ?? 'text');
+                $value = trim((string) ($values[$field['id'] ?? ''] ?? ''));
+
+                if ($type === 'date' && $value === '') {
+                    $value = $signedDate;
+                }
+
+                if (($type === 'signature' || $type === 'initials') && $value === '') {
+                    $value = $endorsement->contract_signature_text ?: $endorsement->contract_signer_name ?: $endorsement->author_name ?: '';
+                }
+
+                if ($value === '' && $type !== 'checkbox') {
+                    continue;
+                }
+
+                $x = ((float) ($field['x'] ?? 0) / 100) * $pageWidth;
+                $fieldWidth = ((float) ($field['w'] ?? 20) / 100) * $pageWidth;
+                $fieldHeight = ((float) ($field['h'] ?? 6) / 100) * $pageHeight;
+                $y = $pageHeight - (((float) ($field['y'] ?? 0) / 100) * $pageHeight) - $fieldHeight;
+                $fontSize = max(7, min(48, (float) ($field['fontSize'] ?? 14)));
+                $appearance = $this->signatureFieldAppearanceContent($type, $value, $fieldWidth, $fieldHeight, $fontSize);
+                $xobjects = [];
+
+                if (($type === 'signature' || $type === 'initials') && $value !== '') {
+                    $signatureImage = $this->signatureImagePdfObject($value, max(90, (int) $fieldWidth - 10), max(24, (int) ($fieldHeight * 0.75)));
+
+                    if ($signatureImage) {
+                        $signatureObjectRef = $nextObject++;
+                        $signatureName = 'SIG' . $signatureIndex++;
+                        $newObjects[$signatureObjectRef] = $signatureImage;
+                        $xobjects[$signatureName] = $signatureObjectRef;
+                        $imageWidth = max(20, $fieldWidth - 10);
+                        $imageHeight = max(12, min($fieldHeight - 4, $fieldHeight * 0.78));
+                        $imageX = max(0, ($fieldWidth - $imageWidth) / 2);
+                        $imageY = max(0, ($fieldHeight - $imageHeight) / 2);
+                        $appearance = 'q ' . $this->pdfNumber($imageWidth) . ' 0 0 ' . $this->pdfNumber($imageHeight) . ' ' . $this->pdfNumber($imageX) . ' ' . $this->pdfNumber($imageY) . ' cm /' . $signatureName . ' Do Q';
+                    }
+                }
+
+                $appearanceRef = $nextObject++;
+                $annotationRef = $nextObject++;
+                $newObjects[$appearanceRef] = $this->pdfAppearanceStreamObject($appearance, $fieldWidth, $fieldHeight, $fontRegularRef, $fontBoldRef, $fontScriptRef, $xobjects);
+                $newObjects[$annotationRef] = $this->signatureFieldAnnotationPdfObject($value, $x, $y, $fieldWidth, $fieldHeight, $appearanceRef);
+                $annotationRefs[] = $annotationRef;
+            }
+
+            if ($annotationRefs === []) {
                 continue;
             }
 
-            $overlayRef = $nextObject++;
-            $newObjects += $overlay['objects'];
-            $newObjects[$overlayRef] = $this->pdfStreamObject($overlay['content']);
-            $resourceUpdate = $this->addPdfPageResources($page, $objects, $fontRegularRef, $fontBoldRef, $fontScriptRef, $overlay['xobjects']);
-            $newObjects += $resourceUpdate['objects'];
-            $newObjects[$pageRef] = $this->appendPdfPageContent($resourceUpdate['page'], $overlayRef);
+            $annotationUpdate = $this->appendPdfPageAnnotations($page, $objects, $annotationRefs);
+            $newObjects += $annotationUpdate['objects'];
+            $newObjects[$pageRef] = $annotationUpdate['page'];
         }
 
         return [
             'objects' => $newObjects,
             'nextObject' => $nextObject,
         ];
+    }
+
+    private function signatureFieldAppearanceContent(string $type, string $value, float $width, float $height, float $fontSize): string
+    {
+        $displayValue = $type === 'checkbox' ? ($value ? 'Checked' : 'Unchecked') : $value;
+        $font = match ($type) {
+            'signature', 'initials' => 'ESS',
+            'date' => 'ESB',
+            default => 'ESR',
+        };
+        $size = (int) max(7, min($fontSize, $type === 'signature' || $type === 'initials' ? 28 : 14));
+        $estimatedWidth = strlen($displayValue) * $size * 0.45;
+        $x = max(2, ($width - $estimatedWidth) / 2);
+        $y = max($size, ($height - $size) / 2);
+
+        return '0 0 0 rg ' . $this->pdfText($displayValue, (int) $x, (int) $y, $size, $font);
     }
 
     private function signatureFieldPdfContent($fields, array $values, SalesEndorsement $endorsement, float $pageWidth, float $pageHeight, int $nextObject): array
@@ -1256,6 +1317,79 @@ class ContractSignatureController extends Controller
         }
 
         return null;
+    }
+
+    private function appendPdfPageAnnotations(string $page, array $objects, array $annotationRefs): array
+    {
+        $annotationList = implode(' ', array_map(fn ($ref) => $ref . ' 0 R', $annotationRefs));
+        $newObjects = [];
+
+        if (preg_match('/\/Annots\s+/', $page, $annotsMatch, PREG_OFFSET_CAPTURE)) {
+            $valueStart = $annotsMatch[0][1] + strlen($annotsMatch[0][0]);
+            $valueEnd = $this->pdfValueEnd($page, $valueStart);
+            $annotsValue = trim(substr($page, $valueStart, $valueEnd - $valueStart));
+
+            if (str_starts_with($annotsValue, '[')) {
+                $updatedAnnots = preg_replace('/\]\s*$/', ' ' . $annotationList . ' ]', $annotsValue, 1) ?? $annotsValue;
+
+                return [
+                    'page' => substr($page, 0, $valueStart) . $updatedAnnots . substr($page, $valueEnd),
+                    'objects' => [],
+                ];
+            }
+
+            if (preg_match('/^(\d+)\s+\d+\s+R$/', $annotsValue, $annotsRefMatch)) {
+                $annotsRef = (int) $annotsRefMatch[1];
+                $annotsObject = $objects[$annotsRef] ?? '';
+
+                if (str_starts_with(trim($annotsObject), '[')) {
+                    $newObjects[$annotsRef] = preg_replace('/\]\s*$/', ' ' . $annotationList . ' ]', $annotsObject, 1) ?? $annotsObject;
+
+                    return [
+                        'page' => $page,
+                        'objects' => $newObjects,
+                    ];
+                }
+            }
+        }
+
+        return [
+            'page' => preg_replace('/>>\s*$/', '/Annots [' . $annotationList . '] >>', $page, 1) ?? $page,
+            'objects' => [],
+        ];
+    }
+
+    private function pdfAppearanceStreamObject(string $content, float $width, float $height, int $fontRegularRef, int $fontBoldRef, int $fontScriptRef, array $xobjects = []): string
+    {
+        $resources = '/Font << /ESR ' . $fontRegularRef . ' 0 R /ESB ' . $fontBoldRef . ' 0 R /ESS ' . $fontScriptRef . ' 0 R >>';
+
+        if ($xobjects !== []) {
+            $resources .= ' /XObject << ' . $this->pdfXObjectResourceEntries($xobjects) . ' >>';
+        }
+
+        return "<< /Type /XObject /Subtype /Form /FormType 1 /BBox [0 0 " . $this->pdfNumber($width) . ' ' . $this->pdfNumber($height) . '] /Resources << ' . $resources . ' >> /Length ' . strlen($content) . " >>\nstream\n" . $content . "\nendstream";
+    }
+
+    private function signatureFieldAnnotationPdfObject(string $value, float $x, float $y, float $width, float $height, int $appearanceRef): string
+    {
+        return '<< /Type /Annot /Subtype /Stamp /Rect [' . $this->pdfRect($x, $y, $width, $height) . '] /Contents (' . $this->pdfEscape($value) . ') /F 132 /Border [0 0 0] /AP << /N ' . $appearanceRef . ' 0 R >> >>';
+    }
+
+    private function pdfRect(float $x, float $y, float $width, float $height): string
+    {
+        return implode(' ', [
+            $this->pdfNumber($x),
+            $this->pdfNumber($y),
+            $this->pdfNumber($x + $width),
+            $this->pdfNumber($y + $height),
+        ]);
+    }
+
+    private function pdfNumber(float $value): string
+    {
+        $number = rtrim(rtrim(number_format($value, 3, '.', ''), '0'), '.');
+
+        return $number === '-0' || $number === '' ? '0' : $number;
     }
 
     private function pdfStreamObject(string $content): string
