@@ -61,6 +61,7 @@ class EmailMailboxController extends Controller
             'canManageEmailAccounts' => $this->canManageEmailAccounts($user),
             'settingsAccount' => $settingsAccount,
             'emailSignature' => $this->emailSignature($user),
+            'signatureEditorHtml' => $this->signatureEditorHtml($user),
         ]);
     }
 
@@ -247,6 +248,7 @@ class EmailMailboxController extends Controller
             'email_signature_name' => ['nullable', 'string', 'max:255'],
             'email_signature_title' => ['nullable', 'string', 'max:255'],
             'email_signature_contact_number' => ['nullable', 'string', 'max:255'],
+            'email_signature_html' => ['nullable', 'string', 'max:20000'],
         ]);
 
         $request->user()->forceFill([
@@ -254,6 +256,7 @@ class EmailMailboxController extends Controller
             'email_signature_name' => $validated['email_signature_name'] ?? null,
             'email_signature_title' => $validated['email_signature_title'] ?? null,
             'email_signature_contact_number' => $validated['email_signature_contact_number'] ?? null,
+            'email_signature_html' => $this->sanitizeSignatureHtml($validated['email_signature_html'] ?? null),
         ])->save();
 
         return redirect()
@@ -353,27 +356,11 @@ class EmailMailboxController extends Controller
         $brand = $user->brand;
         $logoPath = $brand?->logo_path ?: $brand?->site_logo_path;
         $logoUrl = $logoPath ? asset('storage/' . $logoPath) : null;
+        $html = $this->sanitizeSignatureHtml($user->email_signature_html)
+            ?: $this->defaultSignatureHtml($name, $title, $contact, $brand?->imprint_name, $logoUrl);
 
-        if ($name === '' && $title === '' && $contact === '' && ! $logoUrl) {
+        if ($name === '' && $title === '' && $contact === '' && ! $logoUrl && $html === '') {
             return null;
-        }
-
-        $lines = ['--'];
-
-        if ($name !== '') {
-            $lines[] = $name;
-        }
-
-        if ($title !== '') {
-            $lines[] = $title;
-        }
-
-        if ($brand?->imprint_name) {
-            $lines[] = $brand->imprint_name;
-        }
-
-        if ($contact !== '') {
-            $lines[] = 'Contact Number: ' . $contact;
         }
 
         return [
@@ -382,8 +369,22 @@ class EmailMailboxController extends Controller
             'contact' => $contact,
             'brand' => $brand?->imprint_name,
             'logoUrl' => $logoUrl,
-            'text' => implode("\n", $lines),
+            'html' => $html,
+            'text' => trim(preg_replace('/\n{3,}/', "\n\n", html_entity_decode(strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $html))))),
         ];
+    }
+
+    private function signatureEditorHtml(User $user): string
+    {
+        $name = trim((string) ($user->email_signature_name ?: trim($user->first_name . ' ' . $user->last_name)));
+        $title = trim((string) ($user->email_signature_title ?: $user->role?->name));
+        $contact = trim((string) ($user->email_signature_contact_number ?: $user->phone_number));
+        $brand = $user->brand;
+        $logoPath = $brand?->logo_path ?: $brand?->site_logo_path;
+        $logoUrl = $logoPath ? asset('storage/' . $logoPath) : null;
+
+        return $this->sanitizeSignatureHtml($user->email_signature_html)
+            ?: $this->defaultSignatureHtml($name, $title, $contact, $brand?->imprint_name, $logoUrl);
     }
 
     private function messageHtml(string $body, ?array $signature = null): string
@@ -403,28 +404,45 @@ class EmailMailboxController extends Controller
             return $html;
         }
 
-        $html .= '<div style="margin-top:28px; color:#111827; font-family:Arial, Helvetica, sans-serif;">';
-        $html .= '<div>--</div>';
-
-        if ($signature['name'] !== '') {
-            $html .= '<div style="margin-top:10px; font-size:18px; font-weight:700;">' . e($signature['name']) . '</div>';
-        }
-
-        if ($signature['title'] !== '') {
-            $html .= '<div style="margin-top:2px; color:#666; font-size:14px; font-weight:700;">' . e($signature['title']) . '</div>';
-        }
-
-        if ($signature['logoUrl']) {
-            $html .= '<img src="' . e($signature['logoUrl']) . '" alt="' . e($signature['brand'] ?: 'Brand logo') . '" style="display:block; margin-top:28px; max-width:240px; max-height:120px;">';
-        }
-
-        if ($signature['contact'] !== '') {
-            $html .= '<div style="margin-top:24px; color:#666; font-size:14px; font-weight:700;">Contact Number: ' . e($signature['contact']) . '</div>';
-        }
-
-        $html .= '</div>';
+        $html .= '<div style="margin-top:28px; color:#111827; font-family:Arial, Helvetica, sans-serif;">' . $signature['html'] . '</div>';
 
         return $html;
+    }
+
+    private function defaultSignatureHtml(string $name, string $title, string $contact, ?string $brandName, ?string $logoUrl): string
+    {
+        $html = '<div>--</div>';
+
+        if ($name !== '') {
+            $html .= '<div style="margin-top:10px; font-size:18px; font-weight:700;">' . e($name) . '</div>';
+        }
+
+        if ($title !== '') {
+            $html .= '<div style="margin-top:2px; color:#666; font-size:14px; font-weight:700;">' . e($title) . '</div>';
+        }
+
+        if ($logoUrl) {
+            $html .= '<img src="' . e($logoUrl) . '" alt="' . e($brandName ?: 'Brand logo') . '" style="display:block; margin-top:28px; max-width:240px; max-height:120px;">';
+        }
+
+        if ($contact !== '') {
+            $html .= '<div style="margin-top:24px; color:#666; font-size:14px; font-weight:700;">Contact Number: ' . e($contact) . '</div>';
+        }
+
+        return $html;
+    }
+
+    private function sanitizeSignatureHtml(?string $html): ?string
+    {
+        if (! $html) {
+            return null;
+        }
+
+        $html = strip_tags($html, '<div><p><br><b><strong><i><em><u><span><a><img><ul><ol><li>');
+        $html = preg_replace('/\s+on[a-z]+\s*=\s*(".*?"|\'.*?\'|[^\s>]+)/i', '', $html) ?? '';
+        $html = preg_replace('/javascript\s*:/i', '', $html) ?? '';
+
+        return trim($html) ?: null;
     }
 
     private function syncInbox(EmailAccount $account): int

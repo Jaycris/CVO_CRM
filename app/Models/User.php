@@ -36,6 +36,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'email_signature_name',
         'email_signature_title',
         'email_signature_contact_number',
+        'email_signature_html',
         'hris_employee_id',
         'reports_to_hris_employee_id',
         'service_commission_percent',
