@@ -7,7 +7,7 @@
         composeOpen: @js($errors->has('to') || $errors->has('subject') || $errors->has('body')),
         settingsOpen: @js($canManageEmailAccounts && ($errors->has('email_address') || request()->boolean('settings') || ! $account)),
         signatureSettingsOpen: @js($errors->has('email_signature_html')),
-        mailboxType: @js(old('mailbox_type', $settingsAccount?->user_id ? 'employee' : 'brand')),
+        mailboxType: 'employee',
         bodyText: @js(old('body', '')),
         includeSignature: @js((bool) $emailSignature),
         signatureText: @js($emailSignature['text'] ?? ''),
@@ -178,7 +178,7 @@
             <div>
                 <h1 class="text-2xl font-bold text-slate-900 dark:text-zinc-100">Email</h1>
                 <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
-                    Connect SiteGround mailboxes and give employees a ready-to-use CRM inbox.
+                    Admin assigns SiteGround mailboxes to employees so their CRM inbox is ready after login.
                 </p>
             </div>
 
@@ -261,11 +261,11 @@
                     <div class="mt-6 rounded-xl border border-slate-200 bg-white p-4 text-sm dark:border-zinc-800 dark:bg-zinc-900">
                         <p class="font-semibold text-slate-900 dark:text-zinc-100">{{ $account->email_address }}</p>
                         <p class="mt-1 text-xs text-slate-500 dark:text-zinc-400">
-                            {{ $account->is_shared ? 'Brand mailbox' : 'Employee mailbox' }}
+                            Employee mailbox
                             @if ($account->user)
-                                for {{ $account->user->email }}
+                                for {{ trim(($account->user->first_name ?? '') . ' ' . ($account->user->last_name ?? '')) ?: $account->user->email }}
                             @elseif ($account->brand)
-                                for {{ $account->brand->imprint_name }}
+                                waiting for employee assignment
                             @endif
                         </p>
                         <p class="mt-3 text-xs text-slate-500 dark:text-zinc-400">
@@ -280,10 +280,10 @@
                     <div class="flex h-full min-h-[20rem] items-center justify-center p-8 text-center">
                         <div>
                             <h2 class="text-lg font-bold text-slate-900 dark:text-zinc-100">
-                                {{ $canManageEmailAccounts ? 'Connect the first brand mailbox' : 'Email is not configured yet' }}
+                                {{ $canManageEmailAccounts ? 'Connect the first employee mailbox' : 'Email is not configured yet' }}
                             </h2>
                             <p class="mt-2 text-sm text-slate-500 dark:text-zinc-400">
-                                {{ $canManageEmailAccounts ? 'Add a SiteGround mailbox for a brand so employees can use email immediately.' : 'Please ask an admin to connect the mailbox for your brand.' }}
+                                {{ $canManageEmailAccounts ? 'Add a SiteGround mailbox and assign it to one CRM employee.' : 'Please ask an admin to assign your mailbox.' }}
                             </p>
                             @if ($canManageEmailAccounts)
                                 <button type="button" x-on:click="settingsOpen = true" class="mt-5 inline-flex h-11 items-center justify-center rounded-xl bg-zinc-950 px-5 text-sm font-semibold text-amber-100 shadow-sm dark:bg-amber-400 dark:text-zinc-950">
@@ -566,7 +566,7 @@
                     <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-zinc-800">
                         <div>
                             <h2 class="font-bold text-slate-900 dark:text-zinc-100">{{ $settingsAccount ? 'Admin Mail Settings' : 'Connect Mailbox' }}</h2>
-                            <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Configure a brand mailbox for a team or an employee mailbox for one CRM user.</p>
+                            <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Configure one SiteGround mailbox and assign it to one CRM employee.</p>
                         </div>
                         <button type="button" x-on:click="settingsOpen = false" class="rounded-lg px-3 py-1 text-sm font-semibold text-slate-500 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Close</button>
                     </div>
@@ -577,52 +577,17 @@
                             @method('PUT')
                         @endif
 
-                        @if (! $settingsAccount)
-                            <div class="mb-5">
-                                <label for="mailbox_type" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Mailbox Access</label>
-                                <select id="mailbox_type" name="mailbox_type" x-model="mailboxType" class="w-full rounded-xl border-slate-200 text-sm font-semibold shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-                                    <option value="brand">Brand mailbox - everyone assigned to the brand can use it</option>
-                                    <option value="employee">Employee mailbox - only the selected employee can use it</option>
-                                </select>
-                                <x-input-error :messages="$errors->get('mailbox_type')" class="mt-2" />
-                            </div>
-                        @else
-                            <input type="hidden" name="mailbox_type" value="{{ $settingsAccount->user_id ? 'employee' : 'brand' }}">
-                        @endif
-
-                        <div class="mb-5" x-show="mailboxType === 'brand'">
-                            <label for="brand_id" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Brand</label>
-                            @if ($settingsAccount)
-                                <input type="hidden" name="brand_id" value="{{ $settingsAccount->brand_id }}">
-                                <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-                                    {{ $settingsAccount->brand?->imprint_name ?? 'Brand mailbox' }}
-                                </div>
-                            @else
-                                <select id="brand_id" name="brand_id" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-                                    @foreach ($brands as $brand)
-                                        <option value="{{ $brand->id }}" @selected(old('brand_id', auth()->user()->brand_id) == $brand->id)>{{ $brand->imprint_name }}</option>
-                                    @endforeach
-                                </select>
-                                <x-input-error :messages="$errors->get('brand_id')" class="mt-2" />
-                            @endif
-                        </div>
-
-                        <div class="mb-5" x-show="mailboxType === 'employee'">
+                        <div class="mb-5">
                             <label for="user_id" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Employee</label>
-                            @if ($settingsAccount)
-                                <input type="hidden" name="user_id" value="{{ $settingsAccount->user_id }}">
-                                <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-                                    {{ $settingsAccount->user ? trim(($settingsAccount->user->first_name ?? '') . ' ' . ($settingsAccount->user->last_name ?? '')) : 'Employee mailbox' }}
-                                </div>
-                            @else
-                                <select id="user_id" name="user_id" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-                                    @foreach ($users as $mailUser)
-                                        @php($mailUserName = trim(($mailUser->first_name ?? '') . ' ' . ($mailUser->last_name ?? '')) ?: $mailUser->email)
-                                        <option value="{{ $mailUser->id }}" @selected(old('user_id') == $mailUser->id)>{{ $mailUserName }} - {{ $mailUser->email }}</option>
-                                    @endforeach
-                                </select>
-                                <x-input-error :messages="$errors->get('user_id')" class="mt-2" />
-                            @endif
+                            <select id="user_id" name="user_id" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                                <option value="">Choose employee</option>
+                                @foreach ($users as $mailUser)
+                                    @php($mailUserName = trim(($mailUser->first_name ?? '') . ' ' . ($mailUser->last_name ?? '')) ?: $mailUser->email)
+                                    <option value="{{ $mailUser->id }}" @selected(old('user_id', $settingsAccount?->user_id) == $mailUser->id)>{{ $mailUserName }} - {{ $mailUser->email }}</option>
+                                @endforeach
+                            </select>
+                            <p class="mt-2 text-xs text-slate-500 dark:text-zinc-400">Only this employee can open, sync, and send from this mailbox. Admin can still manage all mailbox settings.</p>
+                            <x-input-error :messages="$errors->get('user_id')" class="mt-2" />
                         </div>
 
                         <div class="grid gap-4 md:grid-cols-2">
