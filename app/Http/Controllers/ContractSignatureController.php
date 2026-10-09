@@ -33,8 +33,8 @@ class ContractSignatureController extends Controller
             'endorsement' => $endorsement,
             'packet' => $this->packet($endorsement),
             'signUrl' => URL::temporarySignedRoute('contracts.sign.show', now()->addDays(30), ['endorsement' => $endorsement]),
-            'downloadUrl' => route('finance.contracts.esign.download', $endorsement),
-            'previewUrl' => route('finance.contracts.esign.preview', $endorsement),
+            'downloadUrl' => route('finance.contracts.esign.download', ['endorsement' => $endorsement, 'v' => $this->contractAssetVersion($endorsement)]),
+            'previewUrl' => route('finance.contracts.esign.preview', ['endorsement' => $endorsement, 'v' => $this->contractAssetVersion($endorsement)]),
             'sendUrl' => route('finance.contracts.esign.send', $endorsement),
             'fieldsUrl' => route('finance.contracts.esign.fields', $endorsement),
             'editorUrl' => route('finance.contracts.esign.editor', $endorsement),
@@ -53,7 +53,7 @@ class ContractSignatureController extends Controller
             'endorsement' => $endorsement,
             'packet' => $this->packet($endorsement),
             'packetUrl' => route('finance.contracts.esign', $endorsement),
-            'previewUrl' => route('finance.contracts.esign.preview', $endorsement),
+            'previewUrl' => route('finance.contracts.esign.preview', ['endorsement' => $endorsement, 'v' => $this->contractAssetVersion($endorsement)]),
             'fieldsUrl' => route('finance.contracts.esign.fields', $endorsement),
         ]);
     }
@@ -158,8 +158,8 @@ class ContractSignatureController extends Controller
             'endorsement' => $endorsement,
             'packet' => $this->packet($endorsement),
             'submitUrl' => URL::temporarySignedRoute('contracts.sign.submit', now()->addDay(), ['endorsement' => $endorsement]),
-            'downloadUrl' => URL::temporarySignedRoute('contracts.sign.download', now()->addDay(), ['endorsement' => $endorsement]),
-            'previewUrl' => URL::temporarySignedRoute('contracts.sign.preview', now()->addDay(), ['endorsement' => $endorsement]),
+            'downloadUrl' => URL::temporarySignedRoute('contracts.sign.download', now()->addDay(), ['endorsement' => $endorsement, 'v' => $this->contractAssetVersion($endorsement)]),
+            'previewUrl' => URL::temporarySignedRoute('contracts.sign.preview', now()->addDay(), ['endorsement' => $endorsement, 'v' => $this->contractAssetVersion($endorsement)]),
         ]);
     }
 
@@ -484,7 +484,7 @@ class ContractSignatureController extends Controller
             return response($this->signedContractPdf($endorsement), 200, [
                 'Content-Type' => 'application/pdf',
                 'Content-Disposition' => ($inline ? 'inline' : 'attachment') . '; filename="' . str_replace('"', '', $signedFileName) . '"',
-            ]);
+            ] + $this->contractResponseHeaders());
         }
 
         if (! $inline) {
@@ -493,7 +493,25 @@ class ContractSignatureController extends Controller
 
         return Storage::disk('local')->response($endorsement->contract_file_path, $fileName, [
             'Content-Disposition' => 'inline; filename="' . str_replace('"', '', $fileName) . '"',
-        ]);
+        ] + $this->contractResponseHeaders());
+    }
+
+    private function contractAssetVersion(SalesEndorsement $endorsement): int
+    {
+        return max(
+            $endorsement->updated_at?->timestamp ?? 0,
+            $endorsement->contract_signed_at?->timestamp ?? 0,
+            $endorsement->contract_sent_at?->timestamp ?? 0
+        );
+    }
+
+    private function contractResponseHeaders(): array
+    {
+        return [
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
+        ];
     }
 
     private function signedContractPdf(SalesEndorsement $endorsement): string
@@ -828,12 +846,15 @@ class ContractSignatureController extends Controller
             $inheritedResources = $this->inheritedPdfPageResources($page, $objects);
 
             if ($inheritedResources) {
-                [$resources, $resourceRef] = $inheritedResources;
+                [$resources, $resourceRef, $resourceStart, $resourceEnd] = $inheritedResources + [null, null, null, null];
                 $resources = $this->addPdfFontResources($resources, $fontResources, $objects, $newObjects);
                 $resources = $this->addPdfXObjectResources($resources, $xobjects, $objects, $newObjects);
 
                 if ($resourceRef) {
-                    $newObjects[$resourceRef] = $resources;
+                    $sourceObject = $objects[$resourceRef] ?? $resources;
+                    $newObjects[$resourceRef] = is_int($resourceStart) && is_int($resourceEnd)
+                        ? substr($sourceObject, 0, $resourceStart) . $resources . substr($sourceObject, $resourceEnd)
+                        : $resources;
 
                     return [
                         'page' => $page,
@@ -906,7 +927,7 @@ class ContractSignatureController extends Controller
             if ($resourceBounds) {
                 [$resourceStart, $resourceEnd] = $resourceBounds;
 
-                return [substr($parent, $resourceStart, $resourceEnd - $resourceStart), null];
+                return [substr($parent, $resourceStart, $resourceEnd - $resourceStart), $parentRef, $resourceStart, $resourceEnd];
             }
 
             $current = $parent;
