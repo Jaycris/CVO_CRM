@@ -89,7 +89,7 @@ class SimpleImapClient
 
     private function fetchMessage(int $uid): ?array
     {
-        $response = $this->command("UID FETCH {$uid} (UID FLAGS BODY.PEEK[]<0.100000>)");
+        $response = $this->command("UID FETCH {$uid} (UID FLAGS BODY.PEEK[]<0.500000>)");
         $rawMessage = $response['literals'][0] ?? null;
 
         if (! $rawMessage) {
@@ -346,10 +346,25 @@ class SimpleImapClient
 
     private function cleanTextBody(string $text): string
     {
+        $text = str_replace(["\r\n", "\r"], "\n", $text);
+        $text = preg_replace('/<\s*(style|script|head)\b[^>]*>.*?<\s*\/\s*\1\s*>/is', '', $text) ?? $text;
         $text = preg_replace('/^\s*#(?:outlook|[a-z0-9_-]+)\s*\{.*?\}\s*$/mi', '', $text) ?? $text;
         $text = preg_replace('/^\s*(?:body|table|td|img|p|\.moz-text-html|\.mj-[a-z0-9_-]+|@media)\b[^{]*\{.*?\}\s*$/mi', '', $text) ?? $text;
+        $text = preg_replace('/^\s*@media\b[\s\S]*?^\s*\}\s*$/mi', '', $text) ?? $text;
         $text = preg_replace("/\n{3,}/", "\n\n", $text) ?? $text;
+        $text = trim($text);
 
-        return trim($text);
+        return $this->looksLikeSourceCode($text) ? '' : $text;
+    }
+
+    private function looksLikeSourceCode(string $text): bool
+    {
+        $sample = strtolower(trim(substr($text, 0, 4000)));
+
+        if ($sample === '') {
+            return false;
+        }
+
+        return (bool) preg_match('/^(<!doctype|<html|<head|<body|<table|#outlook\b|@media\b|body\s*\{|table\s*,\s*td\s*\{|\.moz-text-html\b|\.mj-[a-z0-9_-]+\b)/i', $sample);
     }
 }

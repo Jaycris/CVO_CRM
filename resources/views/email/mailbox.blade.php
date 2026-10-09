@@ -333,6 +333,7 @@
                             $messageHtml = $selectedMessage->body_html;
                             $messageText = $selectedMessage->body_text ?: 'No message body.';
                             $textLooksLikeHtml = is_string($messageText) && preg_match('/^\s*(<!doctype|<html|<body|<table|<div|<p)\b/i', $messageText);
+                            $textLooksLikeSource = is_string($messageText) && preg_match('/^\s*(#outlook\b|@media\b|body\s*\{|table\s*,\s*td\s*\{|img\s*\{|p\s*\{|\.moz-text-html\b|\.mj-[a-z0-9_-]+\b)/i', $messageText);
                         @endphp
                         <div class="mt-8 rounded-xl border border-slate-200 bg-white p-6 text-base leading-8 text-slate-800 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
                             @if ($messageHtml || $textLooksLikeHtml)
@@ -340,6 +341,10 @@
                                         sandbox
                                         srcdoc="{{ $messageHtml ?: $messageText }}"
                                         class="h-[44rem] w-full rounded-lg border-0 bg-white"></iframe>
+                            @elseif ($textLooksLikeSource)
+                                <div class="rounded-xl bg-slate-50 px-5 py-4 text-sm leading-6 text-slate-600 dark:bg-zinc-900 dark:text-zinc-300">
+                                    This email uses HTML formatting that could not be displayed cleanly. Click Refresh to try loading the formatted version again.
+                                </div>
                             @else
                                 {!! nl2br(e($messageText)) !!}
                             @endif
@@ -374,8 +379,14 @@
                                     <div class="min-w-0">
                                         <p class="truncate text-slate-900 dark:text-zinc-100">
                                             <span class="font-semibold">{{ $message->subject ?: '(No subject)' }}</span>
-                                            @if ($message->body_text)
-                                                <span class="text-slate-500 dark:text-zinc-400"> - {{ $message->body_text }}</span>
+                                            @php
+                                                $previewText = $message->body_text;
+                                                $previewLooksLikeSource = is_string($previewText) && preg_match('/^\s*(<!doctype|<html|<body|<table|#outlook\b|@media\b|body\s*\{|table\s*,\s*td\s*\{|\.moz-text-html\b|\.mj-[a-z0-9_-]+\b)/i', $previewText);
+                                            @endphp
+                                            @if ($previewText && ! $previewLooksLikeSource)
+                                                <span class="text-slate-500 dark:text-zinc-400"> - {{ $previewText }}</span>
+                                            @elseif ($message->body_html || $previewLooksLikeSource)
+                                                <span class="text-slate-500 dark:text-zinc-400"> - HTML email</span>
                                             @endif
                                         </p>
                                     </div>
