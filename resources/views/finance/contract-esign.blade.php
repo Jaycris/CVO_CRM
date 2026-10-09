@@ -29,7 +29,7 @@
                      fontSize: Number(field.fontSize || 14),
                  }));
 
-                 if (this.previewKind === 'pdf' && ! this.documentSigned) {
+                 if (this.previewKind === 'pdf') {
                      this.$nextTick(() => this.loadPdf());
                  }
              },
@@ -264,12 +264,6 @@
                             @if (! $packet['hasContractFile'])
                                 <div class="px-6 py-16 text-center text-sm text-slate-500 dark:text-zinc-400">No contract file attached yet.</div>
                             @elseif ($packet['previewKind'] === 'pdf')
-                                @if ($packet['status'] === 'Signed')
-                                    <iframe src="{{ $previewUrl }}#toolbar=1&navpanes=0"
-                                            title="Signed contract preview"
-                                            class="h-[75vh] w-full bg-white"
-                                            loading="lazy"></iframe>
-                                @else
                                 <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 text-slate-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
                                     <div class="flex flex-wrap items-center gap-2 text-sm font-bold">
                                         <span>Page <span x-text="currentPage"></span> of <span x-text="totalPages"></span></span>
@@ -323,7 +317,6 @@
                                         </template>
                                     </div>
                                 </div>
-                                @endif
                             @elseif ($packet['previewKind'] === 'image')
                                 <div class="relative bg-white">
                                     <img src="{{ $previewUrl }}" alt="Contract preview" class="mx-auto max-h-[70vh] bg-white object-contain">
