@@ -38,7 +38,7 @@
     @endphp
 
     <div class="space-y-6" x-data="{
-        composeOpen: @js($errors->has('to') || $errors->has('subject') || $errors->has('body')),
+        composeOpen: @js($errors->has('to') || $errors->has('cc') || $errors->has('subject') || $errors->has('body')),
         settingsOpen: @js($canManageEmailAccounts && ($errors->has('email_address') || request()->boolean('settings') || ! $account)),
         signatureSettingsOpen: @js($errors->has('email_signature_html')),
         mailboxType: 'employee',
@@ -60,6 +60,7 @@
         showSendOptions: false,
         showFormatting: false,
         showEmojiPicker: false,
+        showCc: @js(filled(old('cc')) || $errors->has('cc')),
         scheduleNote: '',
         composeNotice: '',
         emojis: ['😀','😃','😁','😊','😂','🤣','😉','😍','🥳','👍','🙏','🔥','⭐','✅','📌','📎','📅','💡','🎉','❤️'],
@@ -234,6 +235,7 @@
             this.showEmojiPicker = false;
             this.showMoreOptions = false;
             this.showSendOptions = false;
+            this.showCc = false;
             this.includeSignature = @js((bool) $emailSignature);
             this.sendingEmail = false;
             this.scheduleNote = '';
@@ -583,13 +585,28 @@
                     </div>
                     <div class="space-y-4 p-5">
                         <div>
-                            <label for="to" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">To</label>
+                            <div class="mb-1 flex items-center justify-between gap-3">
+                                <label for="to" class="block text-xs font-bold uppercase tracking-wide text-slate-500">To</label>
+                                <button type="button"
+                                        x-show="! showCc"
+                                        x-on:click="showCc = true; $nextTick(() => $refs.cc?.focus())"
+                                        class="rounded-md px-2 py-1 text-xs font-bold uppercase tracking-wide text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100">
+                                    CC
+                                </button>
+                            </div>
                             <input id="to" name="to" value="{{ old('to') }}" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
                             <x-input-error :messages="$errors->get('to')" class="mt-2" />
                         </div>
-                        <div>
-                            <label for="cc" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">CC</label>
-                            <input id="cc" name="cc" value="{{ old('cc') }}" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                        <div x-show="showCc" x-cloak>
+                            <div class="mb-1 flex items-center justify-between gap-3">
+                                <label for="cc" class="block text-xs font-bold uppercase tracking-wide text-slate-500">CC</label>
+                                <button type="button"
+                                        x-on:click="showCc = false; $refs.cc.value = ''"
+                                        class="rounded-md px-2 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100">
+                                    Hide
+                                </button>
+                            </div>
+                            <input id="cc" x-ref="cc" name="cc" value="{{ old('cc') }}" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
                         </div>
                         <div>
                             <label for="subject" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Subject</label>
