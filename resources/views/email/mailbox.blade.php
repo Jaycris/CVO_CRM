@@ -187,7 +187,7 @@
                     <form method="POST" action="{{ route('email.accounts.sync', $account) }}">
                         @csrf
                         <button type="submit" class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800">
-                            Sync
+                            Refresh
                         </button>
                     </form>
                     <button type="button" x-on:click="composeOpen = true" class="inline-flex h-11 items-center justify-center rounded-xl bg-zinc-950 px-5 text-sm font-semibold text-amber-100 shadow-sm hover:bg-zinc-800 dark:bg-amber-400 dark:text-zinc-950">
@@ -217,12 +217,6 @@
         @if (session('error'))
             <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 dark:border-rose-400/30 dark:bg-rose-400/10 dark:text-rose-200">
                 {{ session('error') }}
-            </div>
-        @endif
-
-        @if (! $imapAvailable)
-            <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100">
-                Inbox receiving needs the PHP IMAP extension enabled on the server. SMTP sending and account setup are available now.
             </div>
         @endif
 
@@ -269,7 +263,7 @@
                             @endif
                         </p>
                         <p class="mt-3 text-xs text-slate-500 dark:text-zinc-400">
-                            Last sync: {{ $account->last_synced_at?->format('m/d/Y @ h:i A') ?? 'Not synced yet' }}
+                            Last refresh: {{ $account->last_synced_at?->format('m/d/Y @ h:i A') ?? 'Not refreshed yet' }}
                         </p>
                     </div>
                 @endif
@@ -382,7 +376,7 @@
                             </a>
                         @empty
                             <div class="px-4 py-16 text-center text-sm text-slate-500 dark:text-zinc-400">
-                                {{ $folder === 'Sent' ? 'No sent email yet.' : 'No synced inbox messages yet.' }}
+                                {{ $folder === 'Sent' ? 'No sent email yet.' : 'No refreshed inbox messages yet.' }}
                             </div>
                         @endforelse
                     </div>
@@ -586,7 +580,7 @@
                                     <option value="{{ $mailUser->id }}" @selected(old('user_id', $settingsAccount?->user_id) == $mailUser->id)>{{ $mailUserName }} - {{ $mailUser->email }}</option>
                                 @endforeach
                             </select>
-                            <p class="mt-2 text-xs text-slate-500 dark:text-zinc-400">Only this employee can open, sync, and send from this mailbox. Admin can still manage all mailbox settings.</p>
+                            <p class="mt-2 text-xs text-slate-500 dark:text-zinc-400">Only this employee can open, refresh, and send from this mailbox. Admin can still manage all mailbox settings.</p>
                             <x-input-error :messages="$errors->get('user_id')" class="mt-2" />
                         </div>
 

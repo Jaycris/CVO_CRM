@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\EmailAccount;
 use App\Models\EmailMessage;
 use App\Models\User;
+use App\Support\SimpleImapClient;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
@@ -50,7 +51,6 @@ class EmailMailboxController extends Controller
             'account' => $account,
             'users' => $users,
             'folder' => $folder,
-            'imapAvailable' => function_exists('imap_open'),
             'messages' => $messages,
             'selectedMessage' => $selectedMessage,
             'canManageEmailAccounts' => $this->canManageEmailAccounts($user),
@@ -147,12 +147,6 @@ class EmailMailboxController extends Controller
     {
         $this->authorizeAccount($request->user(), $account);
 
-        if (! function_exists('imap_open')) {
-            return redirect()
-                ->route('email.index', ['account' => $account->id])
-                ->with('error', 'Inbox sync needs the PHP IMAP extension enabled on the server.');
-        }
-
         try {
             $synced = $this->syncInbox($account);
         } catch (\Throwable $exception) {
@@ -160,12 +154,12 @@ class EmailMailboxController extends Controller
 
             return redirect()
                 ->route('email.index', ['account' => $account->id])
-                ->with('error', 'The mailbox could not be synced. Please check the IMAP settings and password.');
+                ->with('error', 'The mailbox could not be refreshed. Please check the IMAP settings and password.');
         }
 
         return redirect()
             ->route('email.index', ['account' => $account->id])
-            ->with('success', "{$synced} inbox message(s) synced.");
+            ->with('success', "{$synced} inbox message(s) refreshed.");
     }
 
     public function send(Request $request)
@@ -426,41 +420,36 @@ class EmailMailboxController extends Controller
 
     private function syncInbox(EmailAccount $account): int
     {
-        $mailbox = $this->mailboxString($account, 'INBOX');
-        $imap = @imap_open($mailbox, $account->username, $account->plainPassword() ?? '', OP_READONLY);
+        $client = new SimpleImapClient(
+            $account->imap_host,
+            $account->imap_port,
+            $account->imap_encryption,
+            $account->username,
+            $account->plainPassword() ?? ''
+        );
 
-        if (! $imap) {
-            throw new \RuntimeException(imap_last_error() ?: 'Unable to open mailbox.');
-        }
+        $client->connect();
 
         try {
-            $uids = imap_search($imap, 'ALL', SE_UID) ?: [];
-            $uids = array_slice(array_reverse($uids), 0, 50);
             $synced = 0;
 
-            foreach ($uids as $uid) {
-                $overview = imap_fetch_overview($imap, (string) $uid, FT_UID)[0] ?? null;
-
-                if (! $overview) {
-                    continue;
-                }
-
+            foreach ($client->messages('INBOX', 50) as $message) {
                 EmailMessage::updateOrCreate(
                     [
                         'email_account_id' => $account->id,
                         'folder' => 'INBOX',
-                        'uid' => (int) $uid,
+                        'uid' => $message['uid'],
                     ],
                     [
-                        'message_id' => $overview->message_id ?? null,
-                        'subject' => $this->decodeHeader($overview->subject ?? '(No subject)'),
-                        'from_name' => $this->decodeHeader($overview->from ?? null),
-                        'from_email' => $this->extractEmail($overview->from ?? null),
-                        'body_text' => trim((string) imap_fetchbody($imap, (string) $uid, '1', FT_UID | FT_PEEK)),
-                        'sent_at' => isset($overview->date) ? Carbon::parse($overview->date) : null,
-                        'is_seen' => ! empty($overview->seen),
-                        'is_answered' => ! empty($overview->answered),
-                        'has_attachments' => false,
+                        'message_id' => $message['message_id'],
+                        'subject' => $message['subject'],
+                        'from_name' => $message['from_name'],
+                        'from_email' => $message['from_email'],
+                        'body_text' => $message['body_text'],
+                        'sent_at' => $this->parseMessageDate($message['sent_at']),
+                        'is_seen' => $message['is_seen'],
+                        'is_answered' => $message['is_answered'],
+                        'has_attachments' => $message['has_attachments'],
                     ]
                 );
                 $synced++;
@@ -470,23 +459,8 @@ class EmailMailboxController extends Controller
 
             return $synced;
         } finally {
-            imap_close($imap);
+            $client->disconnect();
         }
-    }
-
-    private function mailboxString(EmailAccount $account, string $folder): string
-    {
-        $flags = ['/imap'];
-
-        if ($account->imap_encryption === 'ssl') {
-            $flags[] = '/ssl';
-        } elseif ($account->imap_encryption === 'tls') {
-            $flags[] = '/tls';
-        } else {
-            $flags[] = '/notls';
-        }
-
-        return sprintf('{%s:%d%s}%s', $account->imap_host, $account->imap_port, implode('', $flags), $folder);
     }
 
     private function parseAddressList(string $value): array
@@ -499,25 +473,17 @@ class EmailMailboxController extends Controller
             ->all();
     }
 
-    private function decodeHeader(?string $value): ?string
+    private function parseMessageDate(?string $date): ?Carbon
     {
-        if ($value === null || ! function_exists('imap_mime_header_decode')) {
-            return $value;
-        }
-
-        return collect(imap_mime_header_decode($value))
-            ->map(fn ($part) => $part->text ?? '')
-            ->implode('');
-    }
-
-    private function extractEmail(?string $value): ?string
-    {
-        if (! $value) {
+        if (! $date) {
             return null;
         }
 
-        preg_match('/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/i', $value, $matches);
-
-        return $matches[0] ?? null;
+        try {
+            return Carbon::parse($date);
+        } catch (\Throwable) {
+            return null;
+        }
     }
+
 }
