@@ -444,6 +444,15 @@
                     ])
                     ->values();
                 $unreadNotificationCount = auth()->user()->unreadNotifications()->count();
+                $unreadEmailCount = \App\Models\EmailMessage::query()
+                    ->where('folder', 'INBOX')
+                    ->where('is_seen', false)
+                    ->whereHas('account', function ($query) {
+                        if (auth()->user()->role?->name !== 'Admin') {
+                            $query->where('user_id', auth()->id());
+                        }
+                    })
+                    ->count();
                 $salesWorkflowActive = request()->routeIs(
                     'sales.team-leads',
                     'sales.pipeline',
@@ -519,6 +528,11 @@
                             <path stroke-linecap="round" stroke-linejoin="round" d="m3 8.25 7.8 5.85a2 2 0 0 0 2.4 0L21 8.25" />
                         </svg>
                         Email
+                        @if ($unreadEmailCount > 0)
+                            <span class="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-rose-600 px-1.5 py-0.5 text-[11px] font-bold leading-none text-white">
+                                {{ $unreadEmailCount > 99 ? '99+' : $unreadEmailCount }}
+                            </span>
+                        @endif
                     </a>
 
                     <a href="{{ route('calendar.index') }}" class="{{ $sidebarLink(request()->routeIs('calendar.*')) }}">
