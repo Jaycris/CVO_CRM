@@ -328,18 +328,10 @@
         <div class="grid min-h-[calc(100vh-13rem)] grid-cols-1 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800 xl:grid-cols-[18rem_minmax(0,1fr)]">
             <aside class="border-b border-slate-200 bg-slate-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-950/50 xl:border-b-0 xl:border-r">
                 <div class="space-y-3">
-                    <label for="email_account" class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-zinc-400">Mailbox</label>
-                    <select id="email_account"
-                            onchange="if (this.value) window.location.href = this.value"
-                            class="w-full truncate rounded-xl border-slate-200 bg-white text-sm font-semibold text-slate-900 shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
-                        @forelse ($accounts as $mailAccount)
-                            <option value="{{ route('email.index', ['account' => $mailAccount->id, 'folder' => $folder]) }}" @selected($account?->id === $mailAccount->id)>
-                                {{ $mailAccount->email_address }}
-                            </option>
-                        @empty
-                            <option>No mailbox connected</option>
-                        @endforelse
-                    </select>
+                    <p class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-zinc-400">Mailbox</p>
+                    <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
+                        {{ $account?->email_address ?? 'No mailbox connected' }}
+                    </div>
                 </div>
 
                 <nav class="mt-6 space-y-1">
@@ -803,6 +795,22 @@
                         @csrf
                         @if ($settingsAccount)
                             @method('PUT')
+                        @endif
+
+                        @if ($accounts->isNotEmpty())
+                            <div class="mb-5">
+                                <label for="admin_email_account" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Mailbox</label>
+                                <select id="admin_email_account"
+                                        onchange="if (this.value) window.location.href = this.value"
+                                        class="w-full rounded-xl border-slate-200 text-sm font-semibold shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                                    @foreach ($accounts as $mailAccount)
+                                        <option value="{{ route('email.index', ['account' => $mailAccount->id, 'folder' => $folder, 'settings' => 1]) }}" @selected($settingsAccount?->id === $mailAccount->id)>
+                                            {{ $mailAccount->display_name ?: $mailAccount->email_address }} - {{ $mailAccount->email_address }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                <p class="mt-2 text-xs text-slate-500 dark:text-zinc-400">Choose which connected mailbox you want to update.</p>
+                            </div>
                         @endif
 
                         <div class="mb-5">
