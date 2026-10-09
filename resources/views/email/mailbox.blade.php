@@ -12,6 +12,11 @@
         imageNames: [],
         showMoreOptions: false,
         showSendOptions: false,
+        showFormatting: false,
+        showEmojiPicker: false,
+        scheduleNote: '',
+        composeNotice: '',
+        emojis: ['😀','😃','😁','😊','😂','🤣','😉','😍','🥳','👍','🙏','🔥','⭐','✅','📌','📎','📅','💡','🎉','❤️'],
         insertText(text) {
             const body = this.$refs.body;
             const start = body?.selectionStart ?? this.bodyText.length;
@@ -24,22 +29,68 @@
                 }
             });
         },
+        wrapSelection(before, after = before) {
+            const body = this.$refs.body;
+            const start = body?.selectionStart ?? this.bodyText.length;
+            const end = body?.selectionEnd ?? this.bodyText.length;
+            const selected = this.bodyText.slice(start, end);
+            const text = selected || 'text';
+            this.bodyText = this.bodyText.slice(0, start) + before + text + after + this.bodyText.slice(end);
+            this.$nextTick(() => {
+                if (body) {
+                    body.focus();
+                    body.selectionStart = start + before.length;
+                    body.selectionEnd = start + before.length + text.length;
+                }
+            });
+        },
+        applyFormat(format) {
+            if (format === 'bold') this.wrapSelection('**');
+            if (format === 'italic') this.wrapSelection('*');
+            if (format === 'underline') this.wrapSelection('__');
+            if (format === 'quote') this.insertText('\n> ');
+            if (format === 'bullets') this.insertText('\n- ');
+            if (format === 'numbers') this.insertText('\n1. ');
+            if (format === 'indent') this.insertText('    ');
+            if (format === 'remove') this.composeNotice = 'Formatting cleared for new text.';
+        },
         handleComposeAction(action) {
+            const wasFormatting = this.showFormatting;
+            const wasEmojiPicker = this.showEmojiPicker;
+            const wasMoreOptions = this.showMoreOptions;
             this.showMoreOptions = false;
             this.showSendOptions = false;
-            if (action === 'format') this.insertText('\n\n---\n');
+            this.showEmojiPicker = false;
+            this.scheduleNote = '';
+            this.composeNotice = '';
+            if (action === 'format') this.showFormatting = ! wasFormatting;
             if (action === 'attach') this.$refs.attachments.click();
             if (action === 'link') {
                 const url = prompt('Paste the link URL');
                 if (url) this.insertText(url);
             }
-            if (action === 'emoji') this.insertText(' 🙂');
-            if (action === 'drive') this.insertText('\nDrive file link: ');
+            if (action === 'emoji') this.showEmojiPicker = ! wasEmojiPicker;
+            if (action === 'drive') this.composeNotice = 'Google Drive attachment is a placeholder. Use Attach files for now, or paste a Drive link.';
             if (action === 'image') this.$refs.images.click();
             if (action === 'confidential') this.insertText('\n\nConfidential: Please do not forward this message without permission.');
             if (action === 'signature') this.insertText(@js("\n\nRegards,\n" . trim((auth()->user()->first_name ?? '') . ' ' . (auth()->user()->last_name ?? '')) . "\n" . auth()->user()->email));
             if (action === 'calendar') this.insertText('\n\nMeeting invite:\nDate:\nTime:\nAgenda:\n');
-            if (action === 'more') this.showMoreOptions = ! this.showMoreOptions;
+            if (action === 'more') this.showMoreOptions = ! wasMoreOptions;
+        },
+        toggleSendOptions() {
+            this.showSendOptions = ! this.showSendOptions;
+            this.showMoreOptions = false;
+            this.showEmojiPicker = false;
+            this.scheduleNote = '';
+            this.composeNotice = '';
+        },
+        chooseScheduleSend() {
+            this.scheduleNote = 'Schedule send is ready for UI only. Backend scheduling can be connected next.';
+            this.showSendOptions = false;
+        },
+        pickEmoji(emoji) {
+            this.insertText(emoji);
+            this.showEmojiPicker = false;
         },
         updateFiles(type, event) {
             const names = Array.from(event.target.files || []).map(file => file.name);
@@ -52,6 +103,12 @@
             this.imageNames = [];
             if (this.$refs.attachments) this.$refs.attachments.value = '';
             if (this.$refs.images) this.$refs.images.value = '';
+            this.showFormatting = false;
+            this.showEmojiPicker = false;
+            this.showMoreOptions = false;
+            this.showSendOptions = false;
+            this.scheduleNote = '';
+            this.composeNotice = '';
             this.composeOpen = false;
         }
     }">
@@ -317,13 +374,31 @@
                             </template>
                         </div>
                     </div>
-                    <div class="flex items-center justify-between gap-3 border-t border-slate-200 px-5 py-4 dark:border-zinc-800">
+                    <div x-show="showFormatting" x-cloak class="border-t border-slate-200 bg-slate-50 px-5 py-3 dark:border-zinc-800 dark:bg-zinc-950">
+                        <div class="flex flex-wrap items-center gap-1 rounded-full bg-slate-100 p-1 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300">
+                            <button type="button" class="rounded-full px-3 py-1.5 text-sm font-medium hover:bg-white hover:shadow-sm dark:hover:bg-zinc-700">Sans Serif</button>
+                            <button type="button" x-on:click="applyFormat('bold')" title="Bold" class="inline-flex h-9 w-9 items-center justify-center rounded-full font-bold hover:bg-white hover:shadow-sm dark:hover:bg-zinc-700">B</button>
+                            <button type="button" x-on:click="applyFormat('italic')" title="Italic" class="inline-flex h-9 w-9 items-center justify-center rounded-full italic hover:bg-white hover:shadow-sm dark:hover:bg-zinc-700">I</button>
+                            <button type="button" x-on:click="applyFormat('underline')" title="Underline" class="inline-flex h-9 w-9 items-center justify-center rounded-full underline hover:bg-white hover:shadow-sm dark:hover:bg-zinc-700">U</button>
+                            <button type="button" x-on:click="applyFormat('bullets')" title="Bulleted list" class="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-white hover:shadow-sm dark:hover:bg-zinc-700">
+                                <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M5 6a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm2-1h10v2H7V5Zm-2 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm2-1h10v2H7V9Zm-2 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm2-1h10v2H7v-2Z"/></svg>
+                            </button>
+                            <button type="button" x-on:click="applyFormat('numbers')" title="Numbered list" class="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-white hover:shadow-sm dark:hover:bg-zinc-700">
+                                <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M4 5h1v4H4V6H3V5h1Zm-.8 6.1c0-.8.7-1.4 1.6-1.4.9 0 1.6.6 1.6 1.4 0 .5-.2.9-.7 1.3l-.9.8h1.7v1H3.2v-.8l1.8-1.7c.3-.2.4-.4.4-.6 0-.3-.2-.5-.6-.5s-.6.2-.6.5h-1ZM8 5h9v2H8V5Zm0 4h9v2H8V9Zm0 4h9v2H8v-2Z"/></svg>
+                            </button>
+                            <button type="button" x-on:click="applyFormat('quote')" title="Quote" class="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-white hover:shadow-sm dark:hover:bg-zinc-700">"</button>
+                            <button type="button" x-on:click="applyFormat('remove')" title="Clear formatting" class="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-white hover:shadow-sm dark:hover:bg-zinc-700">
+                                <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="m4.4 3.4 12.2 12.2-1 1-2.9-2.9-.6 1.8h-1.5l.9-3.1-3.8-3.8-2.1 6.9H4.1l2.5-8-3.2-3.1 1-1Zm5.4 1.1H16v1.4h-4.1l-.8 2.6-1.2-1.2.4-1.4H8.5l-.9-.9v-.5h2.2Z"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="relative flex items-center justify-between gap-3 border-t border-slate-200 px-5 py-4 dark:border-zinc-800">
                         <div class="flex min-w-0 flex-wrap items-center gap-2">
                             <div class="inline-flex overflow-hidden rounded-full bg-blue-600 text-white shadow-sm">
                                 <button type="submit" class="h-11 px-5 text-sm font-semibold hover:bg-blue-700">
                                     Send
                                 </button>
-                                <button type="button" x-on:click="showSendOptions = ! showSendOptions; showMoreOptions = false" title="More send options" aria-label="More send options" class="flex h-11 w-10 items-center justify-center border-l border-blue-500 hover:bg-blue-700">
+                                <button type="button" x-on:click="toggleSendOptions()" title="More send options" aria-label="More send options" class="flex h-11 w-10 items-center justify-center border-l border-blue-500 hover:bg-blue-700">
                                     <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                         <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clip-rule="evenodd" />
                                     </svg>
@@ -360,10 +435,24 @@
                             </svg>
                         </button>
                     </div>
-                    <div x-show="showSendOptions || showMoreOptions" x-cloak class="border-t border-slate-200 bg-slate-50 px-5 py-3 text-sm text-slate-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
-                        <div x-show="showSendOptions">
-                            Send uses the selected CRM mailbox. Scheduled send can be added later when calendar scheduling is connected.
+                    <div x-show="showSendOptions || showMoreOptions || showEmojiPicker || scheduleNote || composeNotice" x-cloak class="border-t border-slate-200 bg-slate-50 px-5 py-3 text-sm text-slate-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
+                        <div x-show="showSendOptions" class="max-w-xs overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
+                            <button type="button" x-on:click="chooseScheduleSend()" class="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:text-zinc-100 dark:hover:bg-zinc-800">
+                                <svg class="h-5 w-5 text-blue-600" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10 3a7 7 0 1 0 7 7h-1.4A5.6 5.6 0 1 1 10 4.4V7l3.5-3.3L10 .5V3Zm.8 4.5H9.4v3.3l3 1.8.7-1.2-2.3-1.4V7.5Z"/></svg>
+                                Schedule send
+                            </button>
                         </div>
+                        <div x-show="showEmojiPicker" class="max-w-md rounded-xl bg-white p-3 shadow-lg ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
+                            <input type="text" placeholder="Search emoji" class="mb-3 w-full rounded-full border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                            <p class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-zinc-400">Recently used</p>
+                            <div class="grid grid-cols-10 gap-1">
+                                <template x-for="emoji in emojis" :key="emoji">
+                                    <button type="button" x-on:click="pickEmoji(emoji)" class="flex h-8 w-8 items-center justify-center rounded-lg text-lg hover:bg-slate-100 dark:hover:bg-zinc-800" x-text="emoji"></button>
+                                </template>
+                            </div>
+                        </div>
+                        <div x-show="scheduleNote" class="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-blue-700 dark:border-blue-400/30 dark:bg-blue-400/10 dark:text-blue-200" x-text="scheduleNote"></div>
+                        <div x-show="composeNotice" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300" x-text="composeNotice"></div>
                         <div x-show="showMoreOptions" class="flex flex-wrap gap-2">
                             <button type="button" x-on:click="insertText('\n\nPriority: High'); showMoreOptions = false" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold hover:bg-slate-100 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800">Mark high priority</button>
                             <button type="button" x-on:click="insertText('\n\nPlease reply when received.'); showMoreOptions = false" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold hover:bg-slate-100 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800">Request reply</button>
