@@ -512,6 +512,11 @@ class ContractSignatureController extends Controller
     private function appendSignatureCertificatePage(string $pdf, SalesEndorsement $endorsement): string
     {
         abort_unless(str_starts_with($pdf, '%PDF-'), 422, 'The contract file is not a valid PDF.');
+
+        if ($this->hasSignatureCertificatePage($pdf)) {
+            return $pdf;
+        }
+
         preg_match('/startxref\s+(\d+)\s+%%EOF\s*$/s', $pdf, $startXrefMatch);
         preg_match_all('/trailer\s*<<(.*?)>>/s', $pdf, $trailerMatches);
         abort_unless($startXrefMatch && $trailerMatches[1] !== [], 422, 'The contract PDF could not be prepared.');
@@ -595,6 +600,13 @@ class ContractSignatureController extends Controller
         $append .= "startxref\n" . $xrefOffset . "\n%%EOF\n";
 
         return $pdf . $append;
+    }
+
+    private function hasSignatureCertificatePage(string $pdf): bool
+    {
+        return str_contains($pdf, '(Signature Certificate)')
+            && str_contains($pdf, '(Document completed by all parties on ')
+            && str_contains($pdf, '(Sender information)');
     }
 
     private function pdfObjects(string $pdf): array
