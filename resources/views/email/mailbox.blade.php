@@ -401,7 +401,7 @@
                                        x-model="selectedMessages"
                                        class="hidden h-4 w-4 rounded border-slate-300 text-rose-600 shadow-sm focus:ring-rose-500 dark:border-zinc-700 dark:bg-zinc-950 md:block">
                                 <span class="{{ $isUnread ? 'text-amber-400 dark:text-amber-300' : 'text-slate-300 dark:text-zinc-600' }} hidden text-center text-lg leading-none md:block">&#9734;</span>
-                                <a href="{{ route('email.index', ['account' => $account->id, 'folder' => $folder, 'message' => $message->id]) }}" class="contents">
+                                <a href="{{ route('email.index', ['account' => $account->id, 'folder' => $folder, 'message' => $message->id]) }}" data-no-page-loader class="contents">
                                     <p class="{{ $isUnread ? 'font-bold text-slate-950 dark:text-zinc-50' : 'font-medium text-slate-600 dark:text-zinc-400' }} truncate">
                                         {{ $folder === 'Sent' ? collect($message->to)->implode(', ') : ($message->from_name ?: $message->from_email ?: 'Unknown sender') }}
                                     </p>
