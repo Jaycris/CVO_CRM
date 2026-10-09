@@ -862,6 +862,7 @@ class ContractSignatureController extends Controller
 
         [$resourceStart, $resourceEnd] = $resourceBounds;
         $resources = substr($page, $resourceStart, $resourceEnd - $resourceStart);
+        $resources = $this->mergeInheritedPdfPageResources($resources, $page, $objects);
         $resources = $this->addPdfFontResources($resources, $fontResources, $objects, $newObjects);
         $resources = $this->addPdfXObjectResources($resources, $xobjects, $objects, $newObjects);
 
@@ -912,6 +913,118 @@ class ContractSignatureController extends Controller
         }
 
         return null;
+    }
+
+    private function mergeInheritedPdfPageResources(string $resources, string $page, array $objects): string
+    {
+        $inheritedResources = $this->inheritedPdfPageResources($page, $objects);
+
+        if (! $inheritedResources) {
+            return $resources;
+        }
+
+        [$inherited] = $inheritedResources;
+
+        foreach (['/Font', '/XObject', '/ExtGState', '/ColorSpace', '/Pattern', '/Shading', '/Properties', '/ProcSet'] as $name) {
+            if (str_contains($resources, $name)) {
+                continue;
+            }
+
+            $entry = $this->pdfDictionaryEntry($inherited, $name);
+
+            if ($entry !== null) {
+                $resources = preg_replace('/>>\s*$/', ' ' . $entry . ' >>', $resources, 1) ?? $resources;
+            }
+        }
+
+        return $resources;
+    }
+
+    private function pdfDictionaryEntry(string $dictionary, string $name): ?string
+    {
+        $namePosition = strpos($dictionary, $name);
+
+        if ($namePosition === false) {
+            return null;
+        }
+
+        $valueStart = $namePosition + strlen($name);
+        $length = strlen($dictionary);
+
+        while ($valueStart < $length && ctype_space($dictionary[$valueStart])) {
+            $valueStart++;
+        }
+
+        if ($valueStart >= $length) {
+            return null;
+        }
+
+        $valueEnd = $this->pdfValueEnd($dictionary, $valueStart);
+
+        if ($valueEnd <= $valueStart) {
+            return null;
+        }
+
+        return $name . ' ' . trim(substr($dictionary, $valueStart, $valueEnd - $valueStart));
+    }
+
+    private function pdfValueEnd(string $content, int $start): int
+    {
+        $length = strlen($content);
+        $first = substr($content, $start, 2);
+
+        if ($first === '<<') {
+            $depth = 0;
+
+            for ($position = $start; $position < $length - 1; $position++) {
+                $pair = substr($content, $position, 2);
+
+                if ($pair === '<<') {
+                    $depth++;
+                    $position++;
+                    continue;
+                }
+
+                if ($pair === '>>') {
+                    $depth--;
+                    $position++;
+
+                    if ($depth === 0) {
+                        return $position + 1;
+                    }
+                }
+            }
+
+            return $length;
+        }
+
+        if ($content[$start] === '[') {
+            $depth = 0;
+
+            for ($position = $start; $position < $length; $position++) {
+                if ($content[$position] === '[') {
+                    $depth++;
+                } elseif ($content[$position] === ']') {
+                    $depth--;
+
+                    if ($depth === 0) {
+                        return $position + 1;
+                    }
+                }
+            }
+
+            return $length;
+        }
+
+        if (preg_match('/\G\d+\s+\d+\s+R\b/', $content, $match, 0, $start)) {
+            return $start + strlen($match[0]);
+        }
+
+        $nextName = preg_match('/\s\/[A-Za-z0-9_.-]+\b/', $content, $match, PREG_OFFSET_CAPTURE, $start)
+            ? $match[0][1]
+            : strpos($content, '>>', $start);
+
+        return $nextName === false ? $length : $nextName;
     }
 
     private function addPdfFontResources(string $resources, string $fontResources, array $objects, array &$newObjects): string
