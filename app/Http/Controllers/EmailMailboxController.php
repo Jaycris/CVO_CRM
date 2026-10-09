@@ -248,7 +248,7 @@ class EmailMailboxController extends Controller
             'email_signature_name' => ['nullable', 'string', 'max:255'],
             'email_signature_title' => ['nullable', 'string', 'max:255'],
             'email_signature_contact_number' => ['nullable', 'string', 'max:255'],
-            'email_signature_html' => ['nullable', 'string', 'max:20000'],
+            'email_signature_html' => ['nullable', 'string', 'max:100000'],
         ]);
 
         $request->user()->forceFill([
