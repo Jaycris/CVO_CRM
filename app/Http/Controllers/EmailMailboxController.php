@@ -40,12 +40,20 @@ class EmailMailboxController extends Controller
         $brands = $this->canManageEmailAccounts($user)
             ? Brand::orderBy('imprint_name')->get()
             : collect();
+        $users = $this->canManageEmailAccounts($user)
+            ? User::query()
+                ->whereNull('suspended_at')
+                ->orderBy('first_name')
+                ->orderBy('last_name')
+                ->get()
+            : collect();
         $settingsAccount = $request->boolean('new') ? null : $account;
 
         return view('email.mailbox', [
             'accounts' => $accounts,
             'account' => $account,
             'brands' => $brands,
+            'users' => $users,
             'folder' => $folder,
             'imapAvailable' => function_exists('imap_open'),
             'messages' => $messages,
@@ -61,6 +69,7 @@ class EmailMailboxController extends Controller
         abort_unless($this->canManageEmailAccounts($user), 403);
 
         $validated = $request->validate([
+            'mailbox_type' => ['required', Rule::in(['brand', 'employee'])],
             'display_name' => ['required', 'string', 'max:255'],
             'email_address' => ['required', 'email', 'max:255'],
             'username' => ['required', 'string', 'max:255'],
@@ -71,12 +80,16 @@ class EmailMailboxController extends Controller
             'smtp_host' => ['required', 'string', 'max:255'],
             'smtp_port' => ['required', 'integer', 'min:1', 'max:65535'],
             'smtp_encryption' => ['required', Rule::in(['ssl', 'tls', 'none'])],
-            'brand_id' => ['required', 'integer', Rule::exists('brands', 'id')],
+            'brand_id' => ['required_if:mailbox_type,brand', 'nullable', 'integer', Rule::exists('brands', 'id')],
+            'user_id' => ['required_if:mailbox_type,employee', 'nullable', 'integer', Rule::exists('users', 'id')],
         ]);
+        $assignedUser = $validated['mailbox_type'] === 'employee'
+            ? User::findOrFail($validated['user_id'])
+            : null;
 
         $account = new EmailAccount([
-            'user_id' => null,
-            'brand_id' => $validated['brand_id'],
+            'user_id' => $assignedUser?->id,
+            'brand_id' => $validated['mailbox_type'] === 'brand' ? $validated['brand_id'] : $assignedUser?->brand_id,
             'display_name' => $validated['display_name'],
             'email_address' => mb_strtolower($validated['email_address']),
             'username' => $validated['username'],
@@ -86,14 +99,16 @@ class EmailMailboxController extends Controller
             'smtp_host' => $validated['smtp_host'],
             'smtp_port' => $validated['smtp_port'],
             'smtp_encryption' => $validated['smtp_encryption'],
-            'is_shared' => true,
+            'is_shared' => $validated['mailbox_type'] === 'brand',
         ]);
         $account->setPlainPassword($validated['password']);
         $account->save();
 
         return redirect()
             ->route('email.index', ['account' => $account->id, 'settings' => 1])
-            ->with('success', 'Brand mailbox connected. Employees assigned to this brand can now use it from Email.');
+            ->with('success', $account->is_shared
+                ? 'Brand mailbox connected. Employees assigned to this brand can now use it from Email.'
+                : 'Employee mailbox connected. The assigned employee will see it automatically after login.');
     }
 
     public function updateAccount(Request $request, EmailAccount $account)
@@ -212,15 +227,23 @@ class EmailMailboxController extends Controller
     {
         return EmailAccount::query()
             ->when(! $this->canManageEmailAccounts($user), function ($query) use ($user) {
-                $query->where('is_shared', true)
-                    ->whereNotNull('brand_id')
-                    ->where('brand_id', $user->brand_id);
+                $query->where(function ($query) use ($user) {
+                    $query->where('user_id', $user->id)
+                        ->orWhere(function ($query) use ($user) {
+                            $query->where('is_shared', true)
+                                ->whereNotNull('brand_id')
+                                ->where('brand_id', $user->brand_id);
+                        });
+                });
             })
             ->when($this->canManageEmailAccounts($user), function ($query) {
-                $query->where('is_shared', true)
-                    ->whereNotNull('brand_id');
+                $query->where(function ($query) {
+                    $query->where('is_shared', true)
+                        ->whereNotNull('brand_id')
+                        ->orWhereNotNull('user_id');
+                });
             })
-            ->with('brand')
+            ->with(['brand', 'user'])
             ->orderByDesc('is_shared')
             ->orderBy('display_name');
     }
@@ -229,6 +252,7 @@ class EmailMailboxController extends Controller
     {
         abort_unless(
             $this->canManageEmailAccounts($user)
+            || $account->user_id === $user->id
             || ($account->is_shared && $account->brand_id && $account->brand_id === $user->brand_id),
             403
         );

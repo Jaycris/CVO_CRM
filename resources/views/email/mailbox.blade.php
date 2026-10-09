@@ -3,12 +3,12 @@
         Email
     </x-slot>
 
-    <div class="space-y-6" x-data="{ composeOpen: @js($errors->has('to') || $errors->has('subject') || $errors->has('body')), settingsOpen: @js($canManageEmailAccounts && ($errors->has('email_address') || request()->boolean('settings') || ! $account)) }">
+    <div class="space-y-6" x-data="{ composeOpen: @js($errors->has('to') || $errors->has('subject') || $errors->has('body')), settingsOpen: @js($canManageEmailAccounts && ($errors->has('email_address') || request()->boolean('settings') || ! $account)), mailboxType: @js(old('mailbox_type', $settingsAccount?->user_id ? 'employee' : 'brand')) }">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
                 <h1 class="text-2xl font-bold text-slate-900 dark:text-zinc-100">Email</h1>
                 <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
-                    Connect SiteGround mailboxes and send client email from the CRM.
+                    Connect SiteGround mailboxes and give employees a ready-to-use CRM inbox.
                 </p>
             </div>
 
@@ -26,7 +26,7 @@
                 @endif
                 @if ($canManageEmailAccounts)
                     <a href="{{ route('email.index', ['settings' => 1, 'new' => 1]) }}" class="inline-flex h-11 items-center justify-center rounded-xl bg-zinc-950 px-4 text-sm font-semibold text-amber-100 shadow-sm hover:bg-zinc-800 dark:bg-amber-400 dark:text-zinc-950">
-                        Add Brand Mailbox
+                        Add Mailbox
                     </a>
                     <button type="button" x-on:click="settingsOpen = true" class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800">
                         Admin Mail Settings
@@ -53,7 +53,7 @@
             </div>
         @endif
 
-        <div class="grid min-h-[42rem] grid-cols-1 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800 xl:grid-cols-[18rem_minmax(18rem,24rem)_1fr]">
+        <div class="grid min-h-[calc(100vh-13rem)] grid-cols-1 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800 xl:grid-cols-[16rem_minmax(24rem,32rem)_minmax(0,1fr)] 2xl:grid-cols-[18rem_34rem_minmax(0,1fr)]">
             <aside class="border-b border-slate-200 bg-slate-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-950/50 xl:border-b-0 xl:border-r">
                 <div class="space-y-3">
                     <label for="email_account" class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-zinc-400">Mailbox</label>
@@ -62,7 +62,7 @@
                             class="w-full rounded-xl border-slate-200 bg-white text-sm font-semibold text-slate-900 shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
                         @forelse ($accounts as $mailAccount)
                             <option value="{{ route('email.index', ['account' => $mailAccount->id, 'folder' => $folder]) }}" @selected($account?->id === $mailAccount->id)>
-                                {{ $mailAccount->display_name }}
+                                {{ $mailAccount->display_name }} - {{ $mailAccount->email_address }}
                             </option>
                         @empty
                             <option>No mailbox connected</option>
@@ -88,7 +88,12 @@
                     <div class="mt-6 rounded-xl border border-slate-200 bg-white p-4 text-sm dark:border-zinc-800 dark:bg-zinc-900">
                         <p class="font-semibold text-slate-900 dark:text-zinc-100">{{ $account->email_address }}</p>
                         <p class="mt-1 text-xs text-slate-500 dark:text-zinc-400">
-                            {{ $account->is_shared ? 'Brand mailbox' : 'Personal mailbox' }}
+                            {{ $account->is_shared ? 'Brand mailbox' : 'Employee mailbox' }}
+                            @if ($account->user)
+                                for {{ trim(($account->user->first_name ?? '') . ' ' . ($account->user->last_name ?? '')) ?: $account->user->email }}
+                            @elseif ($account->brand)
+                                for {{ $account->brand->imprint_name }}
+                            @endif
                         </p>
                         <p class="mt-3 text-xs text-slate-500 dark:text-zinc-400">
                             Last sync: {{ $account->last_synced_at?->format('m/d/Y @ h:i A') ?? 'Not synced yet' }}
@@ -109,29 +114,46 @@
                             </p>
                             @if ($canManageEmailAccounts)
                                 <button type="button" x-on:click="settingsOpen = true" class="mt-5 inline-flex h-11 items-center justify-center rounded-xl bg-zinc-950 px-5 text-sm font-semibold text-amber-100 shadow-sm dark:bg-amber-400 dark:text-zinc-950">
-                                    Add Brand Mailbox
+                                    Add Mailbox
                                 </button>
                             @endif
                         </div>
                     </div>
                 @else
-                    <div class="border-b border-slate-200 px-4 py-3 dark:border-zinc-800">
-                        <h2 class="font-semibold text-slate-900 dark:text-zinc-100">{{ $folder === 'Sent' ? 'Sent Mail' : 'Inbox' }}</h2>
+                    <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-zinc-800">
+                        <div>
+                            <h2 class="font-semibold text-slate-900 dark:text-zinc-100">{{ $folder === 'Sent' ? 'Sent Mail' : 'Inbox' }}</h2>
+                            <p class="text-xs text-slate-500 dark:text-zinc-400">{{ $messages instanceof \Illuminate\Contracts\Pagination\Paginator ? $messages->total() : 0 }} messages</p>
+                        </div>
+                        @if ($account)
+                            <form method="POST" action="{{ route('email.accounts.sync', $account) }}">
+                                @csrf
+                                <button type="submit" class="inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 shadow-sm hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                                    Refresh
+                                </button>
+                            </form>
+                        @endif
                     </div>
 
                     <div class="divide-y divide-slate-100 dark:divide-zinc-800">
                         @forelse ($messages as $message)
                             <a href="{{ route('email.index', ['account' => $account->id, 'folder' => $folder, 'message' => $message->id]) }}"
-                               class="{{ $selectedMessage?->id === $message->id ? 'bg-amber-50 dark:bg-amber-400/10' : 'bg-white hover:bg-slate-50 dark:bg-zinc-900 dark:hover:bg-zinc-800/70' }} block px-4 py-4">
-                                <div class="flex items-start justify-between gap-3">
+                               class="{{ $selectedMessage?->id === $message->id ? 'bg-blue-50 dark:bg-blue-400/10' : 'bg-white hover:bg-slate-50 dark:bg-zinc-900 dark:hover:bg-zinc-800/70' }} block px-3 py-2.5">
+                                <div class="grid items-center gap-3 text-sm md:grid-cols-[1rem_1.25rem_minmax(8rem,12rem)_minmax(0,1fr)_4.5rem]">
+                                    <span class="hidden h-4 w-4 rounded border border-slate-300 bg-white dark:border-zinc-700 dark:bg-zinc-950 md:block"></span>
+                                    <span class="hidden text-center text-lg leading-none text-slate-300 dark:text-zinc-600 md:block">&#9734;</span>
+                                    <p class="truncate font-semibold text-slate-900 dark:text-zinc-100">
+                                        {{ $folder === 'Sent' ? collect($message->to)->implode(', ') : ($message->from_name ?: $message->from_email ?: 'Unknown sender') }}
+                                    </p>
                                     <div class="min-w-0">
-                                        <p class="truncate text-sm font-bold text-slate-900 dark:text-zinc-100">
-                                            {{ $folder === 'Sent' ? collect($message->to)->implode(', ') : ($message->from_name ?: $message->from_email ?: 'Unknown sender') }}
+                                        <p class="truncate text-slate-900 dark:text-zinc-100">
+                                            <span class="font-semibold">{{ $message->subject ?: '(No subject)' }}</span>
+                                            @if ($message->body_text)
+                                                <span class="text-slate-500 dark:text-zinc-400"> - {{ $message->body_text }}</span>
+                                            @endif
                                         </p>
-                                        <p class="mt-1 truncate text-sm font-semibold text-slate-700 dark:text-zinc-200">{{ $message->subject ?: '(No subject)' }}</p>
-                                        <p class="mt-1 line-clamp-2 text-xs text-slate-500 dark:text-zinc-400">{{ $message->body_text }}</p>
                                     </div>
-                                    <span class="shrink-0 text-xs text-slate-400 dark:text-zinc-500">{{ $message->sent_at?->format('M d') }}</span>
+                                    <span class="text-right text-xs font-medium text-slate-500 dark:text-zinc-400">{{ $message->sent_at?->format('M d') }}</span>
                                 </div>
                             </a>
                         @empty
@@ -149,7 +171,7 @@
                 @endif
             </section>
 
-            <section class="min-h-[24rem] bg-white p-6 dark:bg-zinc-900">
+            <section class="min-h-[32rem] bg-white p-6 dark:bg-zinc-900">
                 @if ($selectedMessage)
                     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div class="min-w-0">
@@ -164,7 +186,7 @@
                         <span class="text-sm text-slate-500 dark:text-zinc-400">{{ $selectedMessage->sent_at?->format('m/d/Y @ h:i A') }}</span>
                     </div>
 
-                    <div class="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm leading-7 text-slate-700 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
+                    <div class="mt-6 max-h-[calc(100vh-21rem)] overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-6 text-base leading-8 text-slate-700 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
                         @if ($selectedMessage->body_html)
                             {!! nl2br(e(strip_tags($selectedMessage->body_html))) !!}
                         @else
@@ -172,62 +194,65 @@
                         @endif
                     </div>
                 @else
-                    <div class="flex h-full min-h-[24rem] items-center justify-center text-center text-sm text-slate-500 dark:text-zinc-400">
+                    <div class="flex h-full min-h-[32rem] items-center justify-center text-center text-sm text-slate-500 dark:text-zinc-400">
                         Select an email to read.
                     </div>
                 @endif
             </section>
         </div>
 
-        <div x-show="composeOpen"
-             x-cloak
-             x-transition.opacity
-             class="crm-top-modal-backdrop flex items-end justify-end bg-slate-950/60 p-4 sm:items-center sm:p-6">
-            <form method="POST" action="{{ route('email.send') }}" data-no-page-loader class="crm-modal-panel w-full max-w-2xl rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
-                @csrf
-                <input type="hidden" name="email_account_id" value="{{ $account?->id }}">
-                <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-zinc-800">
-                    <h2 class="font-bold text-slate-900 dark:text-zinc-100">New Message</h2>
-                    <button type="button" x-on:click="composeOpen = false" class="rounded-lg px-3 py-1 text-sm font-semibold text-slate-500 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Close</button>
-                </div>
-                <div class="space-y-4 p-5">
-                    <div>
-                        <label for="to" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">To</label>
-                        <input id="to" name="to" value="{{ old('to') }}" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-                        <x-input-error :messages="$errors->get('to')" class="mt-2" />
+        <template x-teleport="body">
+            <div x-show="composeOpen"
+                 x-cloak
+                 x-transition.opacity
+                 class="crm-top-modal-backdrop flex items-end justify-end bg-slate-950/70 p-4 backdrop-blur-sm sm:items-center sm:p-6">
+                <form method="POST" action="{{ route('email.send') }}" data-no-page-loader class="crm-modal-panel w-full max-w-2xl rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
+                    @csrf
+                    <input type="hidden" name="email_account_id" value="{{ $account?->id }}">
+                    <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-zinc-800">
+                        <h2 class="font-bold text-slate-900 dark:text-zinc-100">New Message</h2>
+                        <button type="button" x-on:click="composeOpen = false" class="rounded-lg px-3 py-1 text-sm font-semibold text-slate-500 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Close</button>
                     </div>
-                    <div>
-                        <label for="cc" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">CC</label>
-                        <input id="cc" name="cc" value="{{ old('cc') }}" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                    <div class="space-y-4 p-5">
+                        <div>
+                            <label for="to" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">To</label>
+                            <input id="to" name="to" value="{{ old('to') }}" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                            <x-input-error :messages="$errors->get('to')" class="mt-2" />
+                        </div>
+                        <div>
+                            <label for="cc" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">CC</label>
+                            <input id="cc" name="cc" value="{{ old('cc') }}" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                        </div>
+                        <div>
+                            <label for="subject" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Subject</label>
+                            <input id="subject" name="subject" value="{{ old('subject') }}" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                            <x-input-error :messages="$errors->get('subject')" class="mt-2" />
+                        </div>
+                        <div>
+                            <label for="body" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Message</label>
+                            <textarea id="body" name="body" rows="10" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">{{ old('body') }}</textarea>
+                            <x-input-error :messages="$errors->get('body')" class="mt-2" />
+                        </div>
                     </div>
-                    <div>
-                        <label for="subject" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Subject</label>
-                        <input id="subject" name="subject" value="{{ old('subject') }}" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-                        <x-input-error :messages="$errors->get('subject')" class="mt-2" />
+                    <div class="flex justify-end gap-3 border-t border-slate-200 px-5 py-4 dark:border-zinc-800">
+                        <button type="button" x-on:click="composeOpen = false" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-zinc-800 dark:text-zinc-200">Cancel</button>
+                        <button type="submit" class="rounded-xl bg-zinc-950 px-5 py-2 text-sm font-semibold text-amber-100 dark:bg-amber-400 dark:text-zinc-950">Send</button>
                     </div>
-                    <div>
-                        <label for="body" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Message</label>
-                        <textarea id="body" name="body" rows="10" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">{{ old('body') }}</textarea>
-                        <x-input-error :messages="$errors->get('body')" class="mt-2" />
-                    </div>
-                </div>
-                <div class="flex justify-end gap-3 border-t border-slate-200 px-5 py-4 dark:border-zinc-800">
-                    <button type="button" x-on:click="composeOpen = false" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-zinc-800 dark:text-zinc-200">Cancel</button>
-                    <button type="submit" class="rounded-xl bg-zinc-950 px-5 py-2 text-sm font-semibold text-amber-100 dark:bg-amber-400 dark:text-zinc-950">Send</button>
-                </div>
-            </form>
-        </div>
+                </form>
+            </div>
+        </template>
 
         @if ($canManageEmailAccounts)
+            <template x-teleport="body">
             <div x-show="settingsOpen"
                  x-cloak
                  x-transition.opacity
-                 class="crm-top-modal-backdrop flex items-start justify-center overflow-y-auto bg-slate-950/60 p-4 sm:p-6">
-                <div class="crm-modal-panel w-full max-w-4xl rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
+                 class="crm-top-modal-backdrop flex items-start justify-center overflow-y-auto bg-slate-950/70 p-4 backdrop-blur-sm sm:p-6">
+                <div class="crm-modal-panel my-auto w-full max-w-6xl rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
                     <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-zinc-800">
                         <div>
-                            <h2 class="font-bold text-slate-900 dark:text-zinc-100">{{ $settingsAccount ? 'Admin Mail Settings' : 'Connect Brand Mailbox' }}</h2>
-                            <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Configure the brand mailbox once. Employees assigned to that brand will see email ready to use.</p>
+                            <h2 class="font-bold text-slate-900 dark:text-zinc-100">{{ $settingsAccount ? 'Admin Mail Settings' : 'Connect Mailbox' }}</h2>
+                            <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Configure a brand mailbox for a team or an employee mailbox for one CRM user.</p>
                         </div>
                         <button type="button" x-on:click="settingsOpen = false" class="rounded-lg px-3 py-1 text-sm font-semibold text-slate-500 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Close</button>
                     </div>
@@ -238,7 +263,20 @@
                             @method('PUT')
                         @endif
 
-                        <div class="mb-5">
+                        @if (! $settingsAccount)
+                            <div class="mb-5">
+                                <label for="mailbox_type" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Mailbox Access</label>
+                                <select id="mailbox_type" name="mailbox_type" x-model="mailboxType" class="w-full rounded-xl border-slate-200 text-sm font-semibold shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                                    <option value="brand">Brand mailbox - everyone assigned to the brand can use it</option>
+                                    <option value="employee">Employee mailbox - only the selected employee can use it</option>
+                                </select>
+                                <x-input-error :messages="$errors->get('mailbox_type')" class="mt-2" />
+                            </div>
+                        @else
+                            <input type="hidden" name="mailbox_type" value="{{ $settingsAccount->user_id ? 'employee' : 'brand' }}">
+                        @endif
+
+                        <div class="mb-5" x-show="mailboxType === 'brand'">
                             <label for="brand_id" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Brand</label>
                             @if ($settingsAccount)
                                 <input type="hidden" name="brand_id" value="{{ $settingsAccount->brand_id }}">
@@ -252,6 +290,24 @@
                                     @endforeach
                                 </select>
                                 <x-input-error :messages="$errors->get('brand_id')" class="mt-2" />
+                            @endif
+                        </div>
+
+                        <div class="mb-5" x-show="mailboxType === 'employee'">
+                            <label for="user_id" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Employee</label>
+                            @if ($settingsAccount)
+                                <input type="hidden" name="user_id" value="{{ $settingsAccount->user_id }}">
+                                <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                                    {{ $settingsAccount->user ? trim(($settingsAccount->user->first_name ?? '') . ' ' . ($settingsAccount->user->last_name ?? '')) : 'Employee mailbox' }}
+                                </div>
+                            @else
+                                <select id="user_id" name="user_id" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                                    @foreach ($users as $mailUser)
+                                        @php($mailUserName = trim(($mailUser->first_name ?? '') . ' ' . ($mailUser->last_name ?? '')) ?: $mailUser->email)
+                                        <option value="{{ $mailUser->id }}" @selected(old('user_id') == $mailUser->id)>{{ $mailUserName }} - {{ $mailUser->email }}</option>
+                                    @endforeach
+                                </select>
+                                <x-input-error :messages="$errors->get('user_id')" class="mt-2" />
                             @endif
                         </div>
 
@@ -282,10 +338,10 @@
                         <div class="rounded-xl border border-slate-200 p-4 dark:border-zinc-800">
                             <h3 class="font-semibold text-slate-900 dark:text-zinc-100">Incoming IMAP</h3>
                             <p class="mt-1 text-xs text-slate-500 dark:text-zinc-400">Use the exact incoming server from SiteGround Mail Configuration.</p>
-                            <div class="mt-4 grid gap-4 sm:grid-cols-[1fr_7rem_8rem]">
-                                <input name="imap_host" value="{{ old('imap_host', $settingsAccount?->imap_host ?? 'mail.siteground.net') }}" class="rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-                                <input name="imap_port" type="number" value="{{ old('imap_port', $settingsAccount?->imap_port ?? 993) }}" class="rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-                                <select name="imap_encryption" class="rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                            <div class="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_5.5rem_6.5rem]">
+                                <input name="imap_host" value="{{ old('imap_host', $settingsAccount?->imap_host ?? 'mail.siteground.net') }}" class="min-w-0 rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                                <input name="imap_port" type="number" value="{{ old('imap_port', $settingsAccount?->imap_port ?? 993) }}" class="min-w-0 rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                                <select name="imap_encryption" class="min-w-0 w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
                                     @foreach (['ssl' => 'SSL', 'tls' => 'TLS', 'none' => 'None'] as $value => $label)
                                         <option value="{{ $value }}" @selected(old('imap_encryption', $settingsAccount?->imap_encryption ?? 'ssl') === $value)>{{ $label }}</option>
                                     @endforeach
@@ -296,10 +352,10 @@
                         <div class="rounded-xl border border-slate-200 p-4 dark:border-zinc-800">
                             <h3 class="font-semibold text-slate-900 dark:text-zinc-100">Outgoing SMTP</h3>
                             <p class="mt-1 text-xs text-slate-500 dark:text-zinc-400">SiteGround commonly uses SMTP port 465 with SSL.</p>
-                            <div class="mt-4 grid gap-4 sm:grid-cols-[1fr_7rem_8rem]">
-                                <input name="smtp_host" value="{{ old('smtp_host', $settingsAccount?->smtp_host ?? 'mail.siteground.net') }}" class="rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-                                <input name="smtp_port" type="number" value="{{ old('smtp_port', $settingsAccount?->smtp_port ?? 465) }}" class="rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-                                <select name="smtp_encryption" class="rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                            <div class="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_5.5rem_6.5rem]">
+                                <input name="smtp_host" value="{{ old('smtp_host', $settingsAccount?->smtp_host ?? 'mail.siteground.net') }}" class="min-w-0 rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                                <input name="smtp_port" type="number" value="{{ old('smtp_port', $settingsAccount?->smtp_port ?? 465) }}" class="min-w-0 rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                                <select name="smtp_encryption" class="min-w-0 w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
                                     @foreach (['ssl' => 'SSL', 'tls' => 'TLS', 'none' => 'None'] as $value => $label)
                                         <option value="{{ $value }}" @selected(old('smtp_encryption', $settingsAccount?->smtp_encryption ?? 'ssl') === $value)>{{ $label }}</option>
                                     @endforeach
@@ -311,12 +367,13 @@
                         <div class="mt-6 flex justify-end gap-3">
                             <button type="button" x-on:click="settingsOpen = false" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-zinc-800 dark:text-zinc-200">Cancel</button>
                             <button type="submit" class="rounded-xl bg-zinc-950 px-5 py-2 text-sm font-semibold text-amber-100 dark:bg-amber-400 dark:text-zinc-950">
-                                {{ $settingsAccount ? 'Save Settings' : 'Connect Brand Mailbox' }}
+                                {{ $settingsAccount ? 'Save Settings' : 'Connect Mailbox' }}
                             </button>
                         </div>
                     </form>
                 </div>
             </div>
+            </template>
         @endif
     </div>
 </x-app-layout>
