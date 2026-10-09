@@ -401,7 +401,7 @@
                  x-cloak
                  x-transition.opacity
                  class="crm-top-modal-backdrop flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm sm:p-6">
-                <form method="POST" action="{{ route('email.send') }}" enctype="multipart/form-data" data-no-page-loader class="crm-modal-panel max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
+                <form method="POST" action="{{ route('email.send') }}" enctype="multipart/form-data" data-no-page-loader class="crm-modal-panel max-h-[calc(100vh-2rem)] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
                     @csrf
                     <input type="hidden" name="email_account_id" value="{{ $account?->id }}">
                     <input type="hidden" name="include_signature" x-bind:value="includeSignature ? 1 : 0">
@@ -428,8 +428,8 @@
                         </div>
                         <div>
                             <label for="body" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Message</label>
-                            <div class="min-h-80 rounded-xl border border-slate-200 bg-white shadow-sm focus-within:border-amber-500 focus-within:ring-1 focus-within:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950">
-                                <textarea id="body" x-ref="body" x-model="bodyText" name="body" rows="8" placeholder="Write your message..." class="min-h-40 w-full resize-none border-0 bg-transparent text-sm shadow-none focus:border-0 focus:ring-0 dark:text-zinc-100"></textarea>
+                            <div class="min-h-72 rounded-xl border border-slate-200 bg-white shadow-sm focus-within:border-amber-500 focus-within:ring-1 focus-within:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950">
+                                <textarea id="body" x-ref="body" x-model="bodyText" name="body" rows="6" placeholder="Write your message..." class="min-h-32 w-full resize-none border-0 bg-transparent text-sm shadow-none focus:border-0 focus:ring-0 dark:text-zinc-100"></textarea>
                                 @if ($emailSignature)
                                     <div x-show="includeSignature" x-cloak class="px-3 pb-4 pt-1 text-sm text-slate-700 dark:text-zinc-200">
                                         <div class="flex items-start justify-between gap-4">
