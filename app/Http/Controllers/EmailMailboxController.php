@@ -255,6 +255,18 @@ class EmailMailboxController extends Controller
             ->with('success', "{$deleted} email message(s) deleted.");
     }
 
+    public function markMessageRead(Request $request, EmailAccount $account, EmailMessage $message)
+    {
+        $this->authorizeAccount($request->user(), $account);
+        abort_unless((int) $message->email_account_id === (int) $account->id, 404);
+
+        if (! $message->is_seen) {
+            $message->forceFill(['is_seen' => true])->save();
+        }
+
+        return response()->noContent();
+    }
+
     public function updateSignature(Request $request)
     {
         $validated = $request->validate([

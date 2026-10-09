@@ -3,6 +3,40 @@
         Email
     </x-slot>
 
+    @php
+        $emailMessageRecords = $messages instanceof \Illuminate\Contracts\Pagination\Paginator
+            ? $messages->getCollection()
+            : collect();
+        $emailMessagePayload = $account
+            ? $emailMessageRecords->mapWithKeys(function ($message) use ($account, $folder) {
+                $bodyText = $message->body_text ?: 'No message body.';
+                $textLooksLikeHtml = is_string($bodyText) && preg_match('/^\s*(<!doctype|<html|<body|<table|<div|<p)\b/i', $bodyText);
+                $textLooksLikeSource = is_string($bodyText) && preg_match('/^\s*(#outlook\b|@media\b|body\s*\{|table\s*,\s*td\s*\{|img\s*\{|p\s*\{|\.moz-text-html\b|\.mj-[a-z0-9_-]+\b)/i', $bodyText);
+
+                return [
+                    $message->id => [
+                        'id' => $message->id,
+                        'folder' => $folder,
+                        'url' => route('email.index', ['account' => $account->id, 'folder' => $folder, 'message' => $message->id]),
+                        'listUrl' => route('email.index', ['account' => $account->id, 'folder' => $folder]),
+                        'readUrl' => route('email.messages.read', ['account' => $account, 'message' => $message]),
+                        'subject' => $message->subject ?: '(No subject)',
+                        'fromName' => $message->from_name ?: $message->from_email ?: $account->display_name,
+                        'fromEmail' => $message->from_email,
+                        'recipientLine' => $folder === 'Sent' ? 'sent from ' . $account->email_address : 'to ' . $account->email_address,
+                        'initial' => strtoupper(substr($message->from_name ?: $message->from_email ?: $account->display_name, 0, 1)),
+                        'sentAt' => $message->sent_at?->format('M d, Y h:i A'),
+                        'bodyText' => $bodyText,
+                        'bodyHtml' => $message->body_html,
+                        'textLooksLikeHtml' => (bool) $textLooksLikeHtml,
+                        'textLooksLikeSource' => (bool) $textLooksLikeSource,
+                        'isSeen' => (bool) $message->is_seen,
+                    ],
+                ];
+            })
+            : collect();
+    @endphp
+
     <div class="space-y-6" x-data="{
         composeOpen: @js($errors->has('to') || $errors->has('subject') || $errors->has('body')),
         settingsOpen: @js($canManageEmailAccounts && ($errors->has('email_address') || request()->boolean('settings') || ! $account)),
@@ -18,6 +52,9 @@
         attachmentNames: [],
         imageNames: [],
         selectedMessages: [],
+        activeEmailMessage: null,
+        emailMessages: @js($emailMessagePayload),
+        currentMailboxUrl: @js($account ? route('email.index', ['account' => $account->id, 'folder' => $folder]) : url()->current()),
         sendingEmail: false,
         showMoreOptions: false,
         showSendOptions: false,
@@ -106,6 +143,33 @@
         pickEmoji(emoji) {
             this.insertText(emoji);
             this.showEmojiPicker = false;
+        },
+        openEmailMessageById(messageId) {
+            const message = this.emailMessages?.[messageId];
+            if (! message) return;
+            this.openEmailMessage(message);
+        },
+        openEmailMessage(message) {
+            this.activeEmailMessage = message;
+            this.selectedMessages = [];
+            window.history.pushState({}, '', message.url);
+
+            if (message.folder === 'INBOX' && !message.isSeen) {
+                message.isSeen = true;
+                window.setTimeout(() => {
+                    fetch(message.readUrl, {
+                        method: 'PATCH',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]')?.content || '',
+                        },
+                    }).catch(() => {});
+                }, 750);
+            }
+        },
+        closeEmailMessage() {
+            this.activeEmailMessage = null;
+            window.history.pushState({}, '', this.currentMailboxUrl);
         },
         formatSignature(command, value = null) {
             this.$refs.signatureEditor?.focus();
@@ -354,6 +418,64 @@
                         </div>
                     </article>
                 @else
+                    <div x-show="activeEmailMessage" x-cloak>
+                        <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-zinc-800">
+                            <div class="flex items-center gap-2">
+                                <button type="button"
+                                        x-on:click="closeEmailMessage()"
+                                        class="inline-flex h-9 w-9 items-center justify-center rounded-full text-xl text-slate-600 hover:bg-slate-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                                        aria-label="Back to inbox">
+                                    &larr;
+                                </button>
+                                @if ($account)
+                                    <form method="POST" action="{{ route('email.accounts.sync', $account) }}">
+                                        @csrf
+                                        <button type="submit" class="inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 shadow-sm hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                                            Refresh
+                                        </button>
+                                    </form>
+                                @endif
+                            </div>
+                            <span class="text-xs font-medium text-slate-500 dark:text-zinc-400" x-text="activeEmailMessage?.sentAt"></span>
+                        </div>
+
+                        <article class="mx-auto max-w-6xl px-6 py-8">
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div class="min-w-0">
+                                    <h2 class="text-2xl font-normal leading-tight text-slate-950 dark:text-zinc-100" x-text="activeEmailMessage?.subject || '(No subject)'"></h2>
+                                    <div class="mt-6 flex items-start gap-4">
+                                        <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700 dark:bg-blue-400/20 dark:text-blue-200" x-text="activeEmailMessage?.initial || '?'"></div>
+                                        <div class="min-w-0">
+                                            <p class="font-semibold text-slate-900 dark:text-zinc-100">
+                                                <span x-text="activeEmailMessage?.fromName || 'Unknown sender'"></span>
+                                                <span x-show="activeEmailMessage?.fromEmail" class="font-normal text-slate-500 dark:text-zinc-400">&lt;<span x-text="activeEmailMessage?.fromEmail"></span>&gt;</span>
+                                            </p>
+                                            <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400" x-text="activeEmailMessage?.recipientLine"></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mt-8 rounded-xl border border-slate-200 bg-white p-6 text-base leading-8 text-slate-800 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
+                                <template x-if="activeEmailMessage && (activeEmailMessage.bodyHtml || activeEmailMessage.textLooksLikeHtml)">
+                                    <iframe title="Email message body"
+                                            sandbox
+                                            x-bind:srcdoc="activeEmailMessage.bodyHtml || activeEmailMessage.bodyText"
+                                            class="h-[44rem] w-full rounded-lg border-0 bg-white"></iframe>
+                                </template>
+                                <template x-if="activeEmailMessage && !activeEmailMessage.bodyHtml && !activeEmailMessage.textLooksLikeHtml && activeEmailMessage.textLooksLikeSource">
+                                    <div class="rounded-xl bg-slate-50 px-5 py-4 text-sm leading-6 text-slate-600 dark:bg-zinc-900 dark:text-zinc-300">
+                                        This email uses HTML formatting that could not be displayed cleanly. Click Refresh to try loading the formatted version again.
+                                    </div>
+                                </template>
+                                <template x-if="activeEmailMessage && !activeEmailMessage.bodyHtml && !activeEmailMessage.textLooksLikeHtml && !activeEmailMessage.textLooksLikeSource">
+                                    <div class="whitespace-pre-line" x-text="activeEmailMessage.bodyText || 'No message body.'"></div>
+                                </template>
+                            </div>
+                        </article>
+                    </div>
+
+                    <div x-show="!activeEmailMessage">
                     <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-zinc-800">
                         <div>
                             <h2 class="font-semibold text-slate-900 dark:text-zinc-100">{{ $folder === 'Sent' ? 'Sent Mail' : 'Inbox' }}</h2>
@@ -403,7 +525,10 @@
                                        x-model="selectedMessages"
                                        class="hidden h-4 w-4 rounded border-slate-300 text-rose-600 shadow-sm focus:ring-rose-500 dark:border-zinc-700 dark:bg-zinc-950 md:block">
                                 <span class="{{ $isUnread ? 'text-amber-400 dark:text-amber-300' : 'text-slate-300 dark:text-zinc-600' }} hidden text-center text-lg leading-none md:block">&#9734;</span>
-                                <a href="{{ route('email.index', ['account' => $account->id, 'folder' => $folder, 'message' => $message->id]) }}" data-no-page-loader class="contents">
+                                <a href="{{ route('email.index', ['account' => $account->id, 'folder' => $folder, 'message' => $message->id]) }}"
+                                   x-on:click.prevent="openEmailMessageById({{ $message->id }})"
+                                   data-no-page-loader
+                                   class="contents">
                                     <p class="{{ $isUnread ? 'font-bold text-slate-950 dark:text-zinc-50' : 'font-medium text-slate-600 dark:text-zinc-400' }} truncate">
                                         {{ $folder === 'Sent' ? collect($message->to)->implode(', ') : ($message->from_name ?: $message->from_email ?: 'Unknown sender') }}
                                     </p>
@@ -436,6 +561,7 @@
                             {{ $messages->links() }}
                         </div>
                     @endif
+                    </div>
                 @endif
             </section>
         </div>
