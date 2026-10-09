@@ -143,6 +143,12 @@
 
             <div class="mt-4 grid gap-4 sm:grid-cols-2">
                 <div>
+                    <x-input-label for="email_signature_name" :value="__('Signature Name')" />
+                    <x-text-input id="email_signature_name" name="email_signature_name" type="text" class="mt-1 block w-full" :value="old('email_signature_name', $user->email_signature_name ?? trim($user->first_name . ' ' . $user->last_name))" />
+                    <x-input-error class="mt-2" :messages="$errors->get('email_signature_name')" />
+                </div>
+
+                <div>
                     <x-input-label for="email_signature_title" :value="__('Job Title')" />
                     <x-text-input id="email_signature_title" name="email_signature_title" type="text" class="mt-1 block w-full" :value="old('email_signature_title', $user->email_signature_title)" placeholder="Admin Support" />
                     <x-input-error class="mt-2" :messages="$errors->get('email_signature_title')" />
@@ -157,7 +163,7 @@
 
             <div class="mt-4 rounded-xl bg-white p-4 text-sm text-slate-700 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:text-zinc-200 dark:ring-zinc-800">
                 <p>--</p>
-                <p class="mt-2 text-lg font-bold text-slate-950 dark:text-white">{{ trim($user->first_name . ' ' . $user->last_name) }}</p>
+                <p class="mt-2 text-lg font-bold text-slate-950 dark:text-white">{{ $user->email_signature_name ?: trim($user->first_name . ' ' . $user->last_name) }}</p>
                 <p class="font-semibold text-slate-500 dark:text-zinc-400">{{ $user->email_signature_title ?: 'Job Title' }}</p>
                 @if ($user->brand?->logo_path)
                     <img src="{{ asset('storage/' . $user->brand->logo_path) }}" alt="{{ $user->brand->imprint_name }}" class="mt-5 max-h-24 max-w-56 object-contain">

@@ -33,6 +33,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'email',
         'phone_number',
         'email_signature_enabled',
+        'email_signature_name',
         'email_signature_title',
         'email_signature_contact_number',
         'hris_employee_id',

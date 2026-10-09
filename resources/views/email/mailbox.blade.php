@@ -6,6 +6,7 @@
     <div class="space-y-6" x-data="{
         composeOpen: @js($errors->has('to') || $errors->has('subject') || $errors->has('body')),
         settingsOpen: @js($canManageEmailAccounts && ($errors->has('email_address') || request()->boolean('settings') || ! $account)),
+        signatureSettingsOpen: @js($errors->has('email_signature_name') || $errors->has('email_signature_title') || $errors->has('email_signature_contact_number')),
         mailboxType: @js(old('mailbox_type', $settingsAccount?->user_id ? 'employee' : 'brand')),
         bodyText: @js(old('body', '')),
         includeSignature: @js((bool) $emailSignature),
@@ -77,9 +78,9 @@
             if (action === 'signature') {
                 if (this.signatureText) {
                     this.includeSignature = true;
-                    this.composeNotice = 'Your saved email signature is enabled for this message.';
+                    this.signatureSettingsOpen = true;
                 } else {
-                    this.insertText(@js("\n\nRegards,\n" . trim((auth()->user()->first_name ?? '') . ' ' . (auth()->user()->last_name ?? '')) . "\n" . auth()->user()->email));
+                    this.signatureSettingsOpen = true;
                 }
             }
             if (action === 'calendar') this.insertText('\n\nMeeting invite:\nDate:\nTime:\nAgenda:\n');
@@ -141,6 +142,9 @@
                         Compose
                     </button>
                 @endif
+                <button type="button" x-on:click="signatureSettingsOpen = true" class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                    Signature
+                </button>
                 @if ($canManageEmailAccounts)
                     <a href="{{ route('email.index', ['settings' => 1, 'new' => 1]) }}" class="inline-flex h-11 items-center justify-center rounded-xl bg-zinc-950 px-4 text-sm font-semibold text-amber-100 shadow-sm hover:bg-zinc-800 dark:bg-amber-400 dark:text-zinc-950">
                         Add Mailbox
@@ -372,33 +376,51 @@
                         </div>
                         <div>
                             <label for="body" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Message</label>
-                            <textarea id="body" x-ref="body" x-model="bodyText" name="body" rows="10" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"></textarea>
-                            <x-input-error :messages="$errors->get('body')" class="mt-2" />
-                        </div>
-                        @if ($emailSignature)
-                            <div x-show="includeSignature" x-cloak class="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
-                                <div class="flex items-start justify-between gap-4">
-                                    <div>
-                                        <p>--</p>
-                                        @if ($emailSignature['name'])
-                                            <p class="mt-2 text-lg font-bold text-slate-950 dark:text-white">{{ $emailSignature['name'] }}</p>
-                                        @endif
-                                        @if ($emailSignature['title'])
-                                            <p class="font-semibold text-slate-500 dark:text-zinc-400">{{ $emailSignature['title'] }}</p>
-                                        @endif
-                                        @if ($emailSignature['logoUrl'])
-                                            <img src="{{ $emailSignature['logoUrl'] }}" alt="{{ $emailSignature['brand'] ?: 'Brand logo' }}" class="mt-5 max-h-24 max-w-56 object-contain">
-                                        @endif
-                                        @if ($emailSignature['contact'])
-                                            <p class="mt-5 font-semibold text-slate-600 dark:text-zinc-300">Contact Number: {{ $emailSignature['contact'] }}</p>
-                                        @endif
+                            <div class="min-h-80 rounded-xl border border-slate-200 bg-white shadow-sm focus-within:border-amber-500 focus-within:ring-1 focus-within:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950">
+                                <textarea id="body" x-ref="body" x-model="bodyText" name="body" rows="8" placeholder="Write your message..." class="min-h-40 w-full resize-none border-0 bg-transparent text-sm shadow-none focus:border-0 focus:ring-0 dark:text-zinc-100"></textarea>
+                                @if ($emailSignature)
+                                    <div x-show="includeSignature" x-cloak class="px-3 pb-4 pt-1 text-sm text-slate-700 dark:text-zinc-200">
+                                        <div class="flex items-start justify-between gap-4">
+                                            <div>
+                                                <p>--</p>
+                                                @if ($emailSignature['name'])
+                                                    <p class="mt-2 text-lg font-bold text-slate-950 dark:text-white">{{ $emailSignature['name'] }}</p>
+                                                @endif
+                                                @if ($emailSignature['title'])
+                                                    <p class="font-semibold text-slate-500 dark:text-zinc-400">{{ $emailSignature['title'] }}</p>
+                                                @endif
+                                                @if ($emailSignature['logoUrl'])
+                                                    <img src="{{ $emailSignature['logoUrl'] }}" alt="{{ $emailSignature['brand'] ?: 'Brand logo' }}" class="mt-8 max-h-28 max-w-60 object-contain">
+                                                @endif
+                                                @if ($emailSignature['contact'])
+                                                    <p class="mt-8 font-semibold text-slate-600 dark:text-zinc-300">Contact Number: {{ $emailSignature['contact'] }}</p>
+                                                @endif
+                                            </div>
+                                            <div class="flex shrink-0 gap-2">
+                                                <button type="button" x-on:click="signatureSettingsOpen = true" class="rounded-lg px-3 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-800">
+                                                    Edit
+                                                </button>
+                                                <button type="button" x-on:click="includeSignature = false" class="rounded-lg px-3 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-800">
+                                                    Remove
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <button type="button" x-on:click="includeSignature = false" class="rounded-lg px-3 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-800">
-                                        Remove
+                                @else
+                                    <div class="px-3 pb-4 pt-1">
+                                        <button type="button" x-on:click="signatureSettingsOpen = true" class="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900">
+                                            Create email signature
+                                        </button>
+                                    </div>
+                                @endif
+                                <div x-show="! includeSignature && signatureText" x-cloak class="px-3 pb-4">
+                                    <button type="button" x-on:click="includeSignature = true" class="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900">
+                                        Add saved signature
                                     </button>
                                 </div>
                             </div>
-                        @endif
+                            <x-input-error :messages="$errors->get('body')" class="mt-2" />
+                        </div>
                         <div x-show="attachmentNames.length || imageNames.length" x-cloak class="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
                             <template x-if="attachmentNames.length">
                                 <p><span class="font-semibold">Attached:</span> <span x-text="attachmentNames.join(', ')"></span></p>
@@ -627,5 +649,73 @@
             </div>
             </template>
         @endif
+
+        <template x-teleport="body">
+            <div x-show="signatureSettingsOpen"
+                 x-cloak
+                 x-transition.opacity
+                 class="crm-top-modal-backdrop flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm sm:p-6">
+                <form method="POST" action="{{ route('email.signature.update', ['account' => $account?->id, 'folder' => $folder]) }}" data-no-page-loader class="crm-modal-panel w-full max-w-2xl rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
+                    @csrf
+                    @method('patch')
+                    <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-zinc-800">
+                        <div>
+                            <h2 class="font-bold text-slate-900 dark:text-zinc-100">Email Signature</h2>
+                            <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Customize what appears automatically in new CRM emails.</p>
+                        </div>
+                        <button type="button" x-on:click="signatureSettingsOpen = false" class="rounded-lg px-3 py-1 text-sm font-semibold text-slate-500 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Close</button>
+                    </div>
+                    <div class="space-y-4 p-5">
+                        <label class="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-zinc-800 dark:bg-zinc-950">
+                            <input name="email_signature_enabled" type="checkbox" value="1" @checked(old('email_signature_enabled', auth()->user()->email_signature_enabled ?? true)) class="mt-1 rounded border-slate-300 text-emerald-700 shadow-sm focus:ring-emerald-600 dark:border-zinc-700 dark:bg-zinc-900">
+                            <span>
+                                <span class="block text-sm font-bold text-slate-900 dark:text-zinc-100">Automatically add my signature</span>
+                                <span class="mt-1 block text-xs text-slate-500 dark:text-zinc-400">When enabled, the signature appears inside every new compose message.</span>
+                            </span>
+                        </label>
+
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <div>
+                                <label for="email_signature_name" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Name</label>
+                                <input id="email_signature_name" name="email_signature_name" value="{{ old('email_signature_name', auth()->user()->email_signature_name ?: trim(auth()->user()->first_name . ' ' . auth()->user()->last_name)) }}" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                                <x-input-error :messages="$errors->get('email_signature_name')" class="mt-2" />
+                            </div>
+                            <div>
+                                <label for="email_signature_title" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Job Title</label>
+                                <input id="email_signature_title" name="email_signature_title" value="{{ old('email_signature_title', auth()->user()->email_signature_title) }}" placeholder="Admin Support" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                                <x-input-error :messages="$errors->get('email_signature_title')" class="mt-2" />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="email_signature_contact_number" class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Contact Number</label>
+                            <input id="email_signature_contact_number" name="email_signature_contact_number" value="{{ old('email_signature_contact_number', auth()->user()->email_signature_contact_number ?: auth()->user()->phone_number) }}" placeholder="307-224-3882" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                            <x-input-error :messages="$errors->get('email_signature_contact_number')" class="mt-2" />
+                        </div>
+
+                        <div class="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
+                            <p class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-zinc-400">Preview</p>
+                            <div class="mt-4">
+                                <p>--</p>
+                                <p class="mt-2 text-lg font-bold text-slate-950 dark:text-white">{{ auth()->user()->email_signature_name ?: trim(auth()->user()->first_name . ' ' . auth()->user()->last_name) }}</p>
+                                <p class="font-semibold text-slate-500 dark:text-zinc-400">{{ auth()->user()->email_signature_title ?: 'Job Title' }}</p>
+                                @if (auth()->user()->brand?->logo_path)
+                                    <img src="{{ asset('storage/' . auth()->user()->brand->logo_path) }}" alt="{{ auth()->user()->brand->imprint_name }}" class="mt-8 max-h-28 max-w-60 object-contain">
+                                @endif
+                                <p class="mt-8 font-semibold text-slate-600 dark:text-zinc-300">
+                                    Contact Number: {{ auth()->user()->email_signature_contact_number ?: auth()->user()->phone_number ?: 'Your contact number' }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-3 border-t border-slate-200 px-5 py-4 dark:border-zinc-800">
+                        <button type="button" x-on:click="signatureSettingsOpen = false" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-zinc-800 dark:text-zinc-200">Cancel</button>
+                        <button type="submit" class="rounded-xl bg-zinc-950 px-5 py-2 text-sm font-semibold text-amber-100 dark:bg-amber-400 dark:text-zinc-950">
+                            Save Signature
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </template>
     </div>
 </x-app-layout>

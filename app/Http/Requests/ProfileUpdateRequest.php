@@ -28,6 +28,7 @@ class ProfileUpdateRequest extends FormRequest
                 Rule::unique(User::class)->ignore($this->user()->id),
             ],
             'email_signature_enabled' => ['nullable', 'boolean'],
+            'email_signature_name' => ['nullable', 'string', 'max:255'],
             'email_signature_title' => ['nullable', 'string', 'max:255'],
             'email_signature_contact_number' => ['nullable', 'string', 'max:255'],
             'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],

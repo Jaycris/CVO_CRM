@@ -240,6 +240,30 @@ class EmailMailboxController extends Controller
             ->with('success', 'Email sent successfully.');
     }
 
+    public function updateSignature(Request $request)
+    {
+        $validated = $request->validate([
+            'email_signature_enabled' => ['nullable', 'boolean'],
+            'email_signature_name' => ['nullable', 'string', 'max:255'],
+            'email_signature_title' => ['nullable', 'string', 'max:255'],
+            'email_signature_contact_number' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $request->user()->forceFill([
+            'email_signature_enabled' => $request->boolean('email_signature_enabled'),
+            'email_signature_name' => $validated['email_signature_name'] ?? null,
+            'email_signature_title' => $validated['email_signature_title'] ?? null,
+            'email_signature_contact_number' => $validated['email_signature_contact_number'] ?? null,
+        ])->save();
+
+        return redirect()
+            ->route('email.index', [
+                'account' => $request->query('account'),
+                'folder' => $request->query('folder'),
+            ])
+            ->with('success', 'Email signature updated.');
+    }
+
     private function accessibleAccounts(User $user)
     {
         return EmailAccount::query()
@@ -323,7 +347,7 @@ class EmailMailboxController extends Controller
             return null;
         }
 
-        $name = trim($user->first_name . ' ' . $user->last_name);
+        $name = trim((string) ($user->email_signature_name ?: trim($user->first_name . ' ' . $user->last_name)));
         $title = trim((string) ($user->email_signature_title ?: $user->role?->name));
         $contact = trim((string) ($user->email_signature_contact_number ?: $user->phone_number));
         $brand = $user->brand;
