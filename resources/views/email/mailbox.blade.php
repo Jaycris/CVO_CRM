@@ -18,6 +18,7 @@
         attachmentNames: [],
         imageNames: [],
         selectedMessages: [],
+        sendingEmail: false,
         showMoreOptions: false,
         showSendOptions: false,
         showFormatting: false,
@@ -170,6 +171,7 @@
             this.showMoreOptions = false;
             this.showSendOptions = false;
             this.includeSignature = @js((bool) $emailSignature);
+            this.sendingEmail = false;
             this.scheduleNote = '';
             this.composeNotice = '';
             this.composeOpen = false;
@@ -443,7 +445,7 @@
                  x-cloak
                  x-transition.opacity
                  class="crm-top-modal-backdrop flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm sm:p-6">
-                <form method="POST" action="{{ route('email.send') }}" enctype="multipart/form-data" data-no-page-loader class="crm-modal-panel max-h-[calc(100vh-2rem)] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
+                <form method="POST" action="{{ route('email.send') }}" enctype="multipart/form-data" data-no-page-loader x-on:submit="sendingEmail = true" class="crm-modal-panel max-h-[calc(100vh-2rem)] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
                     @csrf
                     <input type="hidden" name="email_account_id" value="{{ $account?->id }}">
                     <input type="hidden" name="include_signature" x-bind:value="includeSignature ? 1 : 0">
@@ -555,10 +557,14 @@
                         </div>
                         <div class="flex min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-x-auto pb-1">
                             <div class="inline-flex shrink-0 overflow-hidden rounded-full bg-blue-600 text-white shadow-sm">
-                                <button type="submit" class="h-11 px-5 text-sm font-semibold hover:bg-blue-700">
-                                    Send
+                                <button type="submit" x-bind:disabled="sendingEmail" class="inline-flex h-11 items-center gap-2 px-5 text-sm font-semibold hover:bg-blue-700 disabled:cursor-wait disabled:opacity-80">
+                                    <svg x-show="sendingEmail" x-cloak class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-90" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z"></path>
+                                    </svg>
+                                    <span x-text="sendingEmail ? 'Sending...' : 'Send'">Send</span>
                                 </button>
-                                <button type="button" x-on:click="toggleSendOptions()" title="More send options" aria-label="More send options" class="flex h-11 w-10 items-center justify-center border-l border-blue-500 hover:bg-blue-700">
+                                <button type="button" x-bind:disabled="sendingEmail" x-on:click="toggleSendOptions()" title="More send options" aria-label="More send options" class="flex h-11 w-10 items-center justify-center border-l border-blue-500 hover:bg-blue-700 disabled:cursor-wait disabled:opacity-70">
                                     <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                         <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clip-rule="evenodd" />
                                     </svg>
