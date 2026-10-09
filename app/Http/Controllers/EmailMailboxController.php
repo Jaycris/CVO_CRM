@@ -156,9 +156,22 @@ class EmailMailboxController extends Controller
         } catch (\Throwable $exception) {
             report($exception);
 
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'The mailbox could not be refreshed. Please check the IMAP settings and password.',
+                ], 422);
+            }
+
             return redirect()
                 ->route('email.index', ['account' => $account->id])
                 ->with('error', 'The mailbox could not be refreshed. Please check the IMAP settings and password.');
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'synced' => $synced,
+                'lastSyncedAt' => $account->fresh()->last_synced_at?->toIso8601String(),
+            ]);
         }
 
         return redirect()
@@ -520,9 +533,13 @@ class EmailMailboxController extends Controller
                     'is_seen' => $emailMessage->exists ? ($emailMessage->is_seen || $message['is_seen']) : $message['is_seen'],
                     'is_answered' => $message['is_answered'],
                     'has_attachments' => $message['has_attachments'],
-                ])->save();
+                ]);
 
-                $synced++;
+                if (! $emailMessage->exists || $emailMessage->isDirty()) {
+                    $synced++;
+                }
+
+                $emailMessage->save();
             }
 
             $account->update(['last_synced_at' => now()]);

@@ -55,6 +55,10 @@
         activeEmailMessage: null,
         emailMessages: @js($emailMessagePayload),
         currentMailboxUrl: @js($account ? route('email.index', ['account' => $account->id, 'folder' => $folder]) : url()->current()),
+        autoRefreshUrl: @js($account ? route('email.accounts.sync', $account) : null),
+        emailFolder: @js($folder),
+        autoRefreshTimer: null,
+        autoRefreshing: false,
         sendingEmail: false,
         showMoreOptions: false,
         showSendOptions: false,
@@ -144,6 +148,38 @@
         pickEmoji(emoji) {
             this.insertText(emoji);
             this.showEmojiPicker = false;
+        },
+        initEmailAutoRefresh() {
+            if (! this.autoRefreshUrl || this.emailFolder !== 'INBOX') return;
+
+            this.autoRefreshTimer = window.setInterval(() => this.autoRefreshInbox(), 45000);
+            window.addEventListener('beforeunload', () => {
+                if (this.autoRefreshTimer) window.clearInterval(this.autoRefreshTimer);
+            });
+        },
+        autoRefreshInbox() {
+            if (this.autoRefreshing || document.hidden || this.activeEmailMessage || this.composeOpen || this.settingsOpen || this.signatureSettingsOpen || this.selectedMessages.length > 0) {
+                return;
+            }
+
+            this.autoRefreshing = true;
+            fetch(this.autoRefreshUrl, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]')?.content || '',
+                },
+            })
+                .then(response => response.ok ? response.json() : null)
+                .then(data => {
+                    if (data?.synced > 0) {
+                        window.location.href = this.currentMailboxUrl;
+                    }
+                })
+                .catch(() => {})
+                .finally(() => {
+                    this.autoRefreshing = false;
+                });
         },
         openEmailMessageById(messageId) {
             const message = this.emailMessages?.[messageId];
@@ -242,7 +278,7 @@
             this.composeNotice = '';
             this.composeOpen = false;
         }
-    }">
+    }" x-init="initEmailAutoRefresh()">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
                 <h1 class="text-2xl font-bold text-slate-900 dark:text-zinc-100">Email</h1>
