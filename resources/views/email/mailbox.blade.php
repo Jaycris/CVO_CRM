@@ -245,7 +245,7 @@
             <div>
                 <h1 class="text-2xl font-bold text-slate-900 dark:text-zinc-100">Email</h1>
                 <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
-                    Admin assigns SiteGround mailboxes to employees so their CRM inbox is ready after login.
+                    Admin assign you an email to your CRM
                 </p>
             </div>
 
