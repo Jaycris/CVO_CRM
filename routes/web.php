@@ -446,6 +446,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/email/accounts', [EmailMailboxController::class, 'storeAccount'])->name('email.accounts.store');
     Route::put('/email/accounts/{account}', [EmailMailboxController::class, 'updateAccount'])->name('email.accounts.update');
     Route::post('/email/accounts/{account}/sync', [EmailMailboxController::class, 'sync'])->name('email.accounts.sync');
+    Route::delete('/email/accounts/{account}/messages', [EmailMailboxController::class, 'destroyMessages'])->name('email.messages.destroy');
     Route::patch('/email/signature', [EmailMailboxController::class, 'updateSignature'])->name('email.signature.update');
     Route::post('/email/send', [EmailMailboxController::class, 'send'])->name('email.send');
 

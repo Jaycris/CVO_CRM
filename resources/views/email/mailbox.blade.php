@@ -17,6 +17,7 @@
         signatureImageSelected: false,
         attachmentNames: [],
         imageNames: [],
+        selectedMessages: [],
         showMoreOptions: false,
         showSendOptions: false,
         showFormatting: false,
@@ -357,42 +358,70 @@
                             <p class="text-xs text-slate-500 dark:text-zinc-400">{{ $messages instanceof \Illuminate\Contracts\Pagination\Paginator ? $messages->total() : 0 }} messages</p>
                         </div>
                         @if ($account)
+                            <form id="bulk-delete-messages" method="POST" action="{{ route('email.messages.destroy', $account) }}" x-on:submit="if (selectedMessages.length === 0 || !confirm('Delete selected email messages?')) { $event.preventDefault(); }">
+                                @csrf
+                                @method('DELETE')
+                                <input type="hidden" name="folder" value="{{ $folder }}">
+                            </form>
+                            <div class="flex items-center gap-2">
+                                <button type="submit"
+                                        form="bulk-delete-messages"
+                                        x-bind:disabled="selectedMessages.length === 0"
+                                        x-bind:class="selectedMessages.length === 0 ? 'cursor-not-allowed opacity-40' : 'hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-400/10 dark:hover:text-rose-300'"
+                                        class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300"
+                                        title="Delete selected"
+                                        aria-label="Delete selected messages">
+                                    <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                        <path d="M7 3.5h6l.6 1.5H17v1.4H3V5h3.4L7 3.5Zm-1.8 4h9.6l-.6 9H5.8l-.6-9Zm2.1 1.4.4 6.2h4.6l.4-6.2H7.3Z"/>
+                                    </svg>
+                                </button>
                             <form method="POST" action="{{ route('email.accounts.sync', $account) }}">
                                 @csrf
                                 <button type="submit" class="inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 shadow-sm hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800">
                                     Refresh
                                 </button>
                             </form>
+                            </div>
                         @endif
                     </div>
 
                     <div class="divide-y divide-slate-100 dark:divide-zinc-800">
                         @forelse ($messages as $message)
-                            <a href="{{ route('email.index', ['account' => $account->id, 'folder' => $folder, 'message' => $message->id]) }}"
-                               class="{{ $selectedMessage?->id === $message->id ? 'bg-blue-50 dark:bg-blue-400/10' : 'bg-white hover:bg-slate-50 dark:bg-zinc-900 dark:hover:bg-zinc-800/70' }} block px-3 py-2.5">
-                                <div class="grid items-center gap-3 text-sm md:grid-cols-[1rem_1.25rem_minmax(8rem,12rem)_minmax(0,1fr)_4.5rem]">
-                                    <span class="hidden h-4 w-4 rounded border border-slate-300 bg-white dark:border-zinc-700 dark:bg-zinc-950 md:block"></span>
-                                    <span class="hidden text-center text-lg leading-none text-slate-300 dark:text-zinc-600 md:block">&#9734;</span>
-                                    <p class="truncate font-semibold text-slate-900 dark:text-zinc-100">
+                            @php
+                                $isUnread = $folder === 'INBOX' && ! $message->is_seen;
+                                $rowClass = $isUnread
+                                    ? 'bg-white hover:bg-amber-50/70 dark:bg-zinc-900 dark:hover:bg-amber-400/10'
+                                    : 'bg-slate-50/70 text-slate-600 hover:bg-white dark:bg-zinc-950/60 dark:text-zinc-400 dark:hover:bg-zinc-900';
+                            @endphp
+                            <div class="{{ $selectedMessage?->id === $message->id ? 'bg-blue-50 dark:bg-blue-400/10' : $rowClass }} grid items-center gap-3 px-3 py-2.5 text-sm md:grid-cols-[1rem_1.25rem_minmax(8rem,12rem)_minmax(0,1fr)_4.5rem]">
+                                <input type="checkbox"
+                                       name="message_ids[]"
+                                       value="{{ $message->id }}"
+                                       form="bulk-delete-messages"
+                                       x-model="selectedMessages"
+                                       class="hidden h-4 w-4 rounded border-slate-300 text-rose-600 shadow-sm focus:ring-rose-500 dark:border-zinc-700 dark:bg-zinc-950 md:block">
+                                <span class="{{ $isUnread ? 'text-amber-400 dark:text-amber-300' : 'text-slate-300 dark:text-zinc-600' }} hidden text-center text-lg leading-none md:block">&#9734;</span>
+                                <a href="{{ route('email.index', ['account' => $account->id, 'folder' => $folder, 'message' => $message->id]) }}" class="contents">
+                                    <p class="{{ $isUnread ? 'font-bold text-slate-950 dark:text-zinc-50' : 'font-medium text-slate-600 dark:text-zinc-400' }} truncate">
                                         {{ $folder === 'Sent' ? collect($message->to)->implode(', ') : ($message->from_name ?: $message->from_email ?: 'Unknown sender') }}
                                     </p>
                                     <div class="min-w-0">
-                                        <p class="truncate text-slate-900 dark:text-zinc-100">
-                                            <span class="font-semibold">{{ $message->subject ?: '(No subject)' }}</span>
+                                        <p class="{{ $isUnread ? 'text-slate-950 dark:text-zinc-50' : 'text-slate-600 dark:text-zinc-400' }} truncate">
+                                            <span class="{{ $isUnread ? 'font-bold' : 'font-medium' }}">{{ $message->subject ?: '(No subject)' }}</span>
                                             @php
                                                 $previewText = $message->body_text;
                                                 $previewLooksLikeSource = is_string($previewText) && preg_match('/^\s*(<!doctype|<html|<body|<table|#outlook\b|@media\b|body\s*\{|table\s*,\s*td\s*\{|\.moz-text-html\b|\.mj-[a-z0-9_-]+\b)/i', $previewText);
                                             @endphp
                                             @if ($previewText && ! $previewLooksLikeSource)
-                                                <span class="text-slate-500 dark:text-zinc-400"> - {{ $previewText }}</span>
+                                                <span class="{{ $isUnread ? 'text-slate-600 dark:text-zinc-300' : 'text-slate-400 dark:text-zinc-500' }}"> - {{ $previewText }}</span>
                                             @elseif ($message->body_html || $previewLooksLikeSource)
-                                                <span class="text-slate-500 dark:text-zinc-400"> - HTML email</span>
+                                                <span class="{{ $isUnread ? 'text-slate-600 dark:text-zinc-300' : 'text-slate-400 dark:text-zinc-500' }}"> - HTML email</span>
                                             @endif
                                         </p>
                                     </div>
-                                    <span class="text-right text-xs font-medium text-slate-500 dark:text-zinc-400">{{ $message->sent_at?->format('M d') }}</span>
-                                </div>
-                            </a>
+                                    <span class="{{ $isUnread ? 'font-bold text-slate-700 dark:text-zinc-200' : 'font-medium text-slate-400 dark:text-zinc-500' }} text-right text-xs">{{ $message->sent_at?->format('M d') }}</span>
+                                </a>
+                            </div>
                         @empty
                             <div class="px-4 py-16 text-center text-sm text-slate-500 dark:text-zinc-400">
                                 {{ $folder === 'Sent' ? 'No sent email yet.' : 'No refreshed inbox messages yet.' }}

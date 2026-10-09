@@ -37,6 +37,10 @@ class EmailMailboxController extends Controller
             ? $account->messages()->whereKey($request->query('message'))->first()
             : null;
 
+        if ($selectedMessage && $folder === 'INBOX' && ! $selectedMessage->is_seen) {
+            $selectedMessage->forceFill(['is_seen' => true])->save();
+        }
+
         $users = $this->canManageEmailAccounts($user)
             ? User::query()
                 ->whereNull('suspended_at')
@@ -227,6 +231,28 @@ class EmailMailboxController extends Controller
         return redirect()
             ->route('email.index', ['account' => $account->id, 'folder' => 'Sent'])
             ->with('success', 'Email sent successfully.');
+    }
+
+    public function destroyMessages(Request $request, EmailAccount $account)
+    {
+        $this->authorizeAccount($request->user(), $account);
+
+        $validated = $request->validate([
+            'message_ids' => ['required', 'array', 'min:1'],
+            'message_ids.*' => ['integer'],
+            'folder' => ['nullable', Rule::in(['INBOX', 'Sent'])],
+        ]);
+
+        $deleted = $account->messages()
+            ->whereIn('id', $validated['message_ids'])
+            ->delete();
+
+        return redirect()
+            ->route('email.index', [
+                'account' => $account->id,
+                'folder' => $validated['folder'] ?? 'INBOX',
+            ])
+            ->with('success', "{$deleted} email message(s) deleted.");
     }
 
     public function updateSignature(Request $request)
@@ -434,25 +460,29 @@ class EmailMailboxController extends Controller
             $synced = 0;
 
             foreach ($client->messages('INBOX', 50) as $message) {
-                EmailMessage::updateOrCreate(
-                    [
-                        'email_account_id' => $account->id,
-                        'folder' => 'INBOX',
-                        'uid' => $message['uid'],
-                    ],
-                    [
-                        'message_id' => $message['message_id'],
-                        'subject' => $message['subject'],
-                        'from_name' => $message['from_name'],
-                        'from_email' => $message['from_email'],
-                        'body_text' => $message['body_text'],
-                        'body_html' => $message['body_html'],
-                        'sent_at' => $this->parseMessageDate($message['sent_at']),
-                        'is_seen' => $message['is_seen'],
-                        'is_answered' => $message['is_answered'],
-                        'has_attachments' => $message['has_attachments'],
-                    ]
-                );
+                $emailMessage = EmailMessage::withTrashed()->firstOrNew([
+                    'email_account_id' => $account->id,
+                    'folder' => 'INBOX',
+                    'uid' => $message['uid'],
+                ]);
+
+                if ($emailMessage->trashed()) {
+                    continue;
+                }
+
+                $emailMessage->fill([
+                    'message_id' => $message['message_id'],
+                    'subject' => $message['subject'],
+                    'from_name' => $message['from_name'],
+                    'from_email' => $message['from_email'],
+                    'body_text' => $message['body_text'],
+                    'body_html' => $message['body_html'],
+                    'sent_at' => $this->parseMessageDate($message['sent_at']),
+                    'is_seen' => $emailMessage->exists ? ($emailMessage->is_seen || $message['is_seen']) : $message['is_seen'],
+                    'is_answered' => $message['is_answered'],
+                    'has_attachments' => $message['has_attachments'],
+                ])->save();
+
                 $synced++;
             }
 
