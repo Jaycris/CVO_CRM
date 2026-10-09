@@ -125,6 +125,49 @@
             @endif
         </div>
 
+        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
+            <div class="flex items-start gap-3">
+                <input id="email_signature_enabled"
+                       name="email_signature_enabled"
+                       type="checkbox"
+                       value="1"
+                       @checked(old('email_signature_enabled', $user->email_signature_enabled ?? true))
+                       class="mt-1 rounded border-slate-300 text-emerald-700 shadow-sm focus:ring-emerald-600 dark:border-zinc-700 dark:bg-zinc-900">
+                <div class="flex-1">
+                    <x-input-label for="email_signature_enabled" :value="__('Email Signature')" />
+                    <p class="mt-1 text-xs text-slate-500 dark:text-zinc-400">
+                        Automatically add this signature when composing CRM emails.
+                    </p>
+                </div>
+            </div>
+
+            <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                <div>
+                    <x-input-label for="email_signature_title" :value="__('Job Title')" />
+                    <x-text-input id="email_signature_title" name="email_signature_title" type="text" class="mt-1 block w-full" :value="old('email_signature_title', $user->email_signature_title)" placeholder="Admin Support" />
+                    <x-input-error class="mt-2" :messages="$errors->get('email_signature_title')" />
+                </div>
+
+                <div>
+                    <x-input-label for="email_signature_contact_number" :value="__('Contact Number')" />
+                    <x-text-input id="email_signature_contact_number" name="email_signature_contact_number" type="text" class="mt-1 block w-full" :value="old('email_signature_contact_number', $user->email_signature_contact_number ?? $user->phone_number)" placeholder="307-224-3882" />
+                    <x-input-error class="mt-2" :messages="$errors->get('email_signature_contact_number')" />
+                </div>
+            </div>
+
+            <div class="mt-4 rounded-xl bg-white p-4 text-sm text-slate-700 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:text-zinc-200 dark:ring-zinc-800">
+                <p>--</p>
+                <p class="mt-2 text-lg font-bold text-slate-950 dark:text-white">{{ trim($user->first_name . ' ' . $user->last_name) }}</p>
+                <p class="font-semibold text-slate-500 dark:text-zinc-400">{{ $user->email_signature_title ?: 'Job Title' }}</p>
+                @if ($user->brand?->logo_path)
+                    <img src="{{ asset('storage/' . $user->brand->logo_path) }}" alt="{{ $user->brand->imprint_name }}" class="mt-5 max-h-24 max-w-56 object-contain">
+                @endif
+                <p class="mt-5 font-semibold text-slate-600 dark:text-zinc-300">
+                    Contact Number: {{ $user->email_signature_contact_number ?: $user->phone_number ?: 'Your contact number' }}
+                </p>
+            </div>
+        </div>
+
         <div class="flex items-center gap-4">
             <x-primary-button x-bind:disabled="! dirty" x-bind:class="! dirty ? 'cursor-not-allowed opacity-50' : ''">
                 {{ __('Save') }}

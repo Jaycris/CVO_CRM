@@ -27,7 +27,17 @@ class ProfileUpdateRequest extends FormRequest
                 'max:255',
                 Rule::unique(User::class)->ignore($this->user()->id),
             ],
+            'email_signature_enabled' => ['nullable', 'boolean'],
+            'email_signature_title' => ['nullable', 'string', 'max:255'],
+            'email_signature_contact_number' => ['nullable', 'string', 'max:255'],
             'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'email_signature_enabled' => $this->boolean('email_signature_enabled'),
+        ]);
     }
 }

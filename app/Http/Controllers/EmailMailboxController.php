@@ -60,6 +60,7 @@ class EmailMailboxController extends Controller
             'selectedMessage' => $selectedMessage,
             'canManageEmailAccounts' => $this->canManageEmailAccounts($user),
             'settingsAccount' => $settingsAccount,
+            'emailSignature' => $this->emailSignature($user),
         ]);
     }
 
@@ -180,6 +181,7 @@ class EmailMailboxController extends Controller
             'cc' => ['nullable', 'string', 'max:1000'],
             'subject' => ['required', 'string', 'max:255'],
             'body' => ['required', 'string', 'max:20000'],
+            'include_signature' => ['nullable', 'boolean'],
             'attachments' => ['nullable', 'array'],
             'attachments.*' => ['file', 'max:10240'],
             'inline_images' => ['nullable', 'array'],
@@ -203,7 +205,13 @@ class EmailMailboxController extends Controller
                 $request->file('attachments', []),
                 $request->file('inline_images', [])
             );
-            $this->sendSmtpMessage($account, $to, $cc, $validated['subject'], $validated['body'], $attachments);
+            $signature = $request->boolean('include_signature')
+                ? $this->emailSignature($request->user())
+                : null;
+            $bodyText = $signature
+                ? rtrim($validated['body']) . "\n\n" . $signature['text']
+                : $validated['body'];
+            $this->sendSmtpMessage($account, $to, $cc, $validated['subject'], $bodyText, $attachments, $signature);
         } catch (\Throwable $exception) {
             report($exception);
 
@@ -221,7 +229,7 @@ class EmailMailboxController extends Controller
             'from_email' => $account->email_address,
             'to' => $to,
             'cc' => $cc,
-            'body_text' => $validated['body'],
+            'body_text' => $bodyText,
             'sent_at' => now(),
             'is_seen' => true,
             'has_attachments' => ! empty($attachments),
@@ -272,7 +280,7 @@ class EmailMailboxController extends Controller
         return $user->role?->name === 'Admin';
     }
 
-    private function sendSmtpMessage(EmailAccount $account, array $to, array $cc, string $subject, string $body, array $attachments = []): void
+    private function sendSmtpMessage(EmailAccount $account, array $to, array $cc, string $subject, string $body, array $attachments = [], ?array $signature = null): void
     {
         $transport = new EsmtpTransport(
             $account->smtp_host,
@@ -286,7 +294,7 @@ class EmailMailboxController extends Controller
             ->from(new Address($account->email_address, $account->display_name))
             ->subject($subject)
             ->text($body)
-            ->html(nl2br(e($body)));
+            ->html($this->messageHtml($body, $signature));
 
         foreach ($to as $address) {
             $email->addTo($address);
@@ -307,6 +315,92 @@ class EmailMailboxController extends Controller
         }
 
         (new Mailer($transport))->send($email);
+    }
+
+    private function emailSignature(User $user): ?array
+    {
+        if ($user->email_signature_enabled === false) {
+            return null;
+        }
+
+        $name = trim($user->first_name . ' ' . $user->last_name);
+        $title = trim((string) ($user->email_signature_title ?: $user->role?->name));
+        $contact = trim((string) ($user->email_signature_contact_number ?: $user->phone_number));
+        $brand = $user->brand;
+        $logoPath = $brand?->logo_path ?: $brand?->site_logo_path;
+        $logoUrl = $logoPath ? asset('storage/' . $logoPath) : null;
+
+        if ($name === '' && $title === '' && $contact === '' && ! $logoUrl) {
+            return null;
+        }
+
+        $lines = ['--'];
+
+        if ($name !== '') {
+            $lines[] = $name;
+        }
+
+        if ($title !== '') {
+            $lines[] = $title;
+        }
+
+        if ($brand?->imprint_name) {
+            $lines[] = $brand->imprint_name;
+        }
+
+        if ($contact !== '') {
+            $lines[] = 'Contact Number: ' . $contact;
+        }
+
+        return [
+            'name' => $name,
+            'title' => $title,
+            'contact' => $contact,
+            'brand' => $brand?->imprint_name,
+            'logoUrl' => $logoUrl,
+            'text' => implode("\n", $lines),
+        ];
+    }
+
+    private function messageHtml(string $body, ?array $signature = null): string
+    {
+        $bodyWithoutSignature = $body;
+
+        if ($signature) {
+            $signaturePosition = strrpos($body, $signature['text']);
+            if ($signaturePosition !== false) {
+                $bodyWithoutSignature = rtrim(substr($body, 0, $signaturePosition));
+            }
+        }
+
+        $html = '<div>' . nl2br(e($bodyWithoutSignature)) . '</div>';
+
+        if (! $signature) {
+            return $html;
+        }
+
+        $html .= '<div style="margin-top:28px; color:#111827; font-family:Arial, Helvetica, sans-serif;">';
+        $html .= '<div>--</div>';
+
+        if ($signature['name'] !== '') {
+            $html .= '<div style="margin-top:10px; font-size:18px; font-weight:700;">' . e($signature['name']) . '</div>';
+        }
+
+        if ($signature['title'] !== '') {
+            $html .= '<div style="margin-top:2px; color:#666; font-size:14px; font-weight:700;">' . e($signature['title']) . '</div>';
+        }
+
+        if ($signature['logoUrl']) {
+            $html .= '<img src="' . e($signature['logoUrl']) . '" alt="' . e($signature['brand'] ?: 'Brand logo') . '" style="display:block; margin-top:28px; max-width:240px; max-height:120px;">';
+        }
+
+        if ($signature['contact'] !== '') {
+            $html .= '<div style="margin-top:24px; color:#666; font-size:14px; font-weight:700;">Contact Number: ' . e($signature['contact']) . '</div>';
+        }
+
+        $html .= '</div>';
+
+        return $html;
     }
 
     private function syncInbox(EmailAccount $account): int

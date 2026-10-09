@@ -8,6 +8,8 @@
         settingsOpen: @js($canManageEmailAccounts && ($errors->has('email_address') || request()->boolean('settings') || ! $account)),
         mailboxType: @js(old('mailbox_type', $settingsAccount?->user_id ? 'employee' : 'brand')),
         bodyText: @js(old('body', '')),
+        includeSignature: @js((bool) $emailSignature),
+        signatureText: @js($emailSignature['text'] ?? ''),
         attachmentNames: [],
         imageNames: [],
         showMoreOptions: false,
@@ -72,7 +74,14 @@
             if (action === 'emoji') this.showEmojiPicker = ! wasEmojiPicker;
             if (action === 'image') this.$refs.images.click();
             if (action === 'confidential') this.insertText('\n\nConfidential: Please do not forward this message without permission.');
-            if (action === 'signature') this.insertText(@js("\n\nRegards,\n" . trim((auth()->user()->first_name ?? '') . ' ' . (auth()->user()->last_name ?? '')) . "\n" . auth()->user()->email));
+            if (action === 'signature') {
+                if (this.signatureText) {
+                    this.includeSignature = true;
+                    this.composeNotice = 'Your saved email signature is enabled for this message.';
+                } else {
+                    this.insertText(@js("\n\nRegards,\n" . trim((auth()->user()->first_name ?? '') . ' ' . (auth()->user()->last_name ?? '')) . "\n" . auth()->user()->email));
+                }
+            }
             if (action === 'calendar') this.insertText('\n\nMeeting invite:\nDate:\nTime:\nAgenda:\n');
             if (action === 'more') this.showMoreOptions = ! wasMoreOptions;
         },
@@ -106,6 +115,7 @@
             this.showEmojiPicker = false;
             this.showMoreOptions = false;
             this.showSendOptions = false;
+            this.includeSignature = @js((bool) $emailSignature);
             this.scheduleNote = '';
             this.composeNotice = '';
             this.composeOpen = false;
@@ -338,6 +348,7 @@
                 <form method="POST" action="{{ route('email.send') }}" enctype="multipart/form-data" data-no-page-loader class="crm-modal-panel max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
                     @csrf
                     <input type="hidden" name="email_account_id" value="{{ $account?->id }}">
+                    <input type="hidden" name="include_signature" x-bind:value="includeSignature ? 1 : 0">
                     <input x-ref="attachments" type="file" name="attachments[]" multiple class="hidden" x-on:change="updateFiles('attachments', $event)">
                     <input x-ref="images" type="file" name="inline_images[]" accept="image/*" multiple class="hidden" x-on:change="updateFiles('images', $event)">
                     <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-zinc-800">
@@ -364,6 +375,30 @@
                             <textarea id="body" x-ref="body" x-model="bodyText" name="body" rows="10" class="w-full rounded-xl border-slate-200 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"></textarea>
                             <x-input-error :messages="$errors->get('body')" class="mt-2" />
                         </div>
+                        @if ($emailSignature)
+                            <div x-show="includeSignature" x-cloak class="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
+                                <div class="flex items-start justify-between gap-4">
+                                    <div>
+                                        <p>--</p>
+                                        @if ($emailSignature['name'])
+                                            <p class="mt-2 text-lg font-bold text-slate-950 dark:text-white">{{ $emailSignature['name'] }}</p>
+                                        @endif
+                                        @if ($emailSignature['title'])
+                                            <p class="font-semibold text-slate-500 dark:text-zinc-400">{{ $emailSignature['title'] }}</p>
+                                        @endif
+                                        @if ($emailSignature['logoUrl'])
+                                            <img src="{{ $emailSignature['logoUrl'] }}" alt="{{ $emailSignature['brand'] ?: 'Brand logo' }}" class="mt-5 max-h-24 max-w-56 object-contain">
+                                        @endif
+                                        @if ($emailSignature['contact'])
+                                            <p class="mt-5 font-semibold text-slate-600 dark:text-zinc-300">Contact Number: {{ $emailSignature['contact'] }}</p>
+                                        @endif
+                                    </div>
+                                    <button type="button" x-on:click="includeSignature = false" class="rounded-lg px-3 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-800">
+                                        Remove
+                                    </button>
+                                </div>
+                            </div>
+                        @endif
                         <div x-show="attachmentNames.length || imageNames.length" x-cloak class="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
                             <template x-if="attachmentNames.length">
                                 <p><span class="font-semibold">Attached:</span> <span x-text="attachmentNames.join(', ')"></span></p>

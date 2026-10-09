@@ -32,6 +32,9 @@ class User extends Authenticatable implements MustVerifyEmail
         'work_type',
         'email',
         'phone_number',
+        'email_signature_enabled',
+        'email_signature_title',
+        'email_signature_contact_number',
         'hris_employee_id',
         'reports_to_hris_employee_id',
         'service_commission_percent',
@@ -211,6 +214,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'is_commission_threshold_exempt' => 'boolean',
             'is_commission_eligible' => 'boolean',
             'enable_end_of_shift_report' => 'boolean',
+            'email_signature_enabled' => 'boolean',
             'password' => 'hashed',
         ];
     }
