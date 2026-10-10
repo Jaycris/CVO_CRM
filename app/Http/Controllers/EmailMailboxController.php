@@ -5,9 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\EmailAccount;
 use App\Models\EmailMessage;
 use App\Models\User;
-use App\Support\SimpleImapClient;
+use App\Services\EmailInboxSyncService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
 use Symfony\Component\Mailer\Mailer;
@@ -160,12 +159,12 @@ class EmailMailboxController extends Controller
             ->with('success', 'Email account settings updated.');
     }
 
-    public function sync(Request $request, EmailAccount $account)
+    public function sync(Request $request, EmailAccount $account, EmailInboxSyncService $syncService)
     {
         $this->authorizeAccount($request->user(), $account);
 
         try {
-            $synced = $this->syncInbox($account);
+            $synced = $syncService->sync($account);
         } catch (\Throwable $exception) {
             report($exception);
 
@@ -509,60 +508,6 @@ class EmailMailboxController extends Controller
         return $html;
     }
 
-    private function syncInbox(EmailAccount $account): int
-    {
-        $client = new SimpleImapClient(
-            $account->imap_host,
-            $account->imap_port,
-            $account->imap_encryption,
-            $account->username,
-            $account->plainPassword() ?? ''
-        );
-
-        $client->connect();
-
-        try {
-            $synced = 0;
-
-            foreach ($client->messages('INBOX', 50) as $message) {
-                $emailMessage = EmailMessage::withTrashed()->firstOrNew([
-                    'email_account_id' => $account->id,
-                    'folder' => 'INBOX',
-                    'uid' => $message['uid'],
-                ]);
-
-                if ($emailMessage->trashed()) {
-                    continue;
-                }
-
-                $emailMessage->fill([
-                    'message_id' => $message['message_id'],
-                    'subject' => $message['subject'],
-                    'from_name' => $message['from_name'],
-                    'from_email' => $message['from_email'],
-                    'body_text' => $message['body_text'],
-                    'body_html' => $message['body_html'],
-                    'sent_at' => $this->parseMessageDate($message['sent_at']),
-                    'is_seen' => $emailMessage->exists ? ($emailMessage->is_seen || $message['is_seen']) : $message['is_seen'],
-                    'is_answered' => $message['is_answered'],
-                    'has_attachments' => $message['has_attachments'],
-                ]);
-
-                if (! $emailMessage->exists || $emailMessage->isDirty()) {
-                    $synced++;
-                }
-
-                $emailMessage->save();
-            }
-
-            $account->update(['last_synced_at' => now()]);
-
-            return $synced;
-        } finally {
-            $client->disconnect();
-        }
-    }
-
     private function parseAddressList(string $value): array
     {
         return collect(preg_split('/[,;\n]+/', $value) ?: [])
@@ -571,19 +516,6 @@ class EmailMailboxController extends Controller
             ->unique()
             ->values()
             ->all();
-    }
-
-    private function parseMessageDate(?string $date): ?Carbon
-    {
-        if (! $date) {
-            return null;
-        }
-
-        try {
-            return Carbon::parse($date);
-        } catch (\Throwable) {
-            return null;
-        }
     }
 
 }

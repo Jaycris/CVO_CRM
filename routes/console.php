@@ -11,3 +11,7 @@ Artisan::command('inspire', function () {
 Schedule::command('leads:auto-return-untouched')
     ->everyFifteenMinutes()
     ->withoutOverlapping();
+
+Schedule::command('email:sync-inboxes')
+    ->everyMinute()
+    ->withoutOverlapping();
