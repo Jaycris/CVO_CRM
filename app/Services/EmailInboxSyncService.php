@@ -63,6 +63,29 @@ class EmailInboxSyncService
         }
     }
 
+    public function markSeen(EmailAccount $account, EmailMessage $message): void
+    {
+        if ($message->folder !== 'INBOX' || ! $message->uid) {
+            return;
+        }
+
+        $client = new SimpleImapClient(
+            $account->imap_host,
+            $account->imap_port,
+            $account->imap_encryption,
+            $account->username,
+            $account->plainPassword() ?? ''
+        );
+
+        $client->connect();
+
+        try {
+            $client->markSeen('INBOX', (int) $message->uid);
+        } finally {
+            $client->disconnect();
+        }
+    }
+
     private function parseMessageDate(?string $date): ?Carbon
     {
         if (! $date) {

@@ -68,6 +68,35 @@
         scheduleNote: '',
         composeNotice: '',
         emojis: ['😀','😃','😁','😊','😂','🤣','😉','😍','🥳','👍','🙏','🔥','⭐','✅','📌','📎','📅','💡','🎉','❤️'],
+        isUnreadMessage(messageId) {
+            const message = this.emailMessages?.[messageId];
+
+            return this.emailFolder === 'INBOX' && message && ! message.isSeen;
+        },
+        messageRowClass(messageId) {
+            if (this.activeEmailMessage?.id === messageId) {
+                return 'bg-blue-50 dark:bg-blue-400/10';
+            }
+
+            return this.isUnreadMessage(messageId)
+                ? 'bg-white hover:bg-amber-50/70 dark:bg-zinc-900 dark:hover:bg-amber-400/10'
+                : 'bg-slate-50/70 text-slate-600 hover:bg-white dark:bg-zinc-950/60 dark:text-zinc-400 dark:hover:bg-zinc-900';
+        },
+        markMessageSeen(message) {
+            if (message.folder !== 'INBOX' || message.isSeen) return;
+
+            message.isSeen = true;
+            window.dispatchEvent(new CustomEvent('email-message-read'));
+
+            fetch(message.readUrl, {
+                method: 'PATCH',
+                keepalive: true,
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]')?.content || '',
+                },
+            }).catch(() => {});
+        },
         insertText(text) {
             const body = this.$refs.body;
             const start = body?.selectionStart ?? this.bodyText.length;
@@ -190,19 +219,7 @@
             this.activeEmailMessage = message;
             this.selectedMessages = [];
             window.history.pushState({}, '', message.url);
-
-            if (message.folder === 'INBOX' && !message.isSeen) {
-                message.isSeen = true;
-                window.setTimeout(() => {
-                    fetch(message.readUrl, {
-                        method: 'PATCH',
-                        headers: {
-                            'Accept': 'application/json',
-                            'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]')?.content || '',
-                        },
-                    }).catch(() => {});
-                }, 750);
-            }
+            this.markMessageSeen(message);
         },
         closeEmailMessage() {
             this.activeEmailMessage = null;
@@ -542,42 +559,41 @@
 
                     <div class="divide-y divide-slate-100 dark:divide-zinc-800">
                         @forelse ($messages as $message)
-                            @php
-                                $isUnread = $folder === 'INBOX' && ! $message->is_seen;
-                                $rowClass = $isUnread
-                                    ? 'bg-white hover:bg-amber-50/70 dark:bg-zinc-900 dark:hover:bg-amber-400/10'
-                                    : 'bg-slate-50/70 text-slate-600 hover:bg-white dark:bg-zinc-950/60 dark:text-zinc-400 dark:hover:bg-zinc-900';
-                            @endphp
-                            <div class="{{ $selectedMessage?->id === $message->id ? 'bg-blue-50 dark:bg-blue-400/10' : $rowClass }} grid items-center gap-3 px-3 py-2.5 text-sm md:grid-cols-[1rem_1.25rem_minmax(8rem,12rem)_minmax(0,1fr)_4.5rem]">
+                            <div class="grid items-center gap-3 px-3 py-2.5 text-sm md:grid-cols-[1rem_1.25rem_minmax(8rem,12rem)_minmax(0,1fr)_4.5rem]"
+                                 x-bind:class="messageRowClass({{ $message->id }})">
                                 <input type="checkbox"
                                        name="message_ids[]"
                                        value="{{ $message->id }}"
                                        form="bulk-delete-messages"
                                        x-model="selectedMessages"
                                        class="hidden h-4 w-4 rounded border-slate-300 text-rose-600 shadow-sm focus:ring-rose-500 dark:border-zinc-700 dark:bg-zinc-950 md:block">
-                                <span class="{{ $isUnread ? 'text-amber-400 dark:text-amber-300' : 'text-slate-300 dark:text-zinc-600' }} hidden text-center text-lg leading-none md:block">&#9734;</span>
+                                <span class="hidden text-center text-lg leading-none md:block"
+                                      x-bind:class="isUnreadMessage({{ $message->id }}) ? 'text-amber-400 dark:text-amber-300' : 'text-slate-300 dark:text-zinc-600'">&#9734;</span>
                                 <a href="{{ route('email.index', ['account' => $account->id, 'folder' => $folder, 'message' => $message->id]) }}"
                                    x-on:click.prevent="openEmailMessageById({{ $message->id }})"
                                    data-no-page-loader
                                    class="contents">
-                                    <p class="{{ $isUnread ? 'font-bold text-slate-950 dark:text-zinc-50' : 'font-medium text-slate-600 dark:text-zinc-400' }} truncate">
+                                    <p class="truncate"
+                                       x-bind:class="isUnreadMessage({{ $message->id }}) ? 'font-bold text-slate-950 dark:text-zinc-50' : 'font-medium text-slate-600 dark:text-zinc-400'">
                                         {{ $folder === 'Sent' ? collect($message->to)->implode(', ') : ($message->from_name ?: $message->from_email ?: 'Unknown sender') }}
                                     </p>
                                     <div class="min-w-0">
-                                        <p class="{{ $isUnread ? 'text-slate-950 dark:text-zinc-50' : 'text-slate-600 dark:text-zinc-400' }} truncate">
-                                            <span class="{{ $isUnread ? 'font-bold' : 'font-medium' }}">{{ $message->subject ?: '(No subject)' }}</span>
+                                        <p class="truncate"
+                                           x-bind:class="isUnreadMessage({{ $message->id }}) ? 'text-slate-950 dark:text-zinc-50' : 'text-slate-600 dark:text-zinc-400'">
+                                            <span x-bind:class="isUnreadMessage({{ $message->id }}) ? 'font-bold' : 'font-medium'">{{ $message->subject ?: '(No subject)' }}</span>
                                             @php
                                                 $previewText = $message->body_text;
                                                 $previewLooksLikeSource = is_string($previewText) && preg_match('/^\s*(<!doctype|<html|<body|<table|#outlook\b|@media\b|body\s*\{|table\s*,\s*td\s*\{|\.moz-text-html\b|\.mj-[a-z0-9_-]+\b)/i', $previewText);
                                             @endphp
                                             @if ($previewText && ! $previewLooksLikeSource)
-                                                <span class="{{ $isUnread ? 'text-slate-600 dark:text-zinc-300' : 'text-slate-400 dark:text-zinc-500' }}"> - {{ $previewText }}</span>
+                                                <span x-bind:class="isUnreadMessage({{ $message->id }}) ? 'text-slate-600 dark:text-zinc-300' : 'text-slate-400 dark:text-zinc-500'"> - {{ $previewText }}</span>
                                             @elseif ($message->body_html || $previewLooksLikeSource)
-                                                <span class="{{ $isUnread ? 'text-slate-600 dark:text-zinc-300' : 'text-slate-400 dark:text-zinc-500' }}"> - HTML email</span>
+                                                <span x-bind:class="isUnreadMessage({{ $message->id }}) ? 'text-slate-600 dark:text-zinc-300' : 'text-slate-400 dark:text-zinc-500'"> - HTML email</span>
                                             @endif
                                         </p>
                                     </div>
-                                    <span class="{{ $isUnread ? 'font-bold text-slate-700 dark:text-zinc-200' : 'font-medium text-slate-400 dark:text-zinc-500' }} text-right text-xs">{{ $message->sent_at?->format('M d') }}</span>
+                                    <span class="text-right text-xs"
+                                          x-bind:class="isUnreadMessage({{ $message->id }}) ? 'font-bold text-slate-700 dark:text-zinc-200' : 'font-medium text-slate-400 dark:text-zinc-500'">{{ $message->sent_at?->format('M d') }}</span>
                                 </a>
                             </div>
                         @empty

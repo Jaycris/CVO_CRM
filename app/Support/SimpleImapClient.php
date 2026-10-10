@@ -71,6 +71,16 @@ class SimpleImapClient
             ->all();
     }
 
+    public function markSeen(string $folder, int $uid): void
+    {
+        if ($uid <= 0) {
+            return;
+        }
+
+        $this->command('SELECT '.$this->quoteMailbox($folder));
+        $this->command("UID STORE {$uid} +FLAGS.SILENT (\\Seen)");
+    }
+
     public function disconnect(): void
     {
         if (! is_resource($this->stream)) {

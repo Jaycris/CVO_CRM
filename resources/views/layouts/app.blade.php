@@ -476,6 +476,7 @@
                  x-data="{
                     leadBadgeCounts: { unassigned: 0, returned: 0, archived: 0, disposed: 0 },
                     productionBadgeCounts: { new_endorsed_projects: 0 },
+                    emailUnreadCount: @js($unreadEmailCount),
                     adminRewardsOpen: @js($adminRewardsActive),
                     refreshLeadBadgeCounts() {
                         fetch('{{ route('leads.sidebar-counts') }}', { headers: { 'Accept': 'application/json' } })
@@ -497,7 +498,7 @@
                             .catch(() => {});
                     }
                  }"
-                 x-init="refreshLeadBadgeCounts(); refreshProductionBadgeCounts(); setInterval(() => { refreshLeadBadgeCounts(); refreshProductionBadgeCounts(); }, 5000)">
+                 x-init="refreshLeadBadgeCounts(); refreshProductionBadgeCounts(); setInterval(() => { refreshLeadBadgeCounts(); refreshProductionBadgeCounts(); }, 5000); window.addEventListener('email-message-read', () => { emailUnreadCount = Math.max(0, emailUnreadCount - 1) })">
                 <div class="space-y-1 border-b border-slate-200 pb-4 dark:border-zinc-800">
                     <a href="{{ route('dashboard') }}" class="{{ $sidebarLink(request()->routeIs('dashboard')) }}">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ $sidebarIcon(request()->routeIs('dashboard')) }}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -524,11 +525,10 @@
                             <path stroke-linecap="round" stroke-linejoin="round" d="m3 8.25 7.8 5.85a2 2 0 0 0 2.4 0L21 8.25" />
                         </svg>
                         Email
-                        @if ($unreadEmailCount > 0)
-                            <span class="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-rose-600 px-1.5 py-0.5 text-[11px] font-bold leading-none text-white">
-                                {{ $unreadEmailCount > 99 ? '99+' : $unreadEmailCount }}
-                            </span>
-                        @endif
+                        <span x-show="emailUnreadCount > 0"
+                              x-cloak
+                              x-text="emailUnreadCount > 99 ? '99+' : emailUnreadCount"
+                              class="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-rose-600 px-1.5 py-0.5 text-[11px] font-bold leading-none text-white"></span>
                     </a>
 
                     <a href="{{ route('calendar.index') }}" class="{{ $sidebarLink(request()->routeIs('calendar.*')) }}">

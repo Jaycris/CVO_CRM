@@ -280,13 +280,19 @@ class EmailMailboxController extends Controller
             ->with('success', "{$deleted} email message(s) deleted.");
     }
 
-    public function markMessageRead(Request $request, EmailAccount $account, EmailMessage $message)
+    public function markMessageRead(Request $request, EmailAccount $account, EmailMessage $message, EmailInboxSyncService $syncService)
     {
         $this->authorizeAccount($request->user(), $account);
         abort_unless((int) $message->email_account_id === (int) $account->id, 404);
 
         if (! $message->is_seen) {
             $message->forceFill(['is_seen' => true])->save();
+        }
+
+        try {
+            $syncService->markSeen($account, $message);
+        } catch (\Throwable $exception) {
+            report($exception);
         }
 
         return response()->noContent();
