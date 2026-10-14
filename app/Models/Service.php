@@ -17,10 +17,12 @@ class Service extends Model
         'price',
         'description',
         'pdf_path',
+        'is_active',
     ];
 
     protected $casts = [
         'price' => 'decimal:2',
+        'is_active' => 'boolean',
     ];
 
     public function brand()

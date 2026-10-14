@@ -18,6 +18,10 @@ class SalesActivitySync
 
         $existingActivity = SalesActivity::where('sales_payment_id', $payment->id)->first();
 
+        if ($existingActivity?->commission_snapshot) {
+            return;
+        }
+
         if ($payment->status !== 'Payment Success') {
             $existingActivity?->delete();
 
@@ -68,6 +72,6 @@ class SalesActivitySync
      */
     public static function forget(SalesPayment $payment): void
     {
-        SalesActivity::where('sales_payment_id', $payment->id)->delete();
+        SalesActivity::where('sales_payment_id', $payment->id)->whereNull('commission_snapshot')->delete();
     }
 }

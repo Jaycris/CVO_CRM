@@ -31,6 +31,7 @@ class SalesActivity extends Model
         'sold_date',
         'original_sold_date',
         'chargeback_reason',
+        'commission_snapshot',
     ];
 
     protected function casts(): array
@@ -42,6 +43,7 @@ class SalesActivity extends Model
             'frankie_commission_percent' => 'decimal:2',
             'sold_date' => 'date',
             'original_sold_date' => 'date',
+            'commission_snapshot' => 'array',
         ];
     }
 

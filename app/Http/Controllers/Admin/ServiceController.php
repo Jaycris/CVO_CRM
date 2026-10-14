@@ -63,6 +63,7 @@ class ServiceController extends Controller
             'category' => $validated['category'],
             'price' => $validated['price'] ?? null,
             'description' => $this->nullableTrim($validated['description'] ?? null),
+            'is_active' => $request->boolean('is_active', true),
         ];
 
         if ($request->hasFile('pdf_file')) {
@@ -92,6 +93,7 @@ class ServiceController extends Controller
             'category' => $validated['category'],
             'price' => $validated['price'] ?? null,
             'description' => $this->nullableTrim($validated['description'] ?? null),
+            'is_active' => $request->boolean('is_active', $service->is_active),
         ];
 
         if ($request->hasFile('pdf_file')) {
@@ -136,6 +138,7 @@ class ServiceController extends Controller
                     ->ignore($service),
             ],
             'category' => ['required', 'in:Publishing,Marketing,Events'],
+            'is_active' => ['sometimes', 'required', 'boolean'],
             'price' => ['nullable', 'numeric', 'min:0', 'max:999999999.99'],
             'description' => ['nullable', 'string', 'max:5000'],
             'pdf_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp,gif', 'max:10240'],

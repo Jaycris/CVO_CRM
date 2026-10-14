@@ -3,16 +3,21 @@
 namespace App\Http\Controllers;
 
 use App\Models\SalesEndorsement;
+use App\Models\SalesActivity;
 use App\Models\SalesPayment;
 use App\Notifications\LeadSaleCreditNotification;
 use App\Notifications\PaymentStatusNotification;
 use App\Support\BrandScope;
+use App\Support\CommissionDisputes;
 use App\Support\RewardProgress;
 use App\Support\SalesActivitySync;
 use App\Support\SalesMtdCalculator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class SalesPaymentController extends Controller
@@ -142,7 +147,25 @@ class SalesPaymentController extends Controller
                 ->withInput();
         }
 
-        $payment->update($validated);
+        $payment = DB::transaction(function () use ($payment, $validated) {
+            $locked = SalesPayment::whereKey($payment->id)->lockForUpdate()->firstOrFail();
+            $frozenActivity = SalesActivity::where('sales_payment_id', $locked->id)->whereNotNull('commission_snapshot')->exists();
+
+            if (($frozenActivity || ($validated['status'] === 'Dispute' && $locked->status === 'Payment Success')) && (
+                round((float) $validated['amount'], 2) !== round((float) $locked->amount, 2)
+                || Carbon::parse($validated['sold_date'])->toDateString() !== $locked->sold_date->toDateString()
+                || $validated['payment_method'] !== $locked->payment_method
+            )) {
+                throw ValidationException::withMessages([
+                    'status' => 'This payment has dispute commission history. Keep its original amount, sold date, and payment method when updating the status.',
+                ]);
+            }
+
+            CommissionDisputes::transition($locked, $validated['status']);
+            $locked->update($validated);
+
+            return $locked;
+        });
 
         if ($this->shouldNotifyLeadCreditForStatus($validated['status']) && $previousStatus !== $validated['status']) {
             $payment->loadMissing('endorsement.agent', 'endorsement.frankieAgent', 'endorsement.service', 'endorsement.lead.createdBy', 'endorsement.lead.verifiedBy');

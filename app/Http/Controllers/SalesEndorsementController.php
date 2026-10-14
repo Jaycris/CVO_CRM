@@ -12,6 +12,7 @@ use App\Support\BrandScope;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class SalesEndorsementController extends Controller
@@ -117,15 +118,21 @@ class SalesEndorsementController extends Controller
             403
         );
 
-        $serviceId = Service::query()
+        $service = Service::query()
             ->where('brand_id', $brandId)
-            ->whereRaw('LOWER(name) = ?', [mb_strtolower(trim($validated['services']))])
-            ->value('id');
+            ->whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower(trim($validated['services']))])
+            ->first();
+
+        if ($service && ! $service->is_active) {
+            throw ValidationException::withMessages([
+                'services' => 'This service is disabled and no longer accepts new sales or registrations. Please choose an active service.',
+            ]);
+        }
 
         $endorsement = SalesEndorsement::create([
             ...$validated,
             'brand_id' => $brandId,
-            'service_id' => $serviceId,
+            'service_id' => $service?->id,
             'agent_id' => $request->user()->id,
             'has_frankie' => $request->boolean('has_frankie'),
             'frankie_agent_id' => $frankieAgent?->id,
@@ -199,6 +206,7 @@ class SalesEndorsementController extends Controller
     private function serviceOptions(Request $request): array
     {
         return Service::query()
+            ->where('is_active', true)
             ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
             ->orderBy('name')
             ->pluck('name')

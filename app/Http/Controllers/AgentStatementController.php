@@ -8,6 +8,7 @@ use App\Models\SalesActivity;
 use App\Models\SalesTarget;
 use App\Models\User;
 use App\Support\BrandScope;
+use App\Support\CommissionBalances;
 use App\Support\SalesMtdCalculator;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -78,7 +79,7 @@ class AgentStatementController extends Controller
 
         $agentTargetRows = SalesMtdCalculator::agentTargetRows($targets);
         $selectedTargets = $agentTargetRows->values();
-        $rows = SalesMtdCalculator::statementRows($activities, $agentTargetRows)
+        $rows = CommissionBalances::apply(SalesMtdCalculator::statementRows($activities, $agentTargetRows), $month, $canViewAll ? $user : null, $brandId, $agentId)
             ->when($agentId, fn (Collection $rows, int $selectedAgentId) => $rows->where('agent_id', $selectedAgentId)->values())
             ->sortByDesc(fn (array $row) => $row['activity']->sold_date?->timestamp ?? 0)
             ->values();

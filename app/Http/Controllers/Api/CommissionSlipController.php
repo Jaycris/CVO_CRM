@@ -8,6 +8,7 @@ use App\Models\SalesActivity;
 use App\Models\SalesTarget;
 use App\Models\User;
 use App\Support\SalesMtdCalculator;
+use App\Support\CommissionBalances;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -66,7 +67,7 @@ class CommissionSlipController extends Controller
         $selectedTargets = $agentTargetRows->values();
         $isCommissionEligible = (bool) $agent->is_commission_eligible;
         $agentTargetAmount = $isCommissionEligible ? (float) $selectedTargets->sum('amount') : 0.0;
-        $rows = SalesMtdCalculator::statementRows($activities, $agentTargetRows)
+        $rows = CommissionBalances::apply(SalesMtdCalculator::statementRows($activities, $agentTargetRows), $month, null, null, $agent->id)
             ->where('agent_id', $agent->id)
             ->sortByDesc(fn (array $row) => $row['activity']->sold_date?->timestamp ?? 0)
             ->values();
@@ -128,6 +129,8 @@ class CommissionSlipController extends Controller
                 $activity = $row['activity'];
 
                 return [
+                    'transaction_type' => $activity->activity_type,
+                    'reference' => $activity->endorsement_code,
                     'sold_date' => $activity->sold_date?->format('Y-m-d'),
                     'brand' => $activity->brand?->imprint_name,
                     'author' => $activity->author_name,

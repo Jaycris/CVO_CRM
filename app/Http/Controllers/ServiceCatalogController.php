@@ -24,6 +24,7 @@ class ServiceCatalogController extends Controller
         $canFilterBrands = BrandScope::canAccessAllBrands($request->user());
 
         $servicesQuery = Service::query()
+            ->where('is_active', true)
             ->with(['brand', 'inclusions' => fn ($query) => $query->orderBy('sort_order')->orderBy('name')])
             ->latest();
 

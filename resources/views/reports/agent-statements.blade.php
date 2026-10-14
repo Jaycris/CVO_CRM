@@ -100,7 +100,7 @@
             <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
                 <p class="text-sm text-slate-500 dark:text-zinc-400">USD Commission</p>
                 <p class="mt-3 text-2xl font-bold text-slate-900 dark:text-zinc-100">{{ $money($totals['usd_total']) }}</p>
-                <p class="mt-2 text-sm text-[var(--brand-primary)]">Service + markup commission</p>
+                <p class="mt-2 text-sm text-[var(--brand-primary)]">Commission including dispute adjustments</p>
             </div>
             <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
                 <p class="text-sm text-slate-500 dark:text-zinc-400">Net Commission</p>
@@ -131,7 +131,7 @@
             <div class="border-b border-slate-200 p-5 dark:border-zinc-800">
                 <h2 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Statement Directory</h2>
                 <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
-                    Each row is credited from a successful payment.
+                    Sales commissions, dispute adjustments, and balances brought forward.
                 </p>
             </div>
 

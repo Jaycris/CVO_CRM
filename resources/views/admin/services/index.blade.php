@@ -94,6 +94,12 @@
                     </div>
 
                     <div>
+                        <input type="hidden" name="is_active" value="0">
+                        <label class="mb-4 flex items-center gap-3 text-sm font-medium text-slate-700 dark:text-zinc-300">
+                            <input type="checkbox" name="is_active" value="1" @checked(old('is_active', true)) class="rounded border-slate-300 text-emerald-700 focus:ring-emerald-600 dark:border-zinc-700 dark:bg-zinc-950">
+                            Active
+                        </label>
+                        <x-input-error :messages="$errors->get('is_active')" class="mb-2" />
                         <label for="description" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">Description</label>
                         <textarea id="description"
                                   name="description"
@@ -206,6 +212,11 @@
                                 <tr x-data="{ editOpen: false }" class="align-top hover:bg-slate-50 dark:hover:bg-zinc-800/60">
                                     <td class="break-words px-5 py-4">
                                         <p class="font-semibold text-slate-900 dark:text-zinc-100">{{ $service->name }}</p>
+                                        <span @class([
+                                            'mt-2 inline-block rounded px-2 py-1 text-xs font-semibold',
+                                            'bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200' => $service->is_active,
+                                            'bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-200' => ! $service->is_active,
+                                        ])>{{ $service->is_active ? 'Active' : 'Disabled' }}</span>
                                         <p class="mt-1 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-zinc-400">{{ $service->description ?: 'No description' }}</p>
                                         @if ($service->pdf_path)
                                             <a href="{{ asset('storage/' . $service->pdf_path) }}"
@@ -289,9 +300,9 @@
                                                             <h3 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Edit Service</h3>
                                                             <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Update service details and inclusions.</p>
                                                         </div>
-                                                        <button type="button" x-on:click="editOpen = false" class="text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-zinc-100">
+                                                        <button type="button" x-on:click="editOpen = false" title="Close" class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100">
                                                             <span class="sr-only">Close</span>
-                                                            &times;
+                                                            <span aria-hidden="true" class="text-3xl leading-none">&times;</span>
                                                         </button>
                                                     </div>
                                                 </div>
@@ -343,6 +354,12 @@
                                                     </div>
 
                                                     <div>
+                                                        <input type="hidden" name="is_active" value="0">
+                                                        <label class="mb-4 flex items-center gap-3 text-sm font-medium text-slate-700 dark:text-zinc-300">
+                                                            <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $service->is_active)) class="rounded border-slate-300 text-emerald-700 focus:ring-emerald-600 dark:border-zinc-700 dark:bg-zinc-950">
+                                                            Active
+                                                        </label>
+                                                        <x-input-error :messages="$errors->get('is_active')" class="mb-2" />
                                                         <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">Description</label>
                                                         <textarea name="description"
                                                                   rows="4"

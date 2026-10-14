@@ -108,7 +108,7 @@ class SalesMtdCalculator
 
         $agentTargetRows = self::agentTargetRows($targets);
 
-        $creditRows = self::statementRows($activities, $agentTargetRows);
+        $creditRows = CommissionBalances::apply(self::statementRows($activities, $agentTargetRows), $monthStart, $user, $brandId, null, $salesBrandsOnly, $includeUserCreditsAcrossBrands);
         $exchangeRate = AppSetting::commissionExchangeRate();
         $cardHoldPercent = AppSetting::cardPaymentHoldPercent();
         $agentCredits = $creditRows
@@ -130,9 +130,9 @@ class SalesMtdCalculator
                 'card_payment_hold_percent' => $cardHoldPercent,
                 'hold_amount' => (float) $rows->sum('hold_amount'),
                 'net_commission' => (float) $rows->sum('net_commission'),
-                'service_commission_percent' => (float) ($rows->last()['service_commission_percent'] ?? self::SERVICE_RATE_LOW),
-                'markup_commission_percent' => (float) ($rows->last()['markup_commission_percent'] ?? 50),
-                'commission_profile_name' => (string) ($rows->last()['commission_profile_name'] ?? 'Default Service Tiers'),
+                'service_commission_percent' => (float) ($rows->last(fn ($row) => $row['activity']->activity_type !== 'commission_adjustment')['service_commission_percent'] ?? self::SERVICE_RATE_LOW),
+                'markup_commission_percent' => (float) ($rows->last(fn ($row) => $row['activity']->activity_type !== 'commission_adjustment')['markup_commission_percent'] ?? 50),
+                'commission_profile_name' => (string) ($rows->last(fn ($row) => $row['activity']->activity_type !== 'commission_adjustment')['commission_profile_name'] ?? 'Default Service Tiers'),
             ]);
 
         $dashboardTargets = self::dashboardTargetRows($targets, $brandId, $user);
@@ -188,7 +188,12 @@ class SalesMtdCalculator
             return $rows;
         });
 
-        return self::applyCommissionProfiles($rows, $agentTargetRows ?? collect(), AppSetting::commissionExchangeRate());
+        return self::applyCommissionProfiles($rows, $agentTargetRows ?? collect(), AppSetting::commissionExchangeRate())
+            ->map(function (array $row) {
+                $snapshot = $row['activity']->commission_snapshot[$row['agent_id']] ?? null;
+
+                return $snapshot ? array_replace($row, $snapshot) : $row;
+            });
     }
 
     private static function creditRow(SalesActivity $activity, ?User $agent, float $creditAmount, string $shareRole, ?array $activitySplit = null): array
