@@ -83,6 +83,8 @@
             </div>
         @endif
 
+        @include('leads.partials.import-results')
+
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
             @foreach ($summaryCards as $card)
                 <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">

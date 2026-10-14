@@ -114,6 +114,9 @@
                                 <th class="min-w-32 px-3 py-4">ISBN</th>
                             @endif
                             <th class="min-w-32 px-3 py-4">Submitted</th>
+                            @if ($canViewSensitiveEndorsementDetails)
+                                <th class="min-w-32 px-3 py-4">Details</th>
+                            @endif
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-200 dark:divide-zinc-800">
@@ -178,10 +181,66 @@
                                     <td class="break-words px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">{{ $endorsement->isbn }}</td>
                                 @endif
                                 <td class="px-3 py-4 leading-snug text-slate-500 dark:text-zinc-400">{{ $endorsement->created_at?->format('M d, Y') }}</td>
+                                @if ($canViewSensitiveEndorsementDetails)
+                                    <td class="px-3 py-4" x-data="{ detailsOpen: false }" x-on:keydown.escape.window="detailsOpen = false">
+                                        <button type="button"
+                                                x-on:click.stop="detailsOpen = true"
+                                                class="whitespace-nowrap font-semibold text-amber-700 underline underline-offset-4 hover:text-amber-900 dark:text-amber-200 dark:hover:text-amber-100">
+                                            View Details
+                                        </button>
+                                        <template x-teleport="body">
+                                            <div x-show="detailsOpen" x-cloak
+                                                 x-on:click.self="detailsOpen = false"
+                                                 class="crm-top-modal-backdrop flex items-center justify-center overflow-y-auto bg-slate-950/70 p-4 backdrop-blur-sm">
+                                                <section role="dialog" aria-modal="true" aria-labelledby="endorsement-details-{{ $endorsement->id }}"
+                                                         class="crm-modal-panel flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl dark:bg-zinc-900">
+                                                    <header class="flex shrink-0 items-center justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-zinc-800">
+                                                        <h2 id="endorsement-details-{{ $endorsement->id }}" class="text-lg font-bold text-slate-900 dark:text-zinc-100">Sales Endorsement {{ $endorsement->endorsement_code }}</h2>
+                                                        <button type="button" x-on:click="detailsOpen = false" class="px-2 py-1 text-sm font-semibold text-slate-600 hover:text-slate-900 dark:text-zinc-300 dark:hover:text-white">Close</button>
+                                                    </header>
+                                                    <dl class="grid min-h-0 grid-cols-1 gap-5 overflow-y-auto p-5 text-sm sm:grid-cols-2">
+                                                        @php
+                                                            $endorsementDetails = [
+                                                                'Brand' => $brandName,
+                                                                'Agent' => trim(($endorsement->agent?->first_name ?? '') . ' ' . ($endorsement->agent?->last_name ?? '')) ?: 'Unknown',
+                                                                'Author' => $endorsement->author_name,
+                                                                'Contact Number' => $endorsement->contact_number,
+                                                                'Email' => $endorsement->email,
+                                                                'Street Address' => $endorsement->street_name,
+                                                                'City / State' => $endorsement->city_state,
+                                                                'ZIP Code' => $endorsement->zip_code,
+                                                                'Book Title' => $endorsement->book_title,
+                                                                'ISBN' => $endorsement->isbn,
+                                                                'Service' => $endorsement->services,
+                                                                'Contract Amount' => '$' . number_format((float) $endorsement->amount, 2),
+                                                                'Payment Type' => $endorsement->payment,
+                                                                'Submitted' => $endorsement->created_at?->format('M d, Y h:i A'),
+                                                            ];
+                                                            if ($endorsement->has_frankie) {
+                                                                $endorsementDetails['Frankie Agent'] = $endorsement->frankie_agent_name;
+                                                                $endorsementDetails['Frankie Commission'] = number_format((float) $endorsement->frankie_commission_percent, 0) . '%';
+                                                            }
+                                                        @endphp
+                                                        @foreach ($endorsementDetails as $label => $value)
+                                                            <div class="min-w-0">
+                                                                <dt class="font-medium text-slate-500 dark:text-zinc-400">{{ $label }}</dt>
+                                                                <dd class="mt-1 whitespace-pre-line break-words text-slate-900 dark:text-zinc-100">{{ filled($value) ? $value : 'Not provided' }}</dd>
+                                                            </div>
+                                                        @endforeach
+                                                        <div class="min-w-0 sm:col-span-2">
+                                                            <dt class="font-medium text-slate-500 dark:text-zinc-400">Remarks</dt>
+                                                            <dd class="mt-1 whitespace-pre-line break-words text-slate-900 dark:text-zinc-100">{{ $endorsement->remarks ?: 'Not provided' }}</dd>
+                                                        </div>
+                                                    </dl>
+                                                </section>
+                                            </div>
+                                        </template>
+                                    </td>
+                                @endif
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="{{ ($canViewSensitiveEndorsementDetails ? 12 : 9) + ($canDeleteEndorsements ? 1 : 0) }}" class="px-6 py-16 text-center text-sm text-slate-500 dark:text-zinc-400">
+                                <td colspan="{{ ($canViewSensitiveEndorsementDetails ? 13 : 9) + ($canDeleteEndorsements ? 1 : 0) }}" class="px-6 py-16 text-center text-sm text-slate-500 dark:text-zinc-400">
                                     No sales endorsements yet.
                                 </td>
                             </tr>

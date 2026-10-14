@@ -24,16 +24,7 @@
             </div>
         @endif
 
-        @if (session('import_skipped_rows') && count(session('import_skipped_rows')) > 0)
-            <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100">
-                <p class="font-semibold">Some rows were skipped:</p>
-                <ul class="mt-2 list-disc space-y-1 pl-5">
-                    @foreach (session('import_skipped_rows') as $skippedRow)
-                        <li>{{ $skippedRow }}</li>
-                    @endforeach
-                </ul>
-            </div>
-        @endif
+        @include('leads.partials.import-results')
 
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_22rem]">
             <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">

@@ -333,6 +333,7 @@ class LeadController extends Controller
         }
 
         $created = 0;
+        $total = 0;
         $skipped = [];
         $rowNumber = 1;
 
@@ -345,6 +346,7 @@ class LeadController extends Controller
                 }
 
                 $leadData = $this->leadDataFromCsvRow($row, $headerMap);
+                $total++;
                 $validator = Validator::make($leadData, [
                     'publisher' => ['nullable', 'string', 'max:255'],
                     'book_title' => ['required', 'string', 'max:255'],
@@ -358,7 +360,7 @@ class LeadController extends Controller
                 ]);
 
                 if ($validator->fails()) {
-                    $skipped[] = "Row {$rowNumber}: " . $validator->errors()->first();
+                    $skipped[] = "Row {$rowNumber}: " . implode(' ', $validator->errors()->all());
                     continue;
                 }
 
@@ -392,13 +394,20 @@ class LeadController extends Controller
 
         fclose($file);
 
+        if ($total === 0) {
+            return back()->withErrors(['lead_csv' => 'The CSV file contains no lead rows. Please add leads below the column headers.']);
+        }
+
         $message = $created === 1
             ? '1 lead imported successfully.'
             : "{$created} leads imported successfully.";
 
         return redirect()
             ->to($this->safeReturnUrl($validated['return_to'] ?? null) ?? route('leads.my'))
-            ->with('success', $message)
+            ->with(count($skipped) > 0 ? 'warning' : 'success', count($skipped) > 0
+                ? "CSV import incomplete: {$created} of {$total} leads imported. " . count($skipped) . ' rows were skipped. See the reasons below.'
+                : $message)
+            ->with('import_summary', ['total' => $total, 'imported' => $created, 'skipped' => count($skipped)])
             ->with('import_skipped_rows', $skipped);
     }
 
