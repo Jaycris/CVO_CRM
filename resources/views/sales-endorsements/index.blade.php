@@ -114,9 +114,6 @@
                                 <th class="min-w-32 px-3 py-4">ISBN</th>
                             @endif
                             <th class="min-w-32 px-3 py-4">Submitted</th>
-                            @if ($canViewSensitiveEndorsementDetails)
-                                <th class="min-w-32 px-3 py-4">Details</th>
-                            @endif
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-200 dark:divide-zinc-800">
@@ -128,13 +125,20 @@
                                 $brandAccent = $brand?->accent_color ?: '#d1fae5';
                                 $brandButtonText = $brand?->button_text_color ?: $brandPrimary;
                             @endphp
-                            <tr @if ($canDeleteEndorsements)
-                                    x-on:click="selectedIds.includes({{ $endorsement->id }}) ? selectedIds = selectedIds.filter((id) => id !== {{ $endorsement->id }}) : selectedIds.push({{ $endorsement->id }})"
+                            <tr @if ($canViewSensitiveEndorsementDetails)
+                                    x-data="{ detailsOpen: false }"
+                                    x-on:click="detailsOpen = true"
+                                    x-on:keydown.enter.self.prevent="detailsOpen = true"
+                                    x-on:keydown.space.self.prevent="detailsOpen = true"
+                                    x-on:keydown.escape.window="detailsOpen = false"
+                                    tabindex="0"
+                                    aria-label="View details for {{ $endorsement->endorsement_code }}"
+                                    aria-haspopup="dialog"
+                                @endif
+                                @if ($canDeleteEndorsements)
                                     x-bind:class="selectedIds.includes({{ $endorsement->id }}) ? 'bg-amber-50 dark:bg-amber-400/10' : 'hover:bg-slate-50 dark:hover:bg-zinc-800/60'"
-                                    class="cursor-pointer align-top"
-                                @else
-                                    class="align-top hover:bg-slate-50 dark:hover:bg-zinc-800/60"
-                                @endif>
+                                @endif
+                                class="align-top hover:bg-slate-50 dark:hover:bg-zinc-800/60 {{ $canViewSensitiveEndorsementDetails ? 'cursor-pointer' : '' }}">
                                 @if ($canDeleteEndorsements)
                                     <td class="px-3 py-4">
                                         <input type="checkbox"
@@ -180,16 +184,12 @@
                                     </td>
                                     <td class="break-words px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">{{ $endorsement->isbn }}</td>
                                 @endif
-                                <td class="px-3 py-4 leading-snug text-slate-500 dark:text-zinc-400">{{ $endorsement->created_at?->format('M d, Y') }}</td>
+                                <td class="px-3 py-4 leading-snug text-slate-500 dark:text-zinc-400">
+                                    {{ $endorsement->created_at?->format('M d, Y') }}
                                 @if ($canViewSensitiveEndorsementDetails)
-                                    <td class="px-3 py-4" x-data="{ detailsOpen: false }" x-on:keydown.escape.window="detailsOpen = false">
-                                        <button type="button"
-                                                x-on:click.stop="detailsOpen = true"
-                                                class="whitespace-nowrap font-semibold text-amber-700 underline underline-offset-4 hover:text-amber-900 dark:text-amber-200 dark:hover:text-amber-100">
-                                            View Details
-                                        </button>
                                         <template x-teleport="body">
                                             <div x-show="detailsOpen" x-cloak
+                                                 x-on:click.stop
                                                  x-on:click.self="detailsOpen = false"
                                                  class="crm-top-modal-backdrop flex items-center justify-center overflow-y-auto bg-slate-950/70 p-4 backdrop-blur-sm">
                                                 <section role="dialog" aria-modal="true" aria-labelledby="endorsement-details-{{ $endorsement->id }}"
@@ -235,12 +235,12 @@
                                                 </section>
                                             </div>
                                         </template>
-                                    </td>
                                 @endif
+                                </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="{{ ($canViewSensitiveEndorsementDetails ? 13 : 9) + ($canDeleteEndorsements ? 1 : 0) }}" class="px-6 py-16 text-center text-sm text-slate-500 dark:text-zinc-400">
+                                <td colspan="{{ ($canViewSensitiveEndorsementDetails ? 12 : 9) + ($canDeleteEndorsements ? 1 : 0) }}" class="px-6 py-16 text-center text-sm text-slate-500 dark:text-zinc-400">
                                     No sales endorsements yet.
                                 </td>
                             </tr>
