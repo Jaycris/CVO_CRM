@@ -25,7 +25,7 @@
             </div>
         @endif
 
-        <div class="grid grid-cols-1 gap-6 xl:grid-cols-[25rem_1fr]">
+        <div class="grid grid-cols-1 gap-6 xl:grid-cols-[25rem_minmax(0,1fr)]">
             <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800"
                  x-data="serviceForm({ inclusions: @js(old('inclusions', [['name' => '']])) })">
                 <h2 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Create Service</h2>
@@ -165,7 +165,7 @@
                 </form>
             </div>
 
-            <div class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
+            <div class="min-w-0 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
                 <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 px-6 py-4 dark:border-zinc-800">
                     <div>
                         <h2 class="font-semibold text-slate-900 dark:text-zinc-100">Service Directory</h2>
@@ -195,7 +195,7 @@
                 </div>
 
                 <div class="overflow-x-auto">
-                    <table class="w-full table-fixed text-left text-xs">
+                    <table class="w-full min-w-[64rem] table-auto text-left text-xs">
                         <thead class="bg-slate-50 text-[11px] uppercase leading-tight text-slate-500 dark:bg-zinc-950 dark:text-zinc-400">
                             <tr>
                                 <th class="w-[17%] px-5 py-4">Service</th>
@@ -203,8 +203,8 @@
                                 <th class="w-[13%] px-5 py-4">Brand</th>
                                 <th class="w-[10%] px-5 py-4">Price</th>
                                 <th class="w-[27%] px-5 py-4">Inclusions</th>
-                                <th class="w-[12%] px-5 py-4">Created</th>
-                                <th class="w-[8%] px-5 py-4 text-right">Action</th>
+                                <th class="w-32 whitespace-nowrap px-5 py-4">Created</th>
+                                <th class="w-36 px-5 py-4 text-right">Action</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-200 dark:divide-zinc-800">
@@ -256,9 +256,9 @@
                                             <span class="text-slate-400 dark:text-zinc-500">No inclusions yet</span>
                                         @endif
                                     </td>
-                                    <td class="px-5 py-4 text-slate-600 dark:text-zinc-300">{{ $service->created_at?->format('M d, Y') }}</td>
-                                    <td class="px-5 py-4 text-right">
-                                        <div class="inline-flex items-center gap-2">
+                                    <td class="whitespace-nowrap px-5 py-4 text-slate-600 dark:text-zinc-300">{{ $service->created_at?->format('M d, Y') }}</td>
+                                    <td class="whitespace-nowrap px-5 py-4 text-right">
+                                        <div class="inline-flex w-[5.5rem] items-center justify-end gap-2">
                                             <button type="button"
                                                     x-on:click="editOpen = true"
                                                     class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 text-amber-700 shadow-sm hover:bg-amber-100 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200"

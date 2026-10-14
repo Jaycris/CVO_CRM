@@ -153,6 +153,39 @@ class CommissionDisputesTest extends TestCase
         $this->assertDatabaseCount('commission_adjustments', 1);
     }
 
+    public function test_legacy_disputes_can_be_previewed_then_reconciled_once_in_the_current_month(): void
+    {
+        [$first, $agent] = $this->sale(1500, '2026-09-29');
+        [$second] = $this->sale(2999, '2026-09-29', $agent);
+        $agent->update(['is_commission_threshold_exempt' => false, 'commission_threshold_amount' => 500]);
+        $originalCommission = $this->rows('2026-09', $agent)->sum('usd_total');
+
+        foreach ([$first, $second] as $payment) {
+            $payment->update(['status' => 'Dispute']);
+            SalesActivitySync::sync($payment);
+        }
+        $this->assertDatabaseCount('sales_activities', 0);
+
+        $this->artisan('commissions:reconcile-disputes', ['--agent' => $agent->id])
+            ->expectsOutput('Preview only. No changes saved. Run again with --apply to record these deductions.')
+            ->assertSuccessful();
+        $this->assertDatabaseCount('sales_activities', 0);
+        $this->assertDatabaseCount('commission_adjustments', 0);
+
+        $this->artisan('commissions:reconcile-disputes', ['--agent' => $agent->id, '--apply' => true])->assertSuccessful();
+        $this->assertDatabaseCount('commission_adjustments', 2);
+        $this->assertDatabaseCount('sales_activities', 2);
+        $this->assertEquals('Dispute', $first->fresh()->status);
+        $this->assertEquals('Dispute', $second->fresh()->status);
+        $this->assertEquals($originalCommission, $this->rows('2026-09', $agent)->sum('usd_total'));
+        $this->assertEquals(-$originalCommission, $this->rows('2026-10', $agent)->sum('usd_total'));
+        $this->assertEquals(-$originalCommission, $this->rows('2026-11', $agent)->sum('usd_total'));
+
+        $this->artisan('commissions:reconcile-disputes', ['--apply' => true])
+            ->expectsOutput('No disputed payments with missing adjustments were found.')->assertSuccessful();
+        $this->assertDatabaseCount('commission_adjustments', 2);
+    }
+
     private function transition(SalesPayment $payment, string $status): void
     {
         DB::transaction(function () use ($payment, $status) {
