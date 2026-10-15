@@ -773,7 +773,7 @@ class ContractSignatureController extends Controller
                 $appearanceRef = $nextObject++;
                 $annotationRef = $nextObject++;
                 $newObjects[$appearanceRef] = $this->pdfAppearanceStreamObject($appearance, $fieldWidth, $fieldHeight, $fontRegularRef, $fontBoldRef, $fontScriptRef, $xobjects);
-                $newObjects[$annotationRef] = $this->signatureFieldAnnotationPdfObject($value, $x, $y, $fieldWidth, $fieldHeight, $appearanceRef);
+                $newObjects[$annotationRef] = $this->signatureFieldAnnotationPdfObject($x, $y, $fieldWidth, $fieldHeight, $appearanceRef);
                 $annotationRefs[] = $annotationRef;
             }
 
@@ -1482,9 +1482,10 @@ class ContractSignatureController extends Controller
         return "<< /Type /XObject /Subtype /Form /FormType 1 /BBox [0 0 " . $this->pdfNumber($width) . ' ' . $this->pdfNumber($height) . '] /Resources << ' . $resources . ' >> /Length ' . strlen($content) . " >>\nstream\n" . $content . "\nendstream";
     }
 
-    private function signatureFieldAnnotationPdfObject(string $value, float $x, float $y, float $width, float $height, int $appearanceRef): string
+    private function signatureFieldAnnotationPdfObject(float $x, float $y, float $width, float $height, int $appearanceRef): string
     {
-        return '<< /Type /Annot /Subtype /Stamp /Rect [' . $this->pdfRect($x, $y, $width, $height) . '] /Contents (' . $this->pdfEscape($value) . ') /F 132 /Border [0 0 0] /AP << /N ' . $appearanceRef . ' 0 R >> >>';
+        // Keep the visible appearance without comment metadata that opens viewer popups.
+        return '<< /Type /Annot /Subtype /Stamp /Rect [' . $this->pdfRect($x, $y, $width, $height) . '] /F 132 /Border [0 0 0] /AP << /N ' . $appearanceRef . ' 0 R >> >>';
     }
 
     private function pdfRect(float $x, float $y, float $width, float $height): string

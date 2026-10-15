@@ -37,6 +37,14 @@ class ContractSignatureRenderingTest extends TestCase
         $this->assertEquals($before[5], $after[5], 'Original font must not be rewritten.');
         $this->assertStringContainsString('/Resources << /Font << /F1 5 0 R >> >>', $after[3]);
         $this->assertStringContainsString('/Annots [', $after[3]);
+        $annotations = array_filter($after, fn ($object) => str_contains($object, '/Subtype /Stamp'));
+        $this->assertCount(2, $annotations);
+        foreach ($annotations as $annotation) {
+            $this->assertStringNotContainsString('/Contents', $annotation);
+            $this->assertStringNotContainsString('/Popup', $annotation);
+            $this->assertStringContainsString('/AP << /N ', $annotation);
+            $this->assertStringContainsString('/F 132', $annotation);
+        }
         $this->assertStringContainsString('(E-Signed by:)', $result);
         $this->assertStringContainsString('(10/13/2026 @ 02:30 PM)', $result);
         $this->assertStringContainsString('3 28 Td (10/13/2026 @ 02:30 PM)', $result);
