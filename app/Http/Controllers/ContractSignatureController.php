@@ -747,24 +747,26 @@ class ContractSignatureController extends Controller
 
                 if (($type === 'signature' || $type === 'initials') && $value !== '') {
                     $isSignature = $type === 'signature';
-                    $signatureImage = $this->signatureImagePdfObject($value, max(90, (int) $fieldWidth - 10), max(24, (int) ($fieldHeight * 0.55)), $field['signatureImage'] ?? null);
+                    // Leave room for names already printed at the bottom of contract signature fields.
+                    $stampY = max(12, $fieldHeight * 0.4);
+                    $imageY = $isSignature ? $stampY + 7 : max(2, $fieldHeight * 0.11);
+                    $imageHeight = max(1, $fieldHeight - $imageY - ($isSignature ? 10 : 2));
+                    $imageWidth = max(1, $fieldWidth - 10);
+                    $signatureImage = $this->signatureImagePdfObject($value, max(1, (int) $imageWidth), max(1, (int) $imageHeight), $field['signatureImage'] ?? null);
 
                     if ($signatureImage) {
                         $signatureObjectRef = $nextObject++;
                         $signatureName = 'SIG' . $signatureIndex++;
                         $newObjects[$signatureObjectRef] = $signatureImage;
                         $xobjects[$signatureName] = $signatureObjectRef;
-                        $imageWidth = max(20, $fieldWidth - 10);
-                        $imageHeight = max(12, min($fieldHeight - 4, $fieldHeight * ($isSignature ? 0.55 : 0.78)));
                         $imageX = max(0, ($fieldWidth - $imageWidth) / 2);
-                        $imageY = max(0, ($fieldHeight - $imageHeight) / 2);
                         $appearance = 'q ' . $this->pdfNumber($imageWidth) . ' 0 0 ' . $this->pdfNumber($imageHeight) . ' ' . $this->pdfNumber($imageX) . ' ' . $this->pdfNumber($imageY) . ' cm /' . $signatureName . ' Do Q';
                     }
 
                     if ($isSignature) {
                         $stampDate = $endorsement->contract_signed_at?->copy()->timezone('America/New_York')->format('m/d/Y @ h:i A') ?: $signedDate;
                         $appearance .= "\n0 0 0 rg\n" . $this->pdfText('E-Signed by:', 3, (int) max(7, $fieldHeight - 7), 5, 'ESR');
-                        $appearance .= "\n" . $this->pdfText($stampDate, 3, 3, 5, 'ESR');
+                        $appearance .= "\n" . $this->pdfText($stampDate, 3, (int) $stampY, 5, 'ESR');
                     }
                 }
 
@@ -1244,8 +1246,9 @@ class ContractSignatureController extends Controller
         if ($savedImage && function_exists('imagecreatefromstring') && ($bytes = $this->signaturePngBytes($savedImage))) {
             $source = @imagecreatefromstring($bytes);
             if ($source) {
-                $imageWidth = max(180, $width * 3);
-                $imageHeight = max(54, $height * 3);
+                $source = $this->cropSignatureImage($source);
+                $imageWidth = max(3, $width * 3);
+                $imageHeight = max(3, $height * 3);
                 $image = imagecreatetruecolor($imageWidth, $imageHeight);
                 imagefill($image, 0, 0, imagecolorallocate($image, 255, 255, 255));
                 $scale = min($imageWidth / imagesx($source), $imageHeight / imagesy($source));
@@ -1307,6 +1310,47 @@ class ContractSignatureController extends Controller
         imagettftext($image, $fontSize, 0, $x, $y, $ink, $fontPath, $text);
 
         return $this->rgbImagePdfObject($image);
+    }
+
+    private function cropSignatureImage(\GdImage $image): \GdImage
+    {
+        $width = imagesx($image);
+        $height = imagesy($image);
+        $left = $width;
+        $top = $height;
+        $right = $bottom = -1;
+
+        for ($y = 0; $y < $height; $y++) {
+            for ($x = 0; $x < $width; $x++) {
+                $color = imagecolorsforindex($image, imagecolorat($image, $x, $y));
+                if ($color['alpha'] < 120 && min($color['red'], $color['green'], $color['blue']) < 240) {
+                    $left = min($left, $x);
+                    $right = max($right, $x);
+                    $top = min($top, $y);
+                    $bottom = max($bottom, $y);
+                }
+            }
+        }
+
+        if ($right < $left) {
+            return $image;
+        }
+
+        $left = max(0, $left - 2);
+        $top = max(0, $top - 2);
+        $cropped = imagecrop($image, [
+            'x' => $left, 'y' => $top,
+            'width' => min($width - 1, $right + 2) - $left + 1,
+            'height' => min($height - 1, $bottom + 2) - $top + 1,
+        ]);
+
+        if (! $cropped) {
+            return $image;
+        }
+
+        imagedestroy($image);
+
+        return $cropped;
     }
 
     private function rgbImagePdfObject(\GdImage $image): string

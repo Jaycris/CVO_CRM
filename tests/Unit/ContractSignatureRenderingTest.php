@@ -39,6 +39,7 @@ class ContractSignatureRenderingTest extends TestCase
         $this->assertStringContainsString('/Annots [', $after[3]);
         $this->assertStringContainsString('(E-Signed by:)', $result);
         $this->assertStringContainsString('(10/13/2026 @ 02:30 PM)', $result);
+        $this->assertStringContainsString('3 28 Td (10/13/2026 @ 02:30 PM)', $result);
         $this->assertStringContainsString('(10/13/2026)', $result);
         $this->assertSame(1, substr_count($result, '(Signature Certificate)'));
         $this->assertSame($result, $this->callPdfMethod('appendSignatureCertificatePage', $result, $endorsement));
@@ -61,6 +62,22 @@ class ContractSignatureRenderingTest extends TestCase
         $this->assertNull($this->callPdfMethod('signaturePngBytes', 'data:image/png;base64,' . base64_encode('not a PNG')));
         $this->assertNull($this->callPdfMethod('signaturePngBytes', 'data:image/svg+xml;base64,' . base64_encode('<svg/>')));
         $this->assertNull($this->callPdfMethod('signaturePngBytes', 'data:image/png;base64,' . str_repeat('A', 100001)));
+    }
+
+    public function test_saved_signature_whitespace_is_cropped_before_fitting_the_field(): void
+    {
+        if (! function_exists('imagepng')) {
+            $this->markTestSkipped('GD is needed for signature appearance images.');
+        }
+
+        $image = imagecreatetruecolor(1000, 180);
+        imagefill($image, 0, 0, imagecolorallocate($image, 255, 255, 255));
+        imagefilledrectangle($image, 450, 70, 549, 109, imagecolorallocate($image, 0, 0, 0));
+        $cropped = $this->callPdfMethod('cropSignatureImage', $image);
+
+        $this->assertSame(104, imagesx($cropped));
+        $this->assertSame(44, imagesy($cropped));
+        imagedestroy($cropped);
     }
 
     private function sourcePdf(): string
