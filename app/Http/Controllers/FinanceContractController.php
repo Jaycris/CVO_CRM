@@ -29,7 +29,8 @@ class FinanceContractController extends Controller
             ->when($status === 'signed', fn ($query) => $query->where('contract_status', 'signed'))
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($query) use ($search) {
-                    $query->where('author_name', 'like', "%{$search}%")
+                    $query->where('endorsement_code', 'like', "%{$search}%")
+                        ->orWhere('author_name', 'like', "%{$search}%")
                         ->orWhere('book_title', 'like', "%{$search}%")
                         ->orWhere('services', 'like', "%{$search}%")
                         ->orWhere('amount', 'like', "%{$search}%")
