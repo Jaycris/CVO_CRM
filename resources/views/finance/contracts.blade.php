@@ -61,6 +61,23 @@
 
                             @if ($canManageContracts)
                             <form method="POST" action="{{ route('finance.contracts.bulk-update') }}"
+                                  x-on:submit="if (selectedIds.length === 0 || !confirm('Mark selected contracts as unsent? This clears their sent and signed status dates without deleting documents.')) { $event.preventDefault(); }">
+                                @csrf
+                                @method('PUT')
+                                <input type="hidden" name="status" value="{{ $status }}">
+                                <template x-for="endorsementId in selectedIds" :key="`unsent-${endorsementId}`">
+                                    <input type="hidden" name="endorsement_ids[]" :value="endorsementId">
+                                </template>
+                                <button type="submit"
+                                        name="contract_status"
+                                        value="unsent"
+                                        x-bind:disabled="selectedIds.length === 0"
+                                        class="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-xs font-semibold text-slate-600 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
+                                    Mark Unsent
+                                </button>
+                            </form>
+
+                            <form method="POST" action="{{ route('finance.contracts.bulk-update') }}"
                                   x-on:submit="if (selectedIds.length === 0) { $event.preventDefault(); }">
                                 @csrf
                                 @method('PUT')
@@ -224,7 +241,7 @@
                                             'bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-200' => $endorsement->contract_status === 'sent',
                                             'bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-200' => $endorsement->contract_status === 'signed',
                                         ])>
-                                            {{ $endorsement->contract_status ? ucfirst($endorsement->contract_status) : 'Not Sent' }}
+                                            {{ $endorsement->contract_status ? ucfirst($endorsement->contract_status) : 'Unsent' }}
                                         </span>
 
                                         <a href="{{ route('finance.contracts.esign', $endorsement) }}"
@@ -305,7 +322,7 @@
                                         </span>
                                     @endif
                                 </td>
-                                <td class="px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">{{ $endorsement->contract_sent_at?->format('M d, Y') ?: '-' }}</td>
+                                <td class="px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">{{ $endorsement->contract_sent_at?->format('M d, Y') ?: 'None' }}</td>
                                 <td class="px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">{{ $endorsement->contract_signed_at?->format('M d, Y') ?: '-' }}</td>
                             </tr>
                         @empty

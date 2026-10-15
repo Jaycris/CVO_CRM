@@ -59,19 +59,10 @@ class FinanceContractController extends Controller
         abort_unless($this->userHasPermission($request, 'manage_contract_records'), 403);
 
         $validated = $request->validate([
-            'contract_status' => ['required', 'in:sent,signed'],
+            'contract_status' => ['required', 'in:unsent,sent,signed'],
         ]);
 
-        $updates = ['contract_status' => $validated['contract_status']];
-
-        if ($validated['contract_status'] === 'sent' && ! $endorsement->contract_sent_at) {
-            $updates['contract_sent_at'] = now();
-        }
-
-        if ($validated['contract_status'] === 'signed') {
-            $updates['contract_sent_at'] = $endorsement->contract_sent_at ?? now();
-            $updates['contract_signed_at'] = now();
-        }
+        $updates = $this->contractStatusUpdates($endorsement, $validated['contract_status']);
 
         abort_unless($this->userCanAccessBrand($request, $endorsement->brand_id), 403);
 
@@ -89,7 +80,7 @@ class FinanceContractController extends Controller
         $validated = $request->validate([
             'endorsement_ids' => ['required', 'array', 'min:1'],
             'endorsement_ids.*' => ['integer', 'exists:sales_endorsements,id'],
-            'contract_status' => ['required', 'in:sent,signed'],
+            'contract_status' => ['required', 'in:unsent,sent,signed'],
             'status' => ['nullable', 'in:all,sent,signed'],
         ]);
 
@@ -97,18 +88,7 @@ class FinanceContractController extends Controller
             ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
             ->get()
             ->each(function (SalesEndorsement $endorsement) use ($validated) {
-                $updates = ['contract_status' => $validated['contract_status']];
-
-                if ($validated['contract_status'] === 'sent' && ! $endorsement->contract_sent_at) {
-                    $updates['contract_sent_at'] = now();
-                }
-
-                if ($validated['contract_status'] === 'signed') {
-                    $updates['contract_sent_at'] = $endorsement->contract_sent_at ?? now();
-                    $updates['contract_signed_at'] = now();
-                }
-
-                $endorsement->update($updates);
+                $endorsement->update($this->contractStatusUpdates($endorsement, $validated['contract_status']));
             });
 
         return redirect()
@@ -362,6 +342,29 @@ class FinanceContractController extends Controller
                     ? "{$endorsedCount} project(s) endorsed to Production successfully."
                     : 'No selected contract records were endorsed to Production.'
             );
+    }
+
+    private function contractStatusUpdates(SalesEndorsement $endorsement, string $status): array
+    {
+        if ($status === 'unsent') {
+            return [
+                'contract_status' => null,
+                'contract_sent_at' => null,
+                'contract_signed_at' => null,
+            ];
+        }
+
+        $updates = ['contract_status' => $status];
+
+        if (! $endorsement->contract_sent_at) {
+            $updates['contract_sent_at'] = now();
+        }
+
+        if ($status === 'signed') {
+            $updates['contract_signed_at'] = now();
+        }
+
+        return $updates;
     }
 
     private function userHasPermission(Request $request, string $permission): bool
