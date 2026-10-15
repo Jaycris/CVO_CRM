@@ -161,16 +161,13 @@
                 </div>
 
                 <div>
-                    <label for="media" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">
-                        Preview Photos / Video
-                    </label>
-                    <input id="media" name="media[]" type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm"
-                           class="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm shadow-sm file:mr-4 file:rounded-lg file:border-0 file:bg-zinc-950 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-black dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                    @include('admin.rewards.partials.media-order', ['uploadMode' => true, 'mediaItems' => []])
                     <p class="mt-2 text-sm text-slate-500 dark:text-zinc-400">
                         Upload up to 8 files. Images and short marketing videos are supported.
                     </p>
                     <x-input-error :messages="$errors->get('media')" class="mt-2" />
                     <x-input-error :messages="$errors->get('media.*')" class="mt-2" />
+                    <x-input-error :messages="$errors->get('upload_order')" class="mt-2" />
                 </div>
 
                 <div class="flex justify-end">
@@ -234,6 +231,22 @@
                                 Delete
                             </button>
                         </form>
+                        @if ($reward->media->isNotEmpty())
+                            @php($orderedMedia = $reward->media->map(fn ($item) => [
+                                'id' => $item->id,
+                                'name' => $item->original_name ?: 'Reward media',
+                                'type' => $item->type,
+                                'url' => asset('storage/' . $item->path),
+                            ])->values()->all())
+                            <form method="POST" action="{{ route('admin.rewards.media-order', ['reward' => $reward, 'page' => $rewards->currentPage()]) }}" class="min-w-0 lg:col-span-3">
+                                @csrf
+                                @method('PUT')
+                                @include('admin.rewards.partials.media-order', ['uploadMode' => false, 'mediaItems' => $orderedMedia])
+                                <div class="mt-3 flex justify-end">
+                                    <button type="submit" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800">Save Photo Order</button>
+                                </div>
+                            </form>
+                        @endif
                     </div>
                 @empty
                     <div class="px-6 py-12 text-center text-sm text-slate-500 dark:text-zinc-400">

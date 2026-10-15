@@ -551,11 +551,7 @@
                         <article class="w-full flex-none snap-start overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
                             <div class="grid grid-cols-1 lg:grid-cols-[minmax(16rem,26rem)_minmax(0,1fr)]">
                                 @if ($media)
-                                    @if ($media->type === 'video')
-                                        <video src="{{ asset('storage/' . $media->path) }}" class="h-56 w-full bg-slate-100 object-cover dark:bg-zinc-900 lg:h-72" muted controls></video>
-                                    @else
-                                        <img src="{{ asset('storage/' . $media->path) }}" alt="{{ $reward->title }}" class="h-56 w-full bg-slate-100 object-cover dark:bg-zinc-900 lg:h-72">
-                                    @endif
+                                    @include('rewards.partials.media-slideshow', ['reward' => $reward])
                                 @else
                                     <div class="flex h-56 items-center justify-center bg-emerald-50 text-sm font-semibold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200 lg:h-72">
                                         Reward

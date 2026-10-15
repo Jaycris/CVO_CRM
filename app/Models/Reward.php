@@ -51,7 +51,7 @@ class Reward extends Model
 
     public function media(): HasMany
     {
-        return $this->hasMany(RewardMedia::class)->orderBy('sort_order');
+        return $this->hasMany(RewardMedia::class)->orderBy('sort_order')->orderBy('id');
     }
 
     public function unlocks(): HasMany

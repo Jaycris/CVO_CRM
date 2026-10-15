@@ -9,6 +9,7 @@ use App\Models\RewardUnlock;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -83,10 +84,12 @@ class RewardController extends Controller
             'expires_in_days' => ['nullable', 'integer', 'min:1', 'max:365'],
             'media' => ['nullable', 'array', 'max:8'],
             'media.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,mp4,mov,webm', 'max:51200'],
+            'upload_order' => ['sometimes', 'array', 'size:' . count($request->file('media', []))],
+            'upload_order.*' => ['required', 'integer', 'distinct', Rule::in(array_keys($request->file('media', [])))],
         ]);
 
         $reward = Reward::create([
-            ...collect($validated)->except('media')->all(),
+            ...collect($validated)->except(['media', 'upload_order'])->all(),
             'created_by' => $request->user()->id,
             'is_active' => $request->boolean('is_active'),
         ]);
@@ -108,6 +111,26 @@ class RewardController extends Controller
         return back()->with('success', 'Reward removed successfully.');
     }
 
+    public function reorderMedia(Request $request, Reward $reward): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+
+        DB::transaction(function () use ($request, $reward) {
+            Reward::whereKey($reward->id)->lockForUpdate()->firstOrFail();
+            $validated = $request->validate([
+                'media_order' => ['required', 'array', 'size:' . $reward->media()->count()],
+                'media_order.*' => ['required', 'integer', 'distinct', Rule::exists('reward_media', 'id')->where('reward_id', $reward->id)],
+            ]);
+
+            foreach (array_values($validated['media_order']) as $position => $mediaId) {
+                $reward->media()->whereKey($mediaId)->update(['sort_order' => $position]);
+            }
+        });
+
+        return redirect()->route('admin.rewards.index', ['page' => $request->query('page', 1)])
+            ->with('success', 'Reward photo order updated. The first item is the main preview.');
+    }
+
     public function markClaimed(Request $request, RewardUnlock $rewardUnlock): RedirectResponse
     {
         $this->ensureAdmin($request);
@@ -125,7 +148,11 @@ class RewardController extends Controller
 
     private function storeMedia(Reward $reward, Request $request): void
     {
-        collect($request->file('media', []))
+        $files = $request->file('media', []);
+        $order = $request->input('upload_order', array_keys($files));
+
+        collect($order)
+            ->map(fn ($index) => $files[$index])
             ->values()
             ->each(function ($file, int $index) use ($reward) {
                 $mime = (string) $file->getMimeType();
