@@ -48,8 +48,7 @@ class SalesEndorsementController extends Controller
 
         return view('sales-endorsements.index', [
             'endorsements' => $endorsements,
-            'canSubmitEndorsement' => $this->userHasPermission($request, 'submit_sales_endorsement')
-                && (bool) $request->user()?->is_commission_eligible,
+            'canSubmitEndorsement' => $this->canSubmitEndorsement($request),
             'canDeleteEndorsements' => $this->userHasPermission($request, 'delete_sales_endorsements'),
             'isAdmin' => $request->user()?->role?->name === 'Admin',
             'canViewSensitiveEndorsementDetails' => $this->canViewSensitiveEndorsementDetails($request),
@@ -59,8 +58,7 @@ class SalesEndorsementController extends Controller
 
     public function create(Request $request): View
     {
-        abort_unless($this->userHasPermission($request, 'submit_sales_endorsement'), 403);
-        abort_unless($request->user()?->is_commission_eligible, 403);
+        abort_unless($this->canSubmitEndorsement($request), 403);
 
         return view('sales-endorsements.create', [
             'paymentOptions' => $this->paymentOptions(),
@@ -73,8 +71,7 @@ class SalesEndorsementController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        abort_unless($this->userHasPermission($request, 'submit_sales_endorsement'), 403);
-        abort_unless($request->user()?->is_commission_eligible, 403);
+        abort_unless($this->canSubmitEndorsement($request), 403);
 
         $validated = $request->validate([
             'has_frankie' => ['nullable', 'boolean'],
@@ -167,6 +164,13 @@ class SalesEndorsementController extends Controller
             ->delete();
 
         return back()->with('success', 'Selected sales endorsement record(s) deleted successfully.');
+    }
+
+    private function canSubmitEndorsement(Request $request): bool
+    {
+        return $request->user()?->role?->name === 'Admin'
+            || ($this->userHasPermission($request, 'submit_sales_endorsement')
+                && (bool) $request->user()?->is_commission_eligible);
     }
 
     private function userHasPermission(Request $request, string $permission): bool

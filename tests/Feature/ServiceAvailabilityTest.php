@@ -102,4 +102,34 @@ class ServiceAvailabilityTest extends TestCase
         $this->actingAs($user)->put(route('admin.services.update', $service), ['is_active' => 0])->assertForbidden();
         $this->assertTrue($service->fresh()->is_active);
     }
+
+    public function test_admin_can_submit_endorsements_without_being_commission_eligible(): void
+    {
+        $admin = $this->admin();
+        $admin->update(['is_commission_eligible' => false]);
+        $service = $this->service($admin);
+
+        $this->actingAs($admin)->get(route('sales.endorsements.index'))->assertOk()
+            ->assertViewHas('canSubmitEndorsement', true);
+        $this->get(route('sales.endorsements.create'))->assertOk();
+        $this->post(route('sales.endorsements.store'), $this->payload($service))
+            ->assertSessionHasNoErrors()->assertRedirect(route('sales.endorsements.index'));
+
+        $this->assertDatabaseHas('sales_endorsements', ['agent_id' => $admin->id, 'author_name' => 'Event Author']);
+        $this->assertFalse($admin->fresh()->is_commission_eligible);
+    }
+
+    public function test_non_admin_without_commission_eligibility_cannot_submit_endorsements(): void
+    {
+        $admin = $this->admin();
+        $service = $this->service($admin);
+        $role = Role::create(['name' => 'SEF Test Agent', 'slug' => 'sef-test-agent', 'department' => 'Sales']);
+        $user = User::factory()->create([
+            'brand_id' => $admin->brand_id, 'role_id' => $role->id, 'is_commission_eligible' => false,
+        ]);
+
+        $this->actingAs($user)->get(route('sales.endorsements.create'))->assertForbidden();
+        $this->post(route('sales.endorsements.store'), $this->payload($service))->assertForbidden();
+        $this->assertDatabaseCount('sales_endorsements', 0);
+    }
 }
