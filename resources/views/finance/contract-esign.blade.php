@@ -34,6 +34,7 @@
                  }
              },
              fieldsForPage(page) {
+                 if (this.documentSigned && this.previewKind === 'pdf') return [];
                  return this.fields.filter((field) => Number(field.page || 1) === Number(page));
              },
              fieldValue(field) {

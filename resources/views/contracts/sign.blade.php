@@ -63,6 +63,7 @@
               signatureModalField: null,
               signatureDraft: '',
               signatureFont: 'esign',
+              signatureImages: @js(old('signature_images', [])),
               signatureStyles: [
                   { key: 'esign', label: 'Signature Style', stack: 'Great Vibes, Allura, Parisienne, cursive' },
                   { key: 'formal', label: 'Formal', stack: 'Edwardian Script ITC, Palace Script MT, cursive' },
@@ -87,6 +88,7 @@
                   return this.fields.filter((field) => Number(field.page || 1) === Number(this.currentPage));
               },
               fieldsForPage(page) {
+                  if (this.documentSigned && this.previewKind === 'pdf') return [];
                   return this.fields.filter((field) => Number(field.page || 1) === Number(page));
               },
               fieldValue(field) {
@@ -144,10 +146,28 @@
                   this.signatureModalOpen = true;
                   this.$nextTick(() => this.$refs.signatureDraftInput?.focus());
               },
-              applySignatureModal() {
+              async applySignatureModal() {
                   if (! this.signatureModalField) return;
 
+                  const field = this.signatureModalField;
                   const value = (this.signatureDraft || this.suggestedSignature(this.signatureModalField)).trim();
+                  const font = `italic 72px ${this.signatureFontStack()}`;
+                  await document.fonts.load(font, value).catch(() => {});
+                  if (this.signatureModalField !== field) return;
+                  const canvas = document.createElement('canvas');
+                  canvas.width = 1000;
+                  canvas.height = 180;
+                  const context = canvas.getContext('2d');
+                  context.fillStyle = 'white';
+                  context.fillRect(0, 0, canvas.width, canvas.height);
+                  context.fillStyle = 'black';
+                  context.font = font;
+                  const size = Math.min(72, 72 * 960 / Math.max(1, context.measureText(value).width));
+                  context.font = `italic ${size}px ${this.signatureFontStack()}`;
+                  context.textAlign = 'center';
+                  context.textBaseline = 'middle';
+                  context.fillText(value, 500, 90);
+                  this.signatureImages[this.signatureModalField.id] = canvas.toDataURL('image/png');
                   this.setFieldValue(this.signatureModalField, value);
 
                   if (this.signatureModalField.type === 'signature') {
@@ -558,6 +578,10 @@
                                x-bind:value="fieldValues[field.id] || ''">
                     </template>
 
+                    <template x-for="field in fields.filter(field => field.type === 'signature' || field.type === 'initials')" :key="`signature-image-${field.id}`">
+                        <input type="hidden" x-bind:name="`signature_images[${field.id}]`" x-bind:value="signatureImages[field.id] || ''">
+                    </template>
+
                     <div class="grid gap-5 sm:grid-cols-2">
                         <label class="block">
                             <span class="text-sm font-semibold text-slate-700">Signer Name</span>
@@ -698,7 +722,12 @@
                             </div>
 
                             <div class="self-center">
-                                <p class="signature-script bg-white px-4 py-3 text-5xl leading-none">{{ $packet['signatureText'] }}</p>
+                                @php($savedSignatureImage = collect($packet['fields'])->firstWhere('type', 'signature')['signatureImage'] ?? null)
+                                @if ($savedSignatureImage)
+                                    <img src="{{ $savedSignatureImage }}" alt="{{ $packet['signatureText'] }}" class="h-auto w-60 bg-white">
+                                @else
+                                    <p class="signature-script bg-white px-4 py-3 text-5xl leading-none">{{ $packet['signatureText'] }}</p>
+                                @endif
                                 <p class="mt-4 text-sm">IP: {{ $packet['signerIp'] ?: '-' }}</p>
                             </div>
                         </div>

@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -177,12 +178,30 @@ class ContractSignatureController extends Controller
             'signature_text' => ['required', 'string', 'max:255'],
             'field_values' => ['nullable', 'array'],
             'field_values.*' => ['nullable', 'string', 'max:1000'],
+            'signature_images' => ['nullable', 'array', 'max:100'],
+            'signature_images.*' => ['nullable', 'string', 'max:100000'],
             'accepted_terms' => ['accepted'],
         ]);
 
         $fieldValues = collect($validated['field_values'] ?? [])
             ->mapWithKeys(fn ($value, $key) => [(string) $key => is_string($value) ? trim($value) : $value])
             ->all();
+
+        $fields = collect($endorsement->contract_esign_fields ?: [])->map(function ($field) use ($validated) {
+            if (! in_array($field['type'] ?? '', ['signature', 'initials'], true)) {
+                return $field;
+            }
+            $image = $validated['signature_images'][$field['id']] ?? null;
+            if (! $image) {
+                return $field;
+            }
+            if (! $this->signaturePngBytes($image)) {
+                throw ValidationException::withMessages(['signature_text' => 'The signature image is invalid. Please apply your signature again.']);
+            }
+            $field['signatureImage'] = $image;
+
+            return $field;
+        })->all();
 
         $endorsement->forceFill([
             'contract_status' => 'signed',
@@ -194,6 +213,7 @@ class ContractSignatureController extends Controller
             'contract_signer_ip' => $request->ip(),
             'contract_signer_user_agent' => substr((string) $request->userAgent(), 0, 1000),
             'contract_esign_field_values' => $fieldValues,
+            'contract_esign_fields' => $fields,
         ])->save();
 
         $this->notifyContractSigned($endorsement->fresh(['agent.team.manager', 'agent.team.teamLeader', 'contractSender']));
@@ -563,7 +583,8 @@ class ContractSignatureController extends Controller
         $fieldOverlayObjects = $this->signatureFieldPdfObjects($endorsement, $objects, $pageRefs, $fontRegularRef, $fontBoldRef, $fontScriptRef, $nextObject);
         $nextObject = $fieldOverlayObjects['nextObject'];
         $certificateSignatureRef = null;
-        $certificateSignatureImage = $this->signatureImagePdfObject($endorsement->contract_signature_text ?: $endorsement->contract_signer_name ?: $endorsement->author_name ?: '', 240, 78);
+        $savedSignature = collect($endorsement->contract_esign_fields ?: [])->firstWhere('type', 'signature');
+        $certificateSignatureImage = $this->signatureImagePdfObject($endorsement->contract_signature_text ?: $endorsement->contract_signer_name ?: $endorsement->author_name ?: '', 240, 78, $savedSignature['signatureImage'] ?? null);
 
         if ($certificateSignatureImage) {
             $certificateSignatureRef = $nextObject++;
@@ -725,7 +746,8 @@ class ContractSignatureController extends Controller
                 $xobjects = [];
 
                 if (($type === 'signature' || $type === 'initials') && $value !== '') {
-                    $signatureImage = $this->signatureImagePdfObject($value, max(90, (int) $fieldWidth - 10), max(24, (int) ($fieldHeight * 0.75)));
+                    $isSignature = $type === 'signature';
+                    $signatureImage = $this->signatureImagePdfObject($value, max(90, (int) $fieldWidth - 10), max(24, (int) ($fieldHeight * 0.55)), $field['signatureImage'] ?? null);
 
                     if ($signatureImage) {
                         $signatureObjectRef = $nextObject++;
@@ -733,10 +755,16 @@ class ContractSignatureController extends Controller
                         $newObjects[$signatureObjectRef] = $signatureImage;
                         $xobjects[$signatureName] = $signatureObjectRef;
                         $imageWidth = max(20, $fieldWidth - 10);
-                        $imageHeight = max(12, min($fieldHeight - 4, $fieldHeight * 0.78));
+                        $imageHeight = max(12, min($fieldHeight - 4, $fieldHeight * ($isSignature ? 0.55 : 0.78)));
                         $imageX = max(0, ($fieldWidth - $imageWidth) / 2);
                         $imageY = max(0, ($fieldHeight - $imageHeight) / 2);
                         $appearance = 'q ' . $this->pdfNumber($imageWidth) . ' 0 0 ' . $this->pdfNumber($imageHeight) . ' ' . $this->pdfNumber($imageX) . ' ' . $this->pdfNumber($imageY) . ' cm /' . $signatureName . ' Do Q';
+                    }
+
+                    if ($isSignature) {
+                        $stampDate = $endorsement->contract_signed_at?->copy()->timezone('America/New_York')->format('m/d/Y @ h:i A') ?: $signedDate;
+                        $appearance .= "\n0 0 0 rg\n" . $this->pdfText('E-Signed by:', 3, (int) max(7, $fieldHeight - 7), 5, 'ESR');
+                        $appearance .= "\n" . $this->pdfText($stampDate, 3, 3, 5, 'ESR');
                     }
                 }
 
@@ -1195,8 +1223,41 @@ class ContractSignatureController extends Controller
         return $resources;
     }
 
-    private function signatureImagePdfObject(string $text, int $width, int $height): ?string
+    private function signaturePngBytes(string $image): ?string
     {
+        if (! str_starts_with($image, 'data:image/png;base64,') || strlen($image) > 100000) {
+            return null;
+        }
+        $bytes = base64_decode(substr($image, strlen('data:image/png;base64,')), true);
+        if ($bytes === false) {
+            return null;
+        }
+        $size = @getimagesizefromstring($bytes);
+
+        return $size && ($size['mime'] ?? '') === 'image/png'
+            && $size[0] >= 1 && $size[0] <= 1600 && $size[1] >= 1 && $size[1] <= 320
+            ? $bytes : null;
+    }
+
+    private function signatureImagePdfObject(string $text, int $width, int $height, ?string $savedImage = null): ?string
+    {
+        if ($savedImage && function_exists('imagecreatefromstring') && ($bytes = $this->signaturePngBytes($savedImage))) {
+            $source = @imagecreatefromstring($bytes);
+            if ($source) {
+                $imageWidth = max(180, $width * 3);
+                $imageHeight = max(54, $height * 3);
+                $image = imagecreatetruecolor($imageWidth, $imageHeight);
+                imagefill($image, 0, 0, imagecolorallocate($image, 255, 255, 255));
+                $scale = min($imageWidth / imagesx($source), $imageHeight / imagesy($source));
+                $drawWidth = (int) round(imagesx($source) * $scale);
+                $drawHeight = (int) round(imagesy($source) * $scale);
+                imagecopyresampled($image, $source, (int) (($imageWidth - $drawWidth) / 2), (int) (($imageHeight - $drawHeight) / 2), 0, 0, $drawWidth, $drawHeight, imagesx($source), imagesy($source));
+                imagedestroy($source);
+
+                return $this->rgbImagePdfObject($image);
+            }
+        }
+
         $text = trim($text);
         $fontPath = $this->signaturePdfFontPath();
 
@@ -1245,6 +1306,13 @@ class ContractSignatureController extends Controller
         $y = (int) max($textHeight + 4, (($imageHeight - $textHeight) / 2) - ($bbox[7] ?? 0));
         imagettftext($image, $fontSize, 0, $x, $y, $ink, $fontPath, $text);
 
+        return $this->rgbImagePdfObject($image);
+    }
+
+    private function rgbImagePdfObject(\GdImage $image): string
+    {
+        $imageWidth = imagesx($image);
+        $imageHeight = imagesy($image);
         $pixels = '';
 
         for ($row = 0; $row < $imageHeight; $row++) {
