@@ -566,6 +566,8 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::get('/rewards/claims', [AdminRewardController::class, 'claims'])->name('rewards.claims');
     Route::put('/rewards/claims/{rewardUnlock}/claimed', [AdminRewardController::class, 'markClaimed'])->name('rewards.claims.mark-claimed');
     Route::delete('/rewards/{reward}', [AdminRewardController::class, 'destroy'])->name('rewards.destroy');
+    Route::get('/rewards/{reward}/edit', [AdminRewardController::class, 'edit'])->name('rewards.edit');
+    Route::put('/rewards/{reward}', [AdminRewardController::class, 'update'])->name('rewards.update');
     Route::put('/rewards/{reward}/media-order', [AdminRewardController::class, 'reorderMedia'])->name('rewards.media-order');
     Route::get('/commission-profiles', [CommissionProfileController::class, 'index'])->name('commission-profiles.index');
     Route::post('/commission-profiles', [CommissionProfileController::class, 'store'])->name('commission-profiles.store');

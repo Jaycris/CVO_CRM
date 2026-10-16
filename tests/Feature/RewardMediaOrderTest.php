@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Reward;
+use App\Models\RewardUnlock;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -52,7 +53,8 @@ class RewardMediaOrderTest extends TestCase
 
         $this->assertSame($order, $reward->fresh()->media->pluck('id')->all());
         $this->assertSame('hotel.jpg', $reward->fresh()->media->first()->original_name);
-        $this->get(route('admin.rewards.index'))->assertOk()->assertSee('Save Photo Order');
+        $this->get(route('admin.rewards.index'))->assertOk()
+            ->assertSee(route('admin.rewards.edit', $reward))->assertDontSee('Save Photo Order');
     }
 
     public function test_partial_duplicate_and_foreign_media_orders_are_rejected_without_changes(): void
@@ -112,5 +114,95 @@ class RewardMediaOrderTest extends TestCase
         Storage::fake('public');
         $this->actingAs($this->admin())->post(route('admin.rewards.store'), $this->uploadPayload())->assertSessionHasNoErrors();
         $this->assertSame(['room.jpg', 'hotel.jpg'], Reward::firstOrFail()->media->pluck('original_name')->all());
+    }
+
+    private function editPayload(): array
+    {
+        return [
+            'title' => 'Updated Hotel Stay', 'accommodation' => 'Two nights for two guests',
+            'requirements' => 'Confirmed payments only', 'requirement_type' => 'sold_mined_leads',
+            'requirement_amount' => 8, 'reward_scope' => 'team', 'audience' => 'lead_generation',
+            'expires_in_days' => 14, 'is_active' => 0,
+        ];
+    }
+
+    public function test_edit_page_prefills_details_and_shows_full_photo_editor(): void
+    {
+        $reward = $this->reward();
+        $this->actingAs($this->admin())->get(route('admin.rewards.edit', $reward))->assertOk()
+            ->assertSee('Edit Reward')->assertSee('Hotel Stay')->assertSee('room.jpg')
+            ->assertSee('Save Changes')->assertSee('Add Photos / Video')
+            ->assertSee('name="media_order[]"', false);
+    }
+
+    public function test_save_changes_updates_all_details_and_order_without_resetting_claims(): void
+    {
+        $admin = $this->admin();
+        $reward = $this->reward();
+        $claim = RewardUnlock::create([
+            'reward_id' => $reward->id, 'user_id' => $admin->id, 'progress_amount' => 15000,
+            'unlocked_at' => now()->subDays(2), 'claim_requested_at' => now()->subDay(), 'claimed_at' => now(),
+        ]);
+        $before = $claim->fresh()->getAttributes();
+        $order = $reward->media->reverse()->map(fn ($item) => 'existing-' . $item->id)->values()->all();
+        $this->actingAs($admin)->put(route('admin.rewards.update', $reward), $this->editPayload() + ['media_order' => $order])
+            ->assertSessionHasNoErrors()->assertRedirect(route('admin.rewards.index'));
+        $this->assertDatabaseHas('rewards', ['id' => $reward->id] + $this->editPayload());
+        $this->assertSame($order, $reward->fresh()->media->map(fn ($item) => 'existing-' . $item->id)->all());
+        $this->assertSame($before, $claim->fresh()->getAttributes());
+    }
+
+    public function test_editor_can_add_remove_and_promote_a_new_upload_to_main(): void
+    {
+        Storage::fake('public');
+        $reward = $this->reward();
+        foreach ($reward->media as $item) Storage::disk('public')->put($item->path, 'original');
+        $ids = $reward->media->pluck('id')->all();
+        $this->actingAs($this->admin())->put(route('admin.rewards.update', $reward), $this->editPayload() + [
+            'media' => [UploadedFile::fake()->image('new-main.jpg')],
+            'remove_media' => [$ids[1]],
+            'media_order' => ['upload-0', 'existing-' . $ids[2], 'existing-' . $ids[0]],
+        ])->assertSessionHasNoErrors();
+        $this->assertSame(['new-main.jpg', 'pool.jpg', 'room.jpg'], $reward->fresh()->media->pluck('original_name')->all());
+        Storage::disk('public')->assertMissing('rewards/hotel.jpg');
+        Storage::disk('public')->assertExists('rewards/room.jpg');
+        Storage::disk('public')->assertExists($reward->fresh()->media->first()->path);
+    }
+
+    public function test_invalid_editor_order_or_foreign_removal_leaves_reward_unchanged(): void
+    {
+        $reward = $this->reward();
+        $other = $this->reward();
+        $ids = $reward->media->pluck('id')->all();
+        $this->actingAs($this->admin());
+        foreach ([
+            ['media_order' => ['existing-' . $ids[0]]],
+            ['media_order' => ['existing-' . $ids[0], 'existing-' . $ids[0], 'existing-' . $ids[2]]],
+            ['remove_media' => [$other->media->first()->id]],
+            ['title' => ''],
+        ] as $invalid) {
+            $this->put(route('admin.rewards.update', $reward), array_replace($this->editPayload(), $invalid))->assertSessionHasErrors();
+            $this->assertSame('Hotel Stay', $reward->fresh()->title);
+            $this->assertSame($ids, $reward->fresh()->media->pluck('id')->all());
+        }
+    }
+
+    public function test_editor_rejects_more_than_eight_total_media(): void
+    {
+        Storage::fake('public');
+        $reward = $this->reward();
+        $this->actingAs($this->admin())->put(route('admin.rewards.update', $reward), $this->editPayload() + [
+            'media' => array_map(fn ($i) => UploadedFile::fake()->image("extra-{$i}.jpg"), range(1, 6)),
+        ])->assertSessionHasErrors('media_order');
+        $this->assertSame('Hotel Stay', $reward->fresh()->title);
+        $this->assertCount(3, $reward->fresh()->media);
+    }
+
+    public function test_edit_and_update_are_restricted_to_reward_managers(): void
+    {
+        $reward = $this->reward();
+        $this->actingAs(User::factory()->create())->get(route('admin.rewards.edit', $reward))->assertForbidden();
+        $this->put(route('admin.rewards.update', $reward), $this->editPayload())->assertForbidden();
+        $this->assertSame('Hotel Stay', $reward->fresh()->title);
     }
 }

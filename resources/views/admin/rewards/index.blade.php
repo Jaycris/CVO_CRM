@@ -224,6 +224,8 @@
                             @endif
                         </div>
 
+                        <div class="flex items-start gap-2">
+                        <a href="{{ route('admin.rewards.edit', $reward) }}" class="inline-flex items-center rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-slate-50 dark:border-zinc-700 dark:text-emerald-300">Edit</a>
                         <form method="POST" action="{{ route('admin.rewards.destroy', $reward) }}" onsubmit="return confirm('Remove this reward?');">
                             @csrf
                             @method('DELETE')
@@ -231,22 +233,7 @@
                                 Delete
                             </button>
                         </form>
-                        @if ($reward->media->isNotEmpty())
-                            @php($orderedMedia = $reward->media->map(fn ($item) => [
-                                'id' => $item->id,
-                                'name' => $item->original_name ?: 'Reward media',
-                                'type' => $item->type,
-                                'url' => asset('storage/' . $item->path),
-                            ])->values()->all())
-                            <form method="POST" action="{{ route('admin.rewards.media-order', ['reward' => $reward, 'page' => $rewards->currentPage()]) }}" class="min-w-0 lg:col-span-3">
-                                @csrf
-                                @method('PUT')
-                                @include('admin.rewards.partials.media-order', ['uploadMode' => false, 'mediaItems' => $orderedMedia])
-                                <div class="mt-3 flex justify-end">
-                                    <button type="submit" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800">Save Photo Order</button>
-                                </div>
-                            </form>
-                        @endif
+                        </div>
                     </div>
                 @empty
                     <div class="px-6 py-12 text-center text-sm text-slate-500 dark:text-zinc-400">

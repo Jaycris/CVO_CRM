@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class RewardController extends Controller
@@ -63,7 +64,100 @@ class RewardController extends Controller
     {
         $this->ensureAdmin($request);
 
-        $validated = $request->validate([
+        $validated = $request->validate($this->rewardRules() + [
+            'upload_order' => ['sometimes', 'array', 'size:' . count($request->file('media', []))],
+            'upload_order.*' => ['required', 'integer', 'distinct', Rule::in(array_keys($request->file('media', [])))],
+        ]);
+
+        $reward = Reward::create([
+            ...collect($validated)->except(['media', 'upload_order'])->all(),
+            'created_by' => $request->user()->id,
+            'is_active' => $request->boolean('is_active'),
+        ]);
+
+        $this->storeMedia($reward, $request);
+
+        return redirect()
+            ->route('admin.rewards.index')
+            ->with('success', 'Reward created successfully.');
+    }
+
+    public function edit(Request $request, Reward $reward): View
+    {
+        $this->ensureAdmin($request);
+
+        return view('admin.rewards.edit', ['reward' => $reward->load('media')]);
+    }
+
+    public function update(Request $request, Reward $reward): RedirectResponse
+    {
+        $this->ensureAdmin($request);
+        $createdPaths = [];
+        $removedPaths = [];
+
+        try {
+            DB::transaction(function () use ($request, $reward, &$createdPaths, &$removedPaths) {
+                $reward = Reward::whereKey($reward->id)->lockForUpdate()->firstOrFail();
+                $media = $reward->media()->get()->keyBy('id');
+                $files = $request->file('media', []);
+                $allowed = $media->keys()->map(fn ($id) => 'existing-' . $id)
+                    ->merge(collect(array_keys($files))->map(fn ($index) => 'upload-' . $index))->all();
+                $validated = $request->validate($this->rewardRules() + [
+                    'remove_media' => ['sometimes', 'array'],
+                    'remove_media.*' => ['required', 'integer', 'distinct', Rule::exists('reward_media', 'id')->where('reward_id', $reward->id)],
+                    'media_order' => ['sometimes', 'array', 'max:8'],
+                    'media_order.*' => ['required', 'string', 'distinct', Rule::in($allowed)],
+                ]);
+                $removedIds = array_map('intval', $validated['remove_media'] ?? []);
+                $retained = $media->reject(fn ($item) => in_array($item->id, $removedIds, true));
+                $expected = $retained->keys()->map(fn ($id) => 'existing-' . $id)
+                    ->merge(collect(array_keys($files))->map(fn ($index) => 'upload-' . $index))->all();
+                $order = array_values($validated['media_order'] ?? $expected);
+                $sortedExpected = $expected;
+                $sortedOrder = $order;
+                sort($sortedExpected);
+                sort($sortedOrder);
+
+                if (count($expected) > 8 || $sortedExpected !== $sortedOrder) {
+                    throw ValidationException::withMessages(['media_order' => 'Keep up to 8 photos or videos, with each item included exactly once. Reload the editor if the reward was changed elsewhere.']);
+                }
+
+                $reward->fill(collect($validated)->except(['media', 'media_order', 'remove_media'])->all());
+                $reward->is_active = $request->boolean('is_active');
+                $reward->save();
+
+                foreach ($order as $position => $key) {
+                    if (str_starts_with($key, 'existing-')) {
+                        $retained->get((int) substr($key, 9))->update(['sort_order' => $position]);
+                    } else {
+                        $file = $files[(int) substr($key, 7)];
+                        $path = $file->store('rewards', 'public');
+                        $createdPaths[] = $path;
+                        $reward->media()->create([
+                            'type' => str_starts_with((string) $file->getMimeType(), 'video/') ? 'video' : 'image',
+                            'path' => $path, 'original_name' => $file->getClientOriginalName(), 'sort_order' => $position,
+                        ]);
+                    }
+                }
+
+                foreach ($media->only($removedIds) as $item) {
+                    $removedPaths[] = $item->path;
+                    $item->delete();
+                }
+            });
+        } catch (\Throwable $exception) {
+            Storage::disk('public')->delete($createdPaths);
+            throw $exception;
+        }
+
+        Storage::disk('public')->delete($removedPaths);
+
+        return redirect()->route('admin.rewards.index')->with('success', 'Reward updated successfully.');
+    }
+
+    private function rewardRules(): array
+    {
+        return [
             'title' => ['required', 'string', 'max:255'],
             'accommodation' => ['nullable', 'string', 'max:1000'],
             'requirements' => ['nullable', 'string', 'max:1000'],
@@ -82,23 +176,10 @@ class RewardController extends Controller
                 Reward::AUDIENCE_PRODUCTION,
             ])],
             'expires_in_days' => ['nullable', 'integer', 'min:1', 'max:365'],
+            'is_active' => ['sometimes', 'boolean'],
             'media' => ['nullable', 'array', 'max:8'],
             'media.*' => ['file', 'mimes:jpg,jpeg,png,webp,gif,mp4,mov,webm', 'max:51200'],
-            'upload_order' => ['sometimes', 'array', 'size:' . count($request->file('media', []))],
-            'upload_order.*' => ['required', 'integer', 'distinct', Rule::in(array_keys($request->file('media', [])))],
-        ]);
-
-        $reward = Reward::create([
-            ...collect($validated)->except(['media', 'upload_order'])->all(),
-            'created_by' => $request->user()->id,
-            'is_active' => $request->boolean('is_active'),
-        ]);
-
-        $this->storeMedia($reward, $request);
-
-        return redirect()
-            ->route('admin.rewards.index')
-            ->with('success', 'Reward created successfully.');
+        ];
     }
 
     public function destroy(Request $request, Reward $reward): RedirectResponse

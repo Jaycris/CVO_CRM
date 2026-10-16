@@ -22,7 +22,7 @@
                x-on:change="loadFiles($event)"
                class="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm shadow-sm file:mr-4 file:rounded-lg file:border-0 file:bg-zinc-950 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-black dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
     @endif
-    <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" x-show="items.length" x-cloak>
+    <div class="mt-3 grid gap-3" style="grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));" x-show="items.length" x-cloak>
         <template x-for="(item, index) in items" :key="item.id">
             <div class="min-w-0 overflow-hidden rounded-lg border border-slate-200 dark:border-zinc-700">
                 <input type="hidden" name="{{ ($uploadMode ?? false) ? 'upload_order[]' : 'media_order[]' }}" :value="item.id">
