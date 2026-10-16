@@ -31,13 +31,18 @@ class CommissionSlipController extends Controller
             'agent' => ['nullable', 'string', 'max:50'],
             'hris_employee_id' => ['nullable', 'string', 'max:50'],
             'month' => ['nullable', 'date_format:Y-m'],
+            'from' => ['required_with:to', 'date_format:Y-m-d'],
+            'to' => ['required_with:from', 'date_format:Y-m-d', 'after_or_equal:from'],
         ]);
 
         $hrisEmployeeId = trim((string) ($validated['hris_employee_id'] ?? $validated['agent'] ?? ''));
 
         abort_if($hrisEmployeeId === '', 422, 'The HRIS employee ID is required.');
 
-        $month = Carbon::createFromFormat('!Y-m', $validated['month'] ?? now()->format('Y-m'))->startOfMonth();
+        $referenceMonth = $validated['month'] ?? Carbon::parse($validated['from'] ?? now())->format('Y-m');
+        $month = Carbon::createFromFormat('!Y-m', $referenceMonth)->startOfMonth();
+        $from = $validated['from'] ?? $month->toDateString();
+        $to = $validated['to'] ?? $month->copy()->endOfMonth()->toDateString();
         $agent = User::query()
             ->with(['brand', 'team', 'commissionProfile.rules'])
             ->where('hris_employee_id', $hrisEmployeeId)
@@ -48,7 +53,8 @@ class CommissionSlipController extends Controller
         $activities = SalesActivity::query()
             ->with(['brand', 'agent', 'frankieAgent', 'service'])
             ->where('payment_status', 'Payment Success')
-            ->whereBetween('sold_date', [$month->toDateString(), $month->copy()->endOfMonth()->toDateString()])
+            ->whereDate('sold_date', '>=', $from)
+            ->whereDate('sold_date', '<=', $to)
             ->where(function ($query) use ($agent) {
                 $query->where('agent_id', $agent->id)
                     ->orWhere('frankie_agent_id', $agent->id);
@@ -69,6 +75,10 @@ class CommissionSlipController extends Controller
         $agentTargetAmount = $isCommissionEligible ? (float) $selectedTargets->sum('amount') : 0.0;
         $rows = CommissionBalances::apply(SalesMtdCalculator::statementRows($activities, $agentTargetRows), $month, null, null, $agent->id)
             ->where('agent_id', $agent->id)
+            // Balance adjustments also have dates and must not leak outside this payroll run.
+            ->filter(fn (array $row) => $row['activity']->sold_date
+                && $row['activity']->sold_date->toDateString() >= $from
+                && $row['activity']->sold_date->toDateString() <= $to)
             ->sortByDesc(fn (array $row) => $row['activity']->sold_date?->timestamp ?? 0)
             ->values();
 
@@ -84,6 +94,8 @@ class CommissionSlipController extends Controller
                 'is_commission_threshold_exempt' => (bool) $agent->is_commission_threshold_exempt,
             ],
             'month' => $month->format('Y-m'),
+            'from' => $from,
+            'to' => $to,
             'hris_employee_id' => $agent->hris_employee_id,
             'is_commission_eligible' => $isCommissionEligible,
             'agent_target' => round($agentTargetAmount, 2),
@@ -118,6 +130,7 @@ class CommissionSlipController extends Controller
             'php_total' => round((float) $rows->sum('php_total'), 2),
             'card_payment_hold_percent' => round(AppSetting::cardPaymentHoldPercent(), 2),
             'card_payment_hold_amount' => round((float) $rows->sum('hold_amount'), 2),
+            'card_hold_amount' => round((float) $rows->sum('hold_amount'), 2),
             'net_commission' => round((float) $rows->sum('net_commission'), 2),
         ];
     }
