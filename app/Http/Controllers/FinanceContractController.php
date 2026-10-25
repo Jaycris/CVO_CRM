@@ -11,6 +11,7 @@ use App\Support\BrandScope;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -294,39 +295,44 @@ class FinanceContractController extends Controller
         ]);
 
         $endorsedCount = 0;
+        $existingCount = 0;
         $notifications = [];
 
-        SalesEndorsement::with('successfulPaymentRecord')
-            ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
-            ->whereIn('id', $validated['endorsement_ids'])
-            ->get()
-            ->each(function (SalesEndorsement $endorsement) use ($request, $validated, &$endorsedCount, &$notifications) {
-                $fulfillmentOfficer = $this->leastLoadedFulfillmentOfficer($endorsement->brand_id);
-                $project = ProductionProject::withTrashed()
-                    ->firstOrNew(['sales_endorsement_id' => $endorsement->id]);
+        DB::transaction(function () use ($request, $validated, &$endorsedCount, &$existingCount, &$notifications) {
+            SalesEndorsement::query()
+                ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
+                ->whereIn('id', $validated['endorsement_ids'])
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->each(function (SalesEndorsement $endorsement) use ($request, $validated, &$endorsedCount, &$existingCount, &$notifications) {
+                    // Installment payments must not restart or reassign an existing project.
+                    if (ProductionProject::withTrashed()->where('sales_endorsement_id', $endorsement->id)->exists()) {
+                        $existingCount++;
+                        return;
+                    }
 
-                if ($project->trashed()) {
-                    $project->restore();
-                }
+                    $fulfillmentOfficer = $this->leastLoadedFulfillmentOfficer($endorsement->brand_id);
+                    ProductionProject::create([
+                        'sales_endorsement_id' => $endorsement->id,
+                        'brand_id' => $endorsement->brand_id ?? BrandScope::userBrandId($request->user()),
+                        'tracker_type' => $validated['tracker_type'],
+                        'fulfillment_officer_id' => $fulfillmentOfficer?->id,
+                        'endorsed_by' => $request->user()->id,
+                        'endorsed_at' => now(),
+                        'endorsement_notes' => $validated['endorsement_notes'] ?? null,
+                        'status' => 'pending',
+                    ]);
 
-                $project->fill([
-                    'brand_id' => $endorsement->brand_id ?? BrandScope::userBrandId($request->user()),
-                    'tracker_type' => $validated['tracker_type'],
-                    'fulfillment_officer_id' => $fulfillmentOfficer?->id,
-                    'endorsed_by' => $request->user()->id,
-                    'endorsed_at' => now(),
-                    'endorsement_notes' => $validated['endorsement_notes'] ?? null,
-                    'status' => 'pending',
-                ])->save();
+                    $endorsedCount++;
 
-                $endorsedCount++;
-
-                if ($fulfillmentOfficer && $this->userCanReceiveProductionNotification($fulfillmentOfficer)) {
-                    $notifications[$fulfillmentOfficer->id]['user'] = $fulfillmentOfficer;
-                    $notifications[$fulfillmentOfficer->id]['tracker'] = $validated['tracker_type'];
-                    $notifications[$fulfillmentOfficer->id]['count'] = ($notifications[$fulfillmentOfficer->id]['count'] ?? 0) + 1;
-                }
-            });
+                    if ($fulfillmentOfficer && $this->userCanReceiveProductionNotification($fulfillmentOfficer)) {
+                        $notifications[$fulfillmentOfficer->id]['user'] = $fulfillmentOfficer;
+                        $notifications[$fulfillmentOfficer->id]['tracker'] = $validated['tracker_type'];
+                        $notifications[$fulfillmentOfficer->id]['count'] = ($notifications[$fulfillmentOfficer->id]['count'] ?? 0) + 1;
+                    }
+                });
+        });
 
         collect($notifications)->each(function (array $group) {
             $group['user']->notify(new ProductionProjectsEndorsedNotification(
@@ -338,10 +344,13 @@ class FinanceContractController extends Controller
         return redirect()
             ->route('finance.contracts.index', ['status' => $validated['status'] ?? 'all'])
             ->with(
-                $endorsedCount > 0 ? 'success' : 'error',
+                $endorsedCount > 0 || $existingCount > 0 ? 'success' : 'error',
                 $endorsedCount > 0
                     ? "{$endorsedCount} project(s) endorsed to Production successfully."
-                    : 'No selected contract records were endorsed to Production.'
+                        . ($existingCount > 0 ? " {$existingCount} already-linked project(s) left unchanged." : '')
+                    : ($existingCount > 0
+                        ? 'Selected contracts already have production projects. Existing assignments, tasks, and progress were left unchanged.'
+                        : 'No selected contract records were endorsed to Production.')
             );
     }
 
