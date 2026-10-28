@@ -124,6 +124,10 @@
                         <h2 class="font-semibold text-slate-900 dark:text-zinc-100">Agent MTD Directory</h2>
                         <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Agent sales totals, service/markup split, commission, and target progress for {{ $month->format('F Y') }}.</p>
                     </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                    @if ($isAdmin)
+                        <a href="{{ route('admin.sales-mtd-deductions.index', ['month' => $month->format('Y-m')]) }}" class="inline-flex h-11 items-center rounded-lg border border-slate-200 px-4 text-sm font-semibold text-emerald-700 dark:border-zinc-700 dark:text-emerald-300">MTD Deductions</a>
+                    @endif
                     <form method="GET" class="flex flex-wrap items-center gap-2">
                         <input type="text" name="month" value="{{ $month->format('Y-m') }}" placeholder="YYYY-MM"
                                class="h-11 w-32 rounded-xl border border-slate-300 bg-white px-4 text-sm shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
@@ -141,6 +145,7 @@
                             Search
                         </button>
                     </form>
+                    </div>
                 </div>
             </div>
 
@@ -189,7 +194,13 @@
                                         } }}
                                     </span>
                                 </td>
-                                <td class="whitespace-nowrap px-5 py-5 font-bold text-slate-900 dark:text-zinc-100">{{ $money($row['mtd']) }}</td>
+                                <td class="whitespace-nowrap px-5 py-5 font-bold text-slate-900 dark:text-zinc-100">
+                                    {{ $money($row['mtd']) }}
+                                    @if (($row['mtd_deduction'] ?? 0) > 0)
+                                        <p class="mt-1 text-xs font-medium text-slate-500 dark:text-zinc-400">Gross {{ $money($row['gross_mtd']) }}</p>
+                                        <p class="mt-1 text-xs font-semibold text-rose-600 dark:text-rose-300">Deduction -{{ $money($row['mtd_deduction']) }}</p>
+                                    @endif
+                                </td>
                                 <td class="px-5 py-5 font-semibold text-slate-700 dark:text-zinc-200">
                                     {{ $money($row['service_mtd']) }}
                                     @if (($row['threshold_applied_service_amount'] ?? 0) > 0)
@@ -213,7 +224,7 @@
                                             <span>{{ number_format($row['percent'], 2) }}%</span>
                                         </div>
                                         <div class="mt-2 h-2 rounded-full bg-slate-100 dark:bg-zinc-800">
-                                            <div class="h-2 rounded-full bg-[var(--brand-primary)]" style="width: {{ min($row['percent'], 100) }}%;"></div>
+                                            <div class="h-2 rounded-full bg-[var(--brand-primary)]" style="width: {{ max(0, min($row['percent'], 100)) }}%;"></div>
                                         </div>
                                     </div>
                                 </td>

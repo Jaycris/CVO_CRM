@@ -148,6 +148,8 @@ class SalesPerformanceController extends Controller
                 'sales_team_name' => $isSalesTeamAgent ? $agent->team?->name : null,
                 'work_type' => $agent->work_type,
                 'mtd' => $mtd,
+                'gross_mtd' => (float) ($credit['gross_mtd'] ?? $mtd),
+                'mtd_deduction' => (float) ($credit['mtd_deduction'] ?? 0),
                 'service_mtd' => (float) $credit['service_mtd'],
                 'markup_mtd' => (float) $credit['markup_mtd'],
                 'commissionable_service_mtd' => (float) ($credit['commissionable_service_mtd'] ?? 0),
@@ -174,10 +176,10 @@ class SalesPerformanceController extends Controller
             ];
         })->filter(function (array $row) use ($canViewAllRows, $user) {
             if ($canViewAllRows) {
-                return $row['is_commission_eligible'] || $row['mtd'] > 0;
+                return $row['is_commission_eligible'] || $row['mtd'] != 0 || $row['mtd_deduction'] > 0;
             }
 
-            return $row['mtd'] > 0 || (int) $row['id'] === (int) $user?->id;
+            return $row['mtd'] != 0 || $row['mtd_deduction'] > 0 || (int) $row['id'] === (int) $user?->id;
         })->sort(function (array $first, array $second) {
             $mtdComparison = $second['mtd'] <=> $first['mtd'];
 
@@ -202,7 +204,7 @@ class SalesPerformanceController extends Controller
                 return [
                     'id' => $team->id,
                     'name' => $team->name,
-                    'mtd' => (float) $memberIds->sum(fn ($agentId) => (float) ($summary['agentCredits']->get($agentId)['mtd'] ?? 0)),
+                    'mtd' => (float) $memberIds->sum(fn ($agentId) => (float) ($summary['agentCredits']->get($agentId)['gross_mtd'] ?? $summary['agentCredits']->get($agentId)['mtd'] ?? 0)),
                     'target' => (float) ($teamTargets->get($team->id)?->amount ?? 0),
                     'members' => $memberIds->count(),
                 ];

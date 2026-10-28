@@ -6,6 +6,7 @@ use App\Models\AppSetting;
 use App\Models\Brand;
 use App\Models\CommissionProfile;
 use App\Models\SalesActivity;
+use App\Models\SalesMtdDeduction;
 use App\Models\SalesTarget;
 use App\Models\Service;
 use App\Models\User;
@@ -111,29 +112,53 @@ class SalesMtdCalculator
         $creditRows = CommissionBalances::apply(self::statementRows($activities, $agentTargetRows), $monthStart, $user, $brandId, null, $salesBrandsOnly, $includeUserCreditsAcrossBrands);
         $exchangeRate = AppSetting::commissionExchangeRate();
         $cardHoldPercent = AppSetting::cardPaymentHoldPercent();
-        $agentCredits = $creditRows
-            ->groupBy('agent_id')
-            ->map(fn (Collection $rows) => [
-                'mtd' => (float) $rows->sum('amount'),
-                'service_mtd' => (float) $rows->sum('service_amount'),
-                'commissionable_service_mtd' => (float) $rows->sum('commissionable_service_amount'),
-                'commissionable_markup_mtd' => (float) $rows->sum('commissionable_markup_amount'),
-                'threshold_applied_amount' => (float) $rows->sum('threshold_applied_amount'),
-                'threshold_applied_service_amount' => (float) $rows->sum('threshold_applied_service_amount'),
-                'threshold_applied_markup_amount' => (float) $rows->sum('threshold_applied_markup_amount'),
-                'markup_mtd' => (float) $rows->sum('markup_amount'),
-                'service_commission' => (float) $rows->sum('service_commission'),
-                'markup_commission' => (float) $rows->sum('markup_commission'),
-                'usd_total' => (float) $rows->sum('usd_total'),
-                'php_total' => (float) $rows->sum('php_total'),
-                'exchange_rate' => $exchangeRate,
-                'card_payment_hold_percent' => $cardHoldPercent,
-                'hold_amount' => (float) $rows->sum('hold_amount'),
-                'net_commission' => (float) $rows->sum('net_commission'),
-                'service_commission_percent' => (float) ($rows->last(fn ($row) => $row['activity']->activity_type !== 'commission_adjustment')['service_commission_percent'] ?? self::SERVICE_RATE_LOW),
-                'markup_commission_percent' => (float) ($rows->last(fn ($row) => $row['activity']->activity_type !== 'commission_adjustment')['markup_commission_percent'] ?? 50),
-                'commission_profile_name' => (string) ($rows->last(fn ($row) => $row['activity']->activity_type !== 'commission_adjustment')['commission_profile_name'] ?? 'Default Service Tiers'),
-            ]);
+        $deductions = Schema::hasTable('sales_mtd_deductions')
+            ? SalesMtdDeduction::query()
+                ->whereDate('effective_month', $monthStart->toDateString())->whereNull('voided_at')
+                ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
+                ->when($salesBrandsOnly && ! $brandId, fn ($query) => $query->whereIn('brand_id', $salesBrandIds))
+                ->when(! $brandId && $user, function ($query) use ($user, $includeUserCreditsAcrossBrands) {
+                    $query->where(function ($query) use ($user, $includeUserCreditsAcrossBrands) {
+                        BrandScope::apply($query, $user);
+                        if ($includeUserCreditsAcrossBrands) {
+                            $query->orWhere('agent_id', $user->id);
+                        }
+                    });
+                })
+                ->get()->groupBy('agent_id')->map->sum('amount')
+            : collect();
+        $groupedCredits = $creditRows->groupBy('agent_id');
+        // Apply MTD-only deductions after calculating commissions from the original sales.
+        $agentCredits = $groupedCredits->keys()->merge($deductions->keys())->unique()
+            ->mapWithKeys(function ($agentId) use ($groupedCredits, $deductions, $exchangeRate, $cardHoldPercent) {
+                $rows = $groupedCredits->get($agentId, collect());
+                $grossMtd = (float) $rows->sum('amount');
+                $deduction = (float) $deductions->get($agentId, 0);
+
+                return [$agentId => [
+                    'mtd' => round($grossMtd - $deduction, 2),
+                    'gross_mtd' => $grossMtd,
+                    'mtd_deduction' => $deduction,
+                    'service_mtd' => (float) $rows->sum('service_amount'),
+                    'commissionable_service_mtd' => (float) $rows->sum('commissionable_service_amount'),
+                    'commissionable_markup_mtd' => (float) $rows->sum('commissionable_markup_amount'),
+                    'threshold_applied_amount' => (float) $rows->sum('threshold_applied_amount'),
+                    'threshold_applied_service_amount' => (float) $rows->sum('threshold_applied_service_amount'),
+                    'threshold_applied_markup_amount' => (float) $rows->sum('threshold_applied_markup_amount'),
+                    'markup_mtd' => (float) $rows->sum('markup_amount'),
+                    'service_commission' => (float) $rows->sum('service_commission'),
+                    'markup_commission' => (float) $rows->sum('markup_commission'),
+                    'usd_total' => (float) $rows->sum('usd_total'),
+                    'php_total' => (float) $rows->sum('php_total'),
+                    'exchange_rate' => $exchangeRate,
+                    'card_payment_hold_percent' => $cardHoldPercent,
+                    'hold_amount' => (float) $rows->sum('hold_amount'),
+                    'net_commission' => (float) $rows->sum('net_commission'),
+                    'service_commission_percent' => (float) ($rows->last(fn ($row) => $row['activity']->activity_type !== 'commission_adjustment')['service_commission_percent'] ?? self::SERVICE_RATE_LOW),
+                    'markup_commission_percent' => (float) ($rows->last(fn ($row) => $row['activity']->activity_type !== 'commission_adjustment')['markup_commission_percent'] ?? 50),
+                    'commission_profile_name' => (string) ($rows->last(fn ($row) => $row['activity']->activity_type !== 'commission_adjustment')['commission_profile_name'] ?? 'Default Service Tiers'),
+                ]];
+            });
 
         $dashboardTargets = self::dashboardTargetRows($targets, $brandId, $user);
         $globalMtd = $creditRows->sum('amount');

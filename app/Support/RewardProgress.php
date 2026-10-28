@@ -22,7 +22,7 @@ class RewardProgress
 
     public static function visibleFor(User $user, array $summary, ?int $limit = null): Collection
     {
-        $individualMtd = (float) data_get($summary, "agentCredits.{$user->id}.mtd", 0);
+        $individualMtd = (float) data_get($summary, "agentCredits.{$user->id}.gross_mtd", data_get($summary, "agentCredits.{$user->id}.mtd", 0));
         $teamMtd = (float) data_get($summary, 'global.mtd', 0);
         $periodMonth = self::currentPeriodMonth();
 

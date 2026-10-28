@@ -53,6 +53,7 @@ use App\Http\Controllers\Admin\CommissionProfileController;
 use App\Http\Controllers\Admin\CommissionSettingController;
 use App\Http\Controllers\Admin\HrisEmployeeLookupController;
 use App\Http\Controllers\Admin\SystemSettingController;
+use App\Http\Controllers\Admin\SalesMtdDeductionController;
 use App\Http\Controllers\Admin\AnnouncementController as AdminAnnouncementController;
 
 
@@ -290,7 +291,7 @@ Route::get('/dashboard', function () {
         $homeTeamSalesMtdSnapshots = $salesDashboardTeams
             ->map(function (Team $team) use ($homeAgentCredits, $homeTeamTargets) {
                 $memberIds = $team->members->pluck('id');
-                $mtd = (float) $memberIds->sum(fn ($agentId) => (float) ($homeAgentCredits->get($agentId)['mtd'] ?? 0));
+                $mtd = (float) $memberIds->sum(fn ($agentId) => (float) ($homeAgentCredits->get($agentId)['gross_mtd'] ?? $homeAgentCredits->get($agentId)['mtd'] ?? 0));
                 $target = (float) ($homeTeamTargets->get($team->id)?->amount ?? 0);
                 $remaining = max($target - $mtd, 0);
 
@@ -554,6 +555,9 @@ Route::middleware('auth')->group(function () {
 });
 
 Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
+    Route::get('/sales-mtd-deductions', [SalesMtdDeductionController::class, 'index'])->name('sales-mtd-deductions.index');
+    Route::post('/sales-mtd-deductions', [SalesMtdDeductionController::class, 'store'])->name('sales-mtd-deductions.store');
+    Route::post('/sales-mtd-deductions/{deduction}/void', [SalesMtdDeductionController::class, 'void'])->name('sales-mtd-deductions.void');
     Route::get('/brands', [BrandController::class, 'index'])->name('brands.index');
     Route::post('/brands', [BrandController::class, 'store'])->name('brands.store');
     Route::put('/brands/{brand}', [BrandController::class, 'update'])->name('brands.update');

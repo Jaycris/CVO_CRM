@@ -26,7 +26,7 @@ class RewardController extends Controller
             $user?->department === 'Sales'
         );
 
-        $individualMtd = (float) data_get($summary, "agentCredits.{$user?->id}.mtd", 0);
+        $individualMtd = (float) data_get($summary, "agentCredits.{$user?->id}.gross_mtd", data_get($summary, "agentCredits.{$user?->id}.mtd", 0));
         $teamMtd = (float) data_get($summary, 'global.mtd', 0);
         $rewards = RewardProgress::visibleFor($user, $summary);
 
@@ -104,7 +104,7 @@ class RewardController extends Controller
         RewardProgress::attachProgress(
             $reward,
             $user,
-            (float) data_get($summary, "agentCredits.{$user->id}.mtd", 0),
+            (float) data_get($summary, "agentCredits.{$user->id}.gross_mtd", data_get($summary, "agentCredits.{$user->id}.mtd", 0)),
             (float) data_get($summary, 'global.mtd', 0),
         );
 

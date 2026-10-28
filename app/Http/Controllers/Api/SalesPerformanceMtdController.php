@@ -96,6 +96,8 @@ class SalesPerformanceMtdController extends Controller
                     },
                     'is_commission_eligible' => $isCommissionEligible,
                     'mtd' => round($mtd, 2),
+                    'gross_mtd' => round((float) ($credit['gross_mtd'] ?? $mtd), 2),
+                    'mtd_deduction' => round((float) ($credit['mtd_deduction'] ?? 0), 2),
                     'service_mtd' => round((float) $credit['service_mtd'], 2),
                     'commissionable_service_mtd' => round((float) ($credit['commissionable_service_mtd'] ?? 0), 2),
                     'threshold_applied_amount' => round((float) ($credit['threshold_applied_amount'] ?? 0), 2),
@@ -121,7 +123,7 @@ class SalesPerformanceMtdController extends Controller
                     'net_commission' => round((float) ($credit['net_commission'] ?? 0), 2),
                 ];
             })
-            ->filter(fn (array $row) => $row['is_commission_eligible'] || $row['mtd'] > 0)
+            ->filter(fn (array $row) => $row['is_commission_eligible'] || $row['mtd'] != 0 || $row['mtd_deduction'] > 0)
             ->values();
 
         return response()->json([
@@ -135,6 +137,8 @@ class SalesPerformanceMtdController extends Controller
                 'hris_employee_id',
                 'work_type',
                 'mtd',
+                'gross_mtd',
+                'mtd_deduction',
                 'service_mtd',
                 'commissionable_service_mtd',
                 'markup_mtd',
