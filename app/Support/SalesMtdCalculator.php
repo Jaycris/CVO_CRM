@@ -6,7 +6,6 @@ use App\Models\AppSetting;
 use App\Models\Brand;
 use App\Models\CommissionProfile;
 use App\Models\SalesActivity;
-use App\Models\SalesMtdDeduction;
 use App\Models\SalesTarget;
 use App\Models\Service;
 use App\Models\User;
@@ -43,7 +42,8 @@ class SalesMtdCalculator
         $activities = SalesActivity::query()
             ->with($activityRelations)
             ->where('payment_status', 'Payment Success')
-            ->whereBetween('sold_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
+            ->whereDate('sold_date', '>=', $monthStart->toDateString())
+            ->whereDate('sold_date', '<=', $monthEnd->toDateString())
             ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
             ->when($salesBrandsOnly && ! $brandId, function ($query) use ($salesBrandIds) {
                 if ($salesBrandIds === []) {
@@ -109,34 +109,20 @@ class SalesMtdCalculator
 
         $agentTargetRows = self::agentTargetRows($targets);
 
-        $creditRows = CommissionBalances::apply(self::statementRows($activities, $agentTargetRows), $monthStart, $user, $brandId, null, $salesBrandsOnly, $includeUserCreditsAcrossBrands);
+        $grossRows = self::statementRows($activities, $agentTargetRows);
+        $deductions = SalesMtdDeductions::entries($monthStart, $user, $brandId, null, $salesBrandsOnly, $includeUserCreditsAcrossBrands);
+        $creditRows = CommissionBalances::apply(self::withMtdDeductions($grossRows, $agentTargetRows, $deductions), $monthStart, $user, $brandId, null, $salesBrandsOnly, $includeUserCreditsAcrossBrands);
         $exchangeRate = AppSetting::commissionExchangeRate();
         $cardHoldPercent = AppSetting::cardPaymentHoldPercent();
-        $deductions = Schema::hasTable('sales_mtd_deductions')
-            ? SalesMtdDeduction::query()
-                ->whereDate('effective_month', $monthStart->toDateString())->whereNull('voided_at')
-                ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
-                ->when($salesBrandsOnly && ! $brandId, fn ($query) => $query->whereIn('brand_id', $salesBrandIds))
-                ->when(! $brandId && $user, function ($query) use ($user, $includeUserCreditsAcrossBrands) {
-                    $query->where(function ($query) use ($user, $includeUserCreditsAcrossBrands) {
-                        BrandScope::apply($query, $user);
-                        if ($includeUserCreditsAcrossBrands) {
-                            $query->orWhere('agent_id', $user->id);
-                        }
-                    });
-                })
-                ->get()->groupBy('agent_id')->map->sum('amount')
-            : collect();
         $groupedCredits = $creditRows->groupBy('agent_id');
-        // Apply MTD-only deductions after calculating commissions from the original sales.
-        $agentCredits = $groupedCredits->keys()->merge($deductions->keys())->unique()
-            ->mapWithKeys(function ($agentId) use ($groupedCredits, $deductions, $exchangeRate, $cardHoldPercent) {
+        $agentCredits = $groupedCredits->keys()
+            ->mapWithKeys(function ($agentId) use ($groupedCredits, $exchangeRate, $cardHoldPercent) {
                 $rows = $groupedCredits->get($agentId, collect());
-                $grossMtd = (float) $rows->sum('amount');
-                $deduction = (float) $deductions->get($agentId, 0);
+                $grossMtd = (float) $rows->sum(fn ($row) => $row['gross_amount'] ?? $row['amount']);
+                $deduction = (float) $rows->sum('mtd_deduction');
 
                 return [$agentId => [
-                    'mtd' => round($grossMtd - $deduction, 2),
+                    'mtd' => round((float) $rows->sum('amount'), 2),
                     'gross_mtd' => $grossMtd,
                     'mtd_deduction' => $deduction,
                     'service_mtd' => (float) $rows->sum('service_amount'),
@@ -161,13 +147,13 @@ class SalesMtdCalculator
             });
 
         $dashboardTargets = self::dashboardTargetRows($targets, $brandId, $user);
-        $globalMtd = $creditRows->sum('amount');
+        $globalMtd = $grossRows->sum('amount');
         $globalTarget = (float) $dashboardTargets->where('target_type', 'global')->sum('amount');
         $remoteTarget = (float) $dashboardTargets->where('target_type', 'remote')->sum('amount');
         $siteTarget = (float) $dashboardTargets->where('target_type', 'site')->sum('amount');
 
-        $remoteMtd = self::teamMtd($creditRows, 'remote');
-        $siteMtd = self::teamMtd($creditRows, 'site') + self::teamMtd($creditRows, 'hybrid');
+        $remoteMtd = self::teamMtd($grossRows, 'remote');
+        $siteMtd = self::teamMtd($grossRows, 'site') + self::teamMtd($grossRows, 'hybrid');
 
         return [
             'month' => $monthStart,
@@ -219,6 +205,49 @@ class SalesMtdCalculator
 
                 return $snapshot ? array_replace($row, $snapshot) : $row;
             });
+    }
+
+    public static function withMtdDeductions(Collection $rows, Collection $targets, Collection $entries): Collection
+    {
+        if ($entries->isEmpty()) {
+            return $rows;
+        }
+
+        $allocation = SalesMtdDeductions::allocations($entries);
+        $affected = $entries->pluck('agent_id')->unique();
+        $rows = $rows->map(function (array $row) use ($allocation) {
+            $deduction = (float) ($allocation['rows'][$row['activity']->id . ':' . $row['agent_id']] ?? 0);
+            $row['gross_amount'] = (float) $row['amount'];
+            $row['mtd_deduction'] = $deduction;
+            if ($deduction <= 0) {
+                return $row;
+            }
+
+            $remaining = max(0, round((float) $row['amount'] - $deduction, 2));
+            $split = (float) $row['service_amount'] + (float) $row['markup_amount'];
+            $row['service_amount'] = $split > 0 ? round($remaining * ((float) $row['service_amount'] / $split), 2) : 0;
+            $row['markup_amount'] = round($remaining - $row['service_amount'], 2);
+            $row['amount'] = $row['credit_amount'] = $remaining;
+
+            return $row;
+        });
+
+        foreach ($allocation['excess'] as $excess) {
+            $entry = $excess['entry'];
+            $activity = new SalesActivity([
+                'brand_id' => $entry->brand_id, 'agent_id' => $entry->agent_id, 'sold_date' => $entry->effective_month,
+                'activity_type' => 'mtd_deduction', 'service_name' => 'Sales MTD deduction exceeding sales', 'amount' => 0,
+            ]);
+            $activity->setRelation('agent', $entry->agent)->setRelation('brand', $entry->brand);
+            $row = self::creditRow($activity, $entry->agent, 0, 'MTD deduction');
+            $row['amount'] = $row['credit_amount'] = -$excess['amount'];
+            $row['gross_amount'] = 0;
+            $row['mtd_deduction'] = $excess['amount'];
+            $rows->push($row);
+        }
+
+        return $rows->groupBy('agent_id')->flatMap(fn ($agentRows, $agentId) => $affected->contains($agentId)
+            ? self::applyCommissionProfiles($agentRows, $targets, AppSetting::commissionExchangeRate()) : $agentRows)->values();
     }
 
     private static function creditRow(SalesActivity $activity, ?User $agent, float $creditAmount, string $shareRole, ?array $activitySplit = null): array

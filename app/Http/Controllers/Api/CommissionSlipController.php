@@ -9,6 +9,7 @@ use App\Models\SalesTarget;
 use App\Models\User;
 use App\Support\SalesMtdCalculator;
 use App\Support\CommissionBalances;
+use App\Support\SalesMtdDeductions;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -73,7 +74,9 @@ class CommissionSlipController extends Controller
         $selectedTargets = $agentTargetRows->values();
         $isCommissionEligible = (bool) $agent->is_commission_eligible;
         $agentTargetAmount = $isCommissionEligible ? (float) $selectedTargets->sum('amount') : 0.0;
-        $rows = CommissionBalances::apply(SalesMtdCalculator::statementRows($activities, $agentTargetRows), $month, null, null, $agent->id)
+        $deductions = SalesMtdDeductions::entries($month, null, null, $agent->id);
+        $commissionRows = SalesMtdCalculator::withMtdDeductions(SalesMtdCalculator::statementRows($activities, $agentTargetRows), $agentTargetRows, $deductions);
+        $rows = CommissionBalances::apply($commissionRows, $month, null, null, $agent->id)
             ->where('agent_id', $agent->id)
             // Balance adjustments also have dates and must not leak outside this payroll run.
             ->filter(fn (array $row) => $row['activity']->sold_date
@@ -113,6 +116,8 @@ class CommissionSlipController extends Controller
 
         return [
             'mtd' => round($mtd, 2),
+            'gross_mtd' => round((float) $rows->sum(fn ($row) => $row['gross_amount'] ?? $row['amount']), 2),
+            'mtd_deduction' => round((float) $rows->sum('mtd_deduction'), 2),
             'target' => round($targetAmount, 2),
             'agent_target' => round($targetAmount, 2),
             'is_commission_eligible' => $isCommissionEligible,
@@ -151,6 +156,8 @@ class CommissionSlipController extends Controller
                     'service' => $activity->service_name ?: $activity->service?->name,
                     'payment_method' => $activity->payment_method,
                     'sale_amount' => round((float) $row['sale_amount'], 2),
+                    'credited_mtd' => round((float) $row['amount'], 2),
+                    'mtd_deduction' => round((float) ($row['mtd_deduction'] ?? 0), 2),
                     'service_amount' => round((float) $row['service_amount'], 2),
                     'markup_amount' => round((float) $row['markup_amount'], 2),
                     'threshold_applied_amount' => round((float) ($row['threshold_applied_amount'] ?? 0), 2),

@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\AppSetting;
 use App\Models\Brand;
+use App\Models\CommissionAdjustment;
+use App\Models\CommissionProfile;
 use App\Models\Reward;
 use App\Models\Role;
 use App\Models\SalesActivity;
@@ -15,6 +17,7 @@ use App\Models\Service;
 use App\Models\Team;
 use App\Models\User;
 use App\Support\RewardProgress;
+use App\Support\CommissionDisputes;
 use App\Support\SalesMtdCalculator;
 use Carbon\Carbon;
 use Illuminate\Database\Schema\Blueprint;
@@ -101,7 +104,7 @@ class SalesMtdDeductionTest extends TestCase
         return SalesMtdCalculator::summary($viewer, Carbon::parse($month . '-01'), $brandId);
     }
 
-    public function test_admin_deduction_reduces_only_agent_mtd_with_audit_and_keeps_financial_records_unchanged(): void
+    public function test_admin_deduction_recalculates_agent_commission_and_keeps_original_records_unchanged(): void
     {
         $sale = $this->sale();
         SalesTarget::create([
@@ -117,10 +120,14 @@ class SalesMtdDeductionTest extends TestCase
         $this->assertEquals(500, $credit['mtd']);
         $this->assertEquals(1000, $credit['gross_mtd']);
         $this->assertEquals(500, $credit['mtd_deduction']);
-        $this->assertEquals(25, $credit['service_commission_percent']);
-        foreach (['service_mtd', 'markup_mtd', 'service_commission', 'markup_commission', 'usd_total', 'php_total', 'hold_amount', 'net_commission', 'service_commission_percent'] as $key) {
-            $this->assertEquals($before['agentCredits']->get($this->agent->id)[$key], $credit[$key], $key);
+        foreach ([
+            'service_mtd' => 250, 'markup_mtd' => 250, 'service_commission_percent' => 15,
+            'service_commission' => 37.5, 'markup_commission' => 125, 'usd_total' => 162.5,
+            'php_total' => 9100, 'hold_amount' => 1365, 'net_commission' => 7735,
+        ] as $key => $value) {
+            $this->assertEquals($value, $credit[$key], $key);
         }
+        $this->assertEquals(25, $before['agentCredits']->get($this->agent->id)['service_commission_percent']);
         $this->assertSame($before['global'], $after['global']);
         $this->assertSame($before['remote'], $after['remote']);
         $this->assertEquals($this->admin->id, $entry->created_by);
@@ -150,6 +157,7 @@ class SalesMtdDeductionTest extends TestCase
         $this->post(route('admin.sales-mtd-deductions.void', $entry), ['void_reason' => 'Entered against wrong employee'])->assertSessionHasNoErrors();
         $entry->refresh();
         $this->assertEquals(1000, $this->summary()['agentCredits']->get($this->agent->id)['mtd']);
+        $this->assertEquals(325, $this->summary()['agentCredits']->get($this->agent->id)['usd_total']);
         $this->assertNotNull($entry->voided_at);
         $this->assertEquals($this->admin->id, $entry->voided_by);
         $this->assertEquals($original, $entry->only(['amount', 'reason', 'created_by', 'created_at']));
@@ -202,18 +210,27 @@ class SalesMtdDeductionTest extends TestCase
         $this->assertEquals(-200, $brandSummary['agentCredits']->get($other->id)['mtd']);
     }
 
-    public function test_agent_dashboard_and_mtd_api_show_adjustment_but_commission_slip_is_unchanged(): void
+    public function test_dashboard_statements_and_hris_use_the_same_adjusted_commission(): void
     {
         $this->sale();
         $query = ['hris_employee_id' => 'EMP-MTD-1', 'month' => '2026-10'];
         $slip = $this->withToken('mtd-deduction-test-token')->getJson(route('api.hris.commission-slip', $query))->assertOk()->json();
         $this->deduct();
-        $this->get(route('reports.sales-performance.index', ['month' => '2026-10']))->assertOk()
+        $dashboard = $this->get(route('reports.sales-performance.index', ['month' => '2026-10']))->assertOk()
             ->assertSee('MTD Deductions')->assertSee('Deduction -$500.00');
+        $this->assertMatchesRegularExpression('/<button type="submit"[^>]*>\s*Search\s*<\/button>\s*<a[^>]*>MTD Deductions<\/a>/s', $dashboard->getContent());
         $this->withToken('mtd-deduction-test-token')->getJson(route('api.hris.sales-performance-mtd', ['month' => '2026-10']))->assertOk()
             ->assertJsonPath('agents.0.mtd', 500)->assertJsonPath('agents.0.gross_mtd', 1000)->assertJsonPath('agents.0.mtd_deduction', 500);
         $after = $this->withToken('mtd-deduction-test-token')->getJson(route('api.hris.commission-slip', $query))->assertOk()->json();
-        $this->assertSame($slip, $after);
+        $this->assertEquals(500, $after['summary']['mtd']);
+        $this->assertEquals(162.5, $after['summary']['usd_total']);
+        $this->assertEquals(7735, $after['summary']['net_commission']);
+        $this->assertLessThan($slip['summary']['net_commission'], $after['summary']['net_commission']);
+        $this->assertSame($slip['transactions'][0]['sale_amount'], $after['transactions'][0]['sale_amount']);
+        $this->assertEquals(500, $after['transactions'][0]['mtd_deduction']);
+        $this->assertEquals(500, $after['transactions'][0]['credited_mtd']);
+        $this->get(route('reports.agent-statements.index', ['month' => '2026-10', 'agent_id' => $this->agent->id]))->assertOk()
+            ->assertViewHas('totals', fn ($totals) => $totals['net_commission'] === 7735.0 && $totals['sales_credit'] === 500.0);
         $this->get(route('admin.sales-mtd-deductions.index', ['month' => '2026-10']))->assertOk()->assertSee('Company adjustment approved by Admin');
     }
 
@@ -247,5 +264,160 @@ class SalesMtdDeductionTest extends TestCase
         $this->assertEquals(2000, $summary['global']['mtd']);
         $this->get(route('reports.sales-performance.index', ['month' => '2026-10']))->assertOk()
             ->assertViewHas('teamRows', fn ($rows) => $rows->firstWhere('id', $team->id)['mtd'] === 1000.0);
+    }
+
+    private function slipFor(string $from, string $to): array
+    {
+        return $this->withToken('mtd-deduction-test-token')->getJson(route('api.hris.commission-slip', [
+            'hris_employee_id' => 'EMP-MTD-1', 'month' => substr($from, 0, 7), 'from' => $from, 'to' => $to,
+        ]))->assertOk()->json();
+    }
+
+    public function test_partial_month_slips_allocate_deduction_once_and_reconcile_to_month_totals(): void
+    {
+        $this->sale(null, '2026-10-01');
+        $this->sale(null, '2026-10-16');
+        $this->deduct();
+        $early = $this->slipFor('2026-10-01', '2026-10-10');
+        $late = $this->slipFor('2026-10-11', '2026-10-31');
+        $full = $this->slipFor('2026-10-01', '2026-10-31');
+
+        $this->assertEquals(250, $early['summary']['mtd_deduction']);
+        $this->assertEquals(250, $late['summary']['mtd_deduction']);
+        $this->assertEquals(1500, $full['summary']['mtd']);
+        foreach (['mtd', 'mtd_deduction', 'service_commission', 'markup_commission', 'usd_total', 'php_total', 'card_hold_amount', 'net_commission'] as $key) {
+            $this->assertEqualsWithDelta($full['summary'][$key], $early['summary'][$key] + $late['summary'][$key], 0.001, $key);
+        }
+        $this->assertSame(['2026-10-01'], array_column($early['transactions'], 'sold_date'));
+        $this->assertSame(['2026-10-16'], array_column($late['transactions'], 'sold_date'));
+    }
+
+    public function test_card_hold_recalculation_stays_limited_to_card_payments(): void
+    {
+        $this->sale(null, '2026-10-01');
+        $wire = $this->sale(null, '2026-10-16');
+        $wire->update(['payment_method' => 'Wire Payment']);
+        $wire->payment->update(['payment_method' => 'Wire Payment']);
+        $this->deduct();
+        $slip = $this->slipFor('2026-10-01', '2026-10-31');
+
+        $this->assertEquals(618.75, $slip['summary']['usd_total']);
+        $this->assertEquals(2047.5, $slip['summary']['card_hold_amount']);
+        $this->assertEquals(32602.5, $slip['summary']['net_commission']);
+        $this->assertEquals(0, collect($slip['transactions'])->firstWhere('payment_method', 'Wire Payment')['card_hold_amount']);
+    }
+
+    public function test_threshold_and_over_deduction_do_not_create_negative_earned_commission(): void
+    {
+        $this->agent->update(['is_commission_threshold_exempt' => false, 'commission_threshold_amount' => 500]);
+        $this->sale();
+        $this->deduct();
+        $credit = $this->summary()['agentCredits']->get($this->agent->id);
+        $this->assertEquals(500, $credit['mtd']);
+        $this->assertEquals(500, $credit['threshold_applied_amount']);
+        $this->assertEquals(0, $credit['net_commission']);
+
+        $this->deduct(['amount' => 600]);
+        $credit = $this->summary()['agentCredits']->get($this->agent->id);
+        $this->assertEquals(-100, $credit['mtd']);
+        $this->assertEquals(1100, $credit['mtd_deduction']);
+        foreach (['service_mtd', 'markup_mtd', 'usd_total', 'php_total', 'hold_amount', 'net_commission'] as $key) {
+            $this->assertEquals(0, $credit[$key], $key);
+        }
+    }
+
+    public function test_cent_allocations_are_exact_across_separate_ranges(): void
+    {
+        foreach (['2026-10-01', '2026-10-11', '2026-10-21'] as $date) $this->sale(null, $date);
+        $this->deduct(['amount' => '100.01']);
+        $ranges = [
+            $this->slipFor('2026-10-01', '2026-10-10'), $this->slipFor('2026-10-11', '2026-10-20'),
+            $this->slipFor('2026-10-21', '2026-10-31'),
+        ];
+        $full = $this->slipFor('2026-10-01', '2026-10-31');
+        $this->assertEquals(100.01, $full['summary']['mtd_deduction']);
+        $this->assertEquals(2899.99, $full['summary']['mtd']);
+        $this->assertEqualsWithDelta(100.01, array_sum(array_column(array_column($ranges, 'summary'), 'mtd_deduction')), 0.001);
+        $this->assertEqualsWithDelta($full['summary']['net_commission'], array_sum(array_column(array_column($ranges, 'summary'), 'net_commission')), 0.001);
+    }
+
+    public function test_shared_sale_deduction_recalculates_only_selected_agent_share(): void
+    {
+        $other = User::factory()->create([
+            'brand_id' => $this->agent->brand_id, 'department' => 'Sales', 'is_commission_eligible' => true,
+            'is_commission_threshold_exempt' => true, 'markup_commission_percent' => 50,
+        ]);
+        $sale = $this->sale();
+        $sale->update(['agent_credit_amount' => 500, 'frankie_agent_id' => $other->id, 'frankie_credit_amount' => 500]);
+        $before = $this->summary()['agentCredits']->get($other->id);
+        $this->deduct(['amount' => 100]);
+        $summary = $this->summary();
+        $credit = $summary['agentCredits']->get($this->agent->id);
+        $this->assertEquals(400, $credit['mtd']);
+        $this->assertEquals(130, $credit['usd_total']);
+        $this->assertEquals(6188, $credit['net_commission']);
+        $this->assertEquals($before['mtd'], $summary['agentCredits']->get($other->id)['mtd']);
+        $this->assertEquals($before['net_commission'], $summary['agentCredits']->get($other->id)['net_commission']);
+    }
+
+    public function test_dispute_reverses_adjusted_commission_not_the_gross_commission(): void
+    {
+        $sale = $this->sale(null, '2026-09-10');
+        $entry = $this->deduct(['month' => '2026-09']);
+        $payment = $sale->payment;
+        CommissionDisputes::transition($payment, 'Dispute');
+
+        $this->assertEquals(-162.5, CommissionAdjustment::firstOrFail()->usd_amount);
+        $snapshot = $sale->fresh()->commission_snapshot[$this->agent->id];
+        $this->assertEquals(325, $snapshot['usd_total']);
+        $this->assertEquals(162.5, $snapshot['paid_usd_total']);
+        $this->post(route('admin.sales-mtd-deductions.void', $entry), ['void_reason' => 'Correction'])->assertSessionHasNoErrors();
+        $this->assertEquals(325, $this->summary('2026-09')['agentCredits']->get($this->agent->id)['usd_total']);
+        $this->assertEquals(-162.5, CommissionAdjustment::firstOrFail()->usd_amount);
+    }
+
+    public function test_commission_debt_carry_forward_uses_reduced_earned_commission(): void
+    {
+        CommissionAdjustment::create([
+            'brand_id' => $this->agent->brand_id, 'agent_id' => $this->agent->id,
+            'kind' => 'dispute', 'effective_date' => '2026-09-15', 'usd_amount' => -300, 'original_commission' => [],
+        ]);
+        $this->sale();
+        $this->deduct();
+        $credit = $this->summary('2026-11')['agentCredits']->get($this->agent->id);
+        $this->assertEquals(-161.88, $credit['usd_total']);
+        $this->assertEquals(-9065.28, $credit['net_commission']);
+    }
+
+    public function test_last_day_sale_matches_between_dashboard_statements_and_slip(): void
+    {
+        $this->sale(null, '2026-10-31');
+        $this->deduct();
+        $credit = $this->summary()['agentCredits']->get($this->agent->id);
+        $slip = $this->slipFor('2026-10-01', '2026-10-31');
+        $this->assertEquals(500, $credit['mtd']);
+        $this->assertEquals($credit['net_commission'], $slip['summary']['net_commission']);
+        $this->get(route('reports.agent-statements.index', ['month' => '2026-10', 'agent_id' => $this->agent->id]))->assertOk()
+            ->assertViewHas('totals', fn ($totals) => $totals['net_commission'] === $credit['net_commission']);
+    }
+
+    public function test_custom_tier_percentage_can_stay_the_same_while_commission_amounts_decrease(): void
+    {
+        $profile = CommissionProfile::create(['name' => 'Ten percent custom scheme']);
+        $profile->rules()->create(['minimum_mtd_percent' => 0, 'commission_percent' => 10]);
+        $this->agent->update(['commission_profile_id' => $profile->id]);
+        AppSetting::set('commission_exchange_rate', 60);
+        $this->sale();
+        $before = $this->summary()['agentCredits']->get($this->agent->id);
+        $this->deduct(['amount' => 100]);
+        $credit = $this->summary()['agentCredits']->get($this->agent->id);
+        $this->assertEquals(10, $before['service_commission_percent']);
+        $this->assertEquals(10, $credit['service_commission_percent']);
+        $this->assertEquals(45, $credit['service_commission']);
+        $this->assertEquals(225, $credit['markup_commission']);
+        $this->assertEquals(270, $credit['usd_total']);
+        $this->assertEquals(16200, $credit['php_total']);
+        $this->assertEquals(2430, $credit['hold_amount']);
+        $this->assertEquals(13770, $credit['net_commission']);
     }
 }

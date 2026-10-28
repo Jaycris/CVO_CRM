@@ -51,7 +51,7 @@ class SalesMtdDeductionController extends Controller
         ]);
 
         return redirect()->route('admin.sales-mtd-deductions.index', ['month' => $deduction->effective_month->format('Y-m')])
-            ->with('success', 'Sales MTD deduction recorded. Commissions and original sales are unchanged.');
+            ->with('success', 'Sales MTD deduction recorded. Related commissions have been recalculated; original sales and payments are unchanged.');
     }
 
     public function void(Request $request, SalesMtdDeduction $deduction): RedirectResponse

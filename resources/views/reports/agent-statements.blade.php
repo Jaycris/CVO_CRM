@@ -176,7 +176,12 @@
                                     <p class="mt-1 text-slate-500 dark:text-zinc-400">{{ $activity->book_title ?: '-' }}</p>
                                 </td>
                                 <td class="max-w-40 px-4 py-3 text-xs leading-5">{{ $activity->service_name ?: '-' }}</td>
-                                <td class="whitespace-nowrap px-4 py-3 text-xs font-semibold">{{ $money($row['sale_amount']) }}</td>
+                                <td class="whitespace-nowrap px-4 py-3 text-xs font-semibold">
+                                    {{ $money($row['sale_amount']) }}
+                                    @if (($row['mtd_deduction'] ?? 0) > 0)
+                                        <span class="block text-xs text-rose-600 dark:text-rose-300">MTD deduction -{{ $money($row['mtd_deduction']) }}</span>
+                                    @endif
+                                </td>
                                 <td class="whitespace-nowrap px-4 py-3 text-xs">{{ $money($row['service_amount']) }}</td>
                                 <td class="whitespace-nowrap px-4 py-3 text-xs">{{ $money($row['markup_amount']) }}</td>
                                 <td class="whitespace-nowrap px-4 py-3 text-xs">

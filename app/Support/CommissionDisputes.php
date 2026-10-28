@@ -29,18 +29,23 @@ class CommissionDisputes
             $agentIds = array_filter([$activity->agent_id, $activity->frankie_agent_id]);
             $activities = SalesActivity::with(['agent.commissionProfile.rules', 'frankieAgent.commissionProfile.rules', 'service'])
                 ->where('payment_status', 'Payment Success')
-                ->whereBetween('sold_date', [$month->toDateString(), $month->copy()->endOfMonth()->toDateString()])
+                ->whereDate('sold_date', '>=', $month->toDateString())
+                ->whereDate('sold_date', '<=', $month->copy()->endOfMonth()->toDateString())
                 ->where(fn ($query) => $query->whereIn('agent_id', $agentIds)->orWhereIn('frankie_agent_id', $agentIds))
                 ->get();
             $targets = SalesMtdCalculator::agentTargetRows(SalesTarget::whereDate('target_month', $month)->get());
-            $snapshots = SalesMtdCalculator::statementRows($activities, $targets)
+            $grossRows = SalesMtdCalculator::statementRows($activities, $targets);
+            $paidRows = SalesMtdCalculator::withMtdDeductions($grossRows, $targets, SalesMtdDeductions::entries($month))
+                ->filter(fn ($row) => $row['activity']->id === $activity->id)->keyBy('agent_id');
+            $snapshots = $grossRows
                 ->filter(fn ($row) => $row['activity']->id === $activity->id)
-                ->mapWithKeys(function ($row) {
+                ->mapWithKeys(function ($row) use ($paidRows) {
                     $snapshot = collect($row)->except(['activity', 'agent', 'commission_profile'])->all();
                     $snapshot['author_name'] = $row['activity']->author_name;
                     $snapshot['book_title'] = $row['activity']->book_title;
                     $snapshot['endorsement_code'] = $row['activity']->endorsement_code;
                     $snapshot['original_sold_date'] = $row['activity']->sold_date->toDateString();
+                    $snapshot['paid_usd_total'] = (float) ($paidRows->get($row['agent_id'])['usd_total'] ?? $row['usd_total']);
 
                     return [$row['agent_id'] => $snapshot];
                 })->all();
@@ -62,7 +67,7 @@ class CommissionDisputes
                 'agent_id' => $agentId,
                 'kind' => $kind,
                 'effective_date' => now()->toDateString(),
-                'usd_amount' => round(abs((float) $snapshot['usd_total']) * ($kind === 'dispute' ? -1 : 1), 2),
+                'usd_amount' => round(abs((float) ($snapshot['paid_usd_total'] ?? $snapshot['usd_total'])) * ($kind === 'dispute' ? -1 : 1), 2),
                 'original_commission' => $snapshot,
             ]);
         }

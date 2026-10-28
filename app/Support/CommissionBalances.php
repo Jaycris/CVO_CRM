@@ -60,7 +60,10 @@ class CommissionBalances
 
         for ($cursor = $earliest->copy(); $cursor->lt($start); $cursor->addMonth()) {
             $key = $cursor->format('Y-m');
-            $earned = SalesMtdCalculator::statementRows($history->get($key, collect()), SalesMtdCalculator::agentTargetRows($targets->get($key, collect())))
+            $targetRows = SalesMtdCalculator::agentTargetRows($targets->get($key, collect()));
+            $historyRows = SalesMtdCalculator::statementRows($history->get($key, collect()), $targetRows);
+            $deductions = SalesMtdDeductions::entries($cursor, $viewer, $brandId, $agentId, $salesBrandsOnly, $includeOwnAcrossBrands);
+            $earned = SalesMtdCalculator::withMtdDeductions($historyRows, $targetRows, $deductions)
                 ->groupBy('agent_id')->map(fn ($items) => $items->sum(fn ($row) => (float) $row['exchange_rate'] > 0
                     ? (float) $row['net_commission'] / (float) $row['exchange_rate'] : (float) $row['usd_total']));
             $events = $eventsByMonth->get($key, collect())->groupBy('agent_id')->map->sum('usd_amount');

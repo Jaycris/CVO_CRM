@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Support\BrandScope;
 use App\Support\CommissionBalances;
 use App\Support\SalesMtdCalculator;
+use App\Support\SalesMtdDeductions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -38,7 +39,8 @@ class AgentStatementController extends Controller
         $activities = SalesActivity::query()
             ->with(['brand', 'agent', 'frankieAgent', 'service'])
             ->where('payment_status', 'Payment Success')
-            ->whereBetween('sold_date', [$month->toDateString(), $month->copy()->endOfMonth()->toDateString()])
+            ->whereDate('sold_date', '>=', $month->toDateString())
+            ->whereDate('sold_date', '<=', $month->copy()->endOfMonth()->toDateString())
             ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
             ->when(! $brandId && $canViewAll, fn ($query) => BrandScope::apply($query, $user))
             ->when($agentId, function ($query) use ($agentId) {
@@ -79,7 +81,9 @@ class AgentStatementController extends Controller
 
         $agentTargetRows = SalesMtdCalculator::agentTargetRows($targets);
         $selectedTargets = $agentTargetRows->values();
-        $rows = CommissionBalances::apply(SalesMtdCalculator::statementRows($activities, $agentTargetRows), $month, $canViewAll ? $user : null, $brandId, $agentId)
+        $deductions = SalesMtdDeductions::entries($month, $canViewAll ? $user : null, $brandId, $agentId);
+        $commissionRows = SalesMtdCalculator::withMtdDeductions(SalesMtdCalculator::statementRows($activities, $agentTargetRows), $agentTargetRows, $deductions);
+        $rows = CommissionBalances::apply($commissionRows, $month, $canViewAll ? $user : null, $brandId, $agentId)
             ->when($agentId, fn (Collection $rows, int $selectedAgentId) => $rows->where('agent_id', $selectedAgentId)->values())
             ->sortByDesc(fn (array $row) => $row['activity']->sold_date?->timestamp ?? 0)
             ->values();
@@ -88,6 +92,7 @@ class AgentStatementController extends Controller
         $salesCredit = (float) $rows->sum('amount');
         $totals = [
             'sales_credit' => $salesCredit,
+            'mtd_deduction' => (float) $rows->sum('mtd_deduction'),
             'service_mtd' => (float) $rows->sum('service_amount'),
             'markup_mtd' => (float) $rows->sum('markup_amount'),
             'service_commission' => (float) $rows->sum('service_commission'),

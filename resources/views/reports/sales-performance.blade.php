@@ -125,9 +125,6 @@
                         <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Agent sales totals, service/markup split, commission, and target progress for {{ $month->format('F Y') }}.</p>
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
-                    @if ($isAdmin)
-                        <a href="{{ route('admin.sales-mtd-deductions.index', ['month' => $month->format('Y-m')]) }}" class="inline-flex h-11 items-center rounded-lg border border-slate-200 px-4 text-sm font-semibold text-emerald-700 dark:border-zinc-700 dark:text-emerald-300">MTD Deductions</a>
-                    @endif
                     <form method="GET" class="flex flex-wrap items-center gap-2">
                         <input type="text" name="month" value="{{ $month->format('Y-m') }}" placeholder="YYYY-MM"
                                class="h-11 w-32 rounded-xl border border-slate-300 bg-white px-4 text-sm shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
@@ -141,9 +138,14 @@
                         @endif
                         <input type="search" name="search" value="{{ $search }}" placeholder="Search agent..."
                                class="h-11 w-64 rounded-xl border border-slate-300 bg-white px-4 text-sm shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
-                        <button type="submit" class="h-11 rounded-xl bg-[var(--brand-primary)] px-5 text-sm font-semibold text-white shadow-sm hover:opacity-90">
-                            Search
-                        </button>
+                        <div class="flex items-center gap-2">
+                            <button type="submit" class="h-11 rounded-xl bg-[var(--brand-primary)] px-5 text-sm font-semibold text-white shadow-sm hover:opacity-90">
+                                Search
+                            </button>
+                            @if ($isAdmin)
+                                <a href="{{ route('admin.sales-mtd-deductions.index', ['month' => $month->format('Y-m')]) }}" class="inline-flex h-11 items-center rounded-xl bg-emerald-700 px-4 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800">MTD Deductions</a>
+                            @endif
+                        </div>
                     </form>
                     </div>
                 </div>
