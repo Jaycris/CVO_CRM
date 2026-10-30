@@ -129,17 +129,31 @@ class CommissionScreenParityTest extends TestCase
         $range = ['month' => '2026-10', 'from' => '2026-10-10', 'to' => '2026-10-24'];
         $rangeSlip = $this->withToken('screen-parity-token')->getJson(route('api.hris.commission-slip',
             $range + ['hris_employee_id' => 'EMP-3183']))->assertOk()->json();
+        $this->assertEquals(3124, $rangeSlip['summary']['usd_total']);
+        $this->assertEquals(0, $rangeSlip['summary']['threshold_applied_amount']);
+        $this->assertEquals(8996, $rangeSlip['summary']['mtd']);
+        $this->assertCount(4, $rangeSlip['transactions']);
+        foreach ($rangeSlip['transactions'] as $transaction) {
+            $this->assertEquals(25, $transaction['service_commission_percent']);
+            $fullRow = $fourLatest->first(fn ($row) => $row['activity']->endorsement_code === $transaction['reference']);
+            $this->assertEquals($fullRow['net_commission'], $transaction['net_commission']);
+        }
         foreach ([null, $brand->id] as $brandId) {
             $rangeStatement = $this->actingAs($admin)->get(route('reports.agent-statements.index',
                 $range + ['agent_id' => $agent->id, 'brand_id' => $brandId]))->assertOk()
-                ->assertSee('$2,749.20')->assertSee('$500.00 threshold applied')
+                ->assertSee('$3,124.00')->assertDontSee('$500.00 threshold applied')
                 ->assertSee('2026-10-10 through 2026-10-24')->assertDontSee('Earlier author');
             $this->assertCount(4, $rangeStatement->viewData('rows')->items());
             foreach (['service_commission', 'markup_commission', 'usd_total', 'php_total', 'net_commission'] as $field) {
-                $this->assertEquals($rangeSlip['summary'][$field], $rangeStatement->viewData('totals')[$field], "Range statement $field");
+                $this->assertEquals($rangeSlip['summary'][$field], round($rangeStatement->viewData('totals')[$field], 2), "Range statement $field");
             }
-            $this->assertEquals(142546.01, $rangeStatement->viewData('totals')['net_commission']);
+            $this->assertEquals(161979.40, round($rangeStatement->viewData('totals')['net_commission'], 2));
         }
+
+        $searched = $this->actingAs($admin)->get(route('reports.agent-statements.index',
+            $range + ['agent_id' => $agent->id, 'search' => 'Carl H. Mitchell']))->assertOk();
+        $this->assertEquals(1049.25, $searched->viewData('totals')['usd_total']);
+        $this->assertCount(1, $searched->viewData('rows')->items());
 
         $this->get(route('reports.agent-statements.index', [
             'month' => '2026-10', 'agent_id' => $agent->id, 'from' => '2026-10-10', 'to' => '2026-10-10',
@@ -155,6 +169,8 @@ class CommissionScreenParityTest extends TestCase
             [['to' => '2026-10-24'], 'from'],
             [['from' => '2026-10-24', 'to' => '2026-10-10'], 'to'],
             [['from' => '2026-02-30', 'to' => '2026-10-24'], 'from'],
+            [['month' => '2026-10', 'from' => '2026-09-30', 'to' => '2026-10-10'], 'from'],
+            [['month' => '2026-10', 'from' => '2026-10-10', 'to' => '2026-11-01'], 'to'],
         ] as [$query, $field]) {
             $this->actingAs($admin)->getJson(route('reports.agent-statements.index', $query))
                 ->assertUnprocessable()->assertJsonValidationErrors($field);

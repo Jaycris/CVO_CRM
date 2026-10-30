@@ -36,6 +36,10 @@ class AgentStatementController extends Controller
         ]);
         $from = $validated['from'] ?? $month->toDateString();
         $to = $validated['to'] ?? $month->copy()->endOfMonth()->toDateString();
+        $request->validate([
+            'from' => ['nullable', 'after_or_equal:'.$month->toDateString(), 'before_or_equal:'.$month->copy()->endOfMonth()->toDateString()],
+            'to' => ['nullable', 'after_or_equal:'.$month->toDateString(), 'before_or_equal:'.$month->copy()->endOfMonth()->toDateString()],
+        ]);
         $brandId = BrandScope::canAccessAllBrands($user)
             ? $request->integer('brand_id') ?: null
             : null;
@@ -45,8 +49,9 @@ class AgentStatementController extends Controller
         $activities = SalesActivity::query()
             ->with(['brand', 'agent', 'frankieAgent', 'service'])
             ->where('payment_status', 'Payment Success')
-            ->whereDate('sold_date', '>=', $from)
-            ->whereDate('sold_date', '<=', $to)
+            // Match the API: dates select calculated rows, not a new tier/threshold period.
+            ->whereDate('sold_date', '>=', $month->toDateString())
+            ->whereDate('sold_date', '<=', $month->copy()->endOfMonth()->toDateString())
             ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
             ->when(! $brandId && $canViewAll, fn ($query) => BrandScope::apply($query, $user))
             ->when($agentId, function ($query) use ($agentId) {
@@ -55,7 +60,14 @@ class AgentStatementController extends Controller
                         ->orWhere('frankie_agent_id', $agentId);
                 });
             })
-            ->when($search !== '', function ($query) use ($search) {
+            ->latest('sold_date')
+            ->latest('id')
+            ->get();
+
+        // Searching must not change the monthly tier or consume the threshold again.
+        $matchingActivityIds = $search === '' ? null : SalesActivity::query()
+            ->whereIn('id', $activities->pluck('id'))
+            ->where(function ($query) use ($search) {
                 $query->where(function ($query) use ($search) {
                     $query->where('endorsement_code', 'like', "%{$search}%")
                         ->orWhere('author_name', 'like', "%{$search}%")
@@ -66,10 +78,7 @@ class AgentStatementController extends Controller
                         ->orWhereHas('agent', fn ($query) => $this->searchUser($query, $search))
                         ->orWhereHas('frankieAgent', fn ($query) => $this->searchUser($query, $search));
                 });
-            })
-            ->latest('sold_date')
-            ->latest('id')
-            ->get();
+            })->pluck('id');
 
         $activityAgentIds = $activities->flatMap(fn (SalesActivity $activity) => [
             $activity->agent_id,
@@ -94,6 +103,8 @@ class AgentStatementController extends Controller
             ->filter(fn (array $row) => $row['activity']->sold_date
                 && $row['activity']->sold_date->toDateString() >= $from
                 && $row['activity']->sold_date->toDateString() <= $to)
+            ->when($matchingActivityIds !== null, fn (Collection $rows) => $rows->filter(fn (array $row) =>
+                $row['activity']->activity_type === 'commission_adjustment' || $matchingActivityIds->contains($row['activity']->id)))
             ->sortByDesc(fn (array $row) => $row['activity']->sold_date?->timestamp ?? 0)
             ->values();
 

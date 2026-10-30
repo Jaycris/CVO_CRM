@@ -44,6 +44,10 @@ class CommissionSlipController extends Controller
         $month = Carbon::createFromFormat('!Y-m', $referenceMonth)->startOfMonth();
         $from = $validated['from'] ?? $month->toDateString();
         $to = $validated['to'] ?? $month->copy()->endOfMonth()->toDateString();
+        $request->validate([
+            'from' => ['after_or_equal:'.$month->toDateString(), 'before_or_equal:'.$month->copy()->endOfMonth()->toDateString()],
+            'to' => ['after_or_equal:'.$month->toDateString(), 'before_or_equal:'.$month->copy()->endOfMonth()->toDateString()],
+        ]);
         $agent = User::query()
             ->with(['brand', 'team', 'commissionProfile.rules'])
             ->where('hris_employee_id', $hrisEmployeeId)
@@ -54,8 +58,9 @@ class CommissionSlipController extends Controller
         $activities = SalesActivity::query()
             ->with(['brand', 'agent', 'frankieAgent', 'service'])
             ->where('payment_status', 'Payment Success')
-            ->whereDate('sold_date', '>=', $from)
-            ->whereDate('sold_date', '<=', $to)
+            // Calculate monthly tiers and consume the threshold before selecting a payroll window.
+            ->whereDate('sold_date', '>=', $month->toDateString())
+            ->whereDate('sold_date', '<=', $month->copy()->endOfMonth()->toDateString())
             ->where(function ($query) use ($agent) {
                 $query->where('agent_id', $agent->id)
                     ->orWhere('frankie_agent_id', $agent->id);
@@ -105,16 +110,19 @@ class CommissionSlipController extends Controller
             'commission_scheme' => $this->commissionScheme($agent, $isCommissionEligible),
             'commission_threshold_amount' => round($this->thresholdAmount($agent, $isCommissionEligible), 2),
             'is_commission_threshold_exempt' => (bool) $agent->is_commission_threshold_exempt,
-            'summary' => $this->summary($rows, $agentTargetAmount, $agent, $isCommissionEligible),
+            'summary' => $this->summary($rows, $agentTargetAmount, $agent, $isCommissionEligible, $commissionRows->where('agent_id', $agent->id)),
             'transactions' => $this->transactions($rows),
         ]);
     }
 
-    private function summary(Collection $rows, float $targetAmount, User $agent, bool $isCommissionEligible): array
+    private function summary(Collection $rows, float $targetAmount, User $agent, bool $isCommissionEligible, Collection $monthlyRows): array
     {
         $mtd = (float) $rows->sum('amount');
 
         return [
+            'commission_basis' => 'monthly',
+            'monthly_mtd' => round((float) $monthlyRows->sum('amount'), 2),
+            'monthly_mtd_percent' => $targetAmount > 0 ? round(((float) $monthlyRows->sum('amount') / $targetAmount) * 100, 2) : 0,
             'mtd' => round($mtd, 2),
             'gross_mtd' => round((float) $rows->sum(fn ($row) => $row['gross_amount'] ?? $row['amount']), 2),
             'mtd_deduction' => round((float) $rows->sum('mtd_deduction'), 2),
@@ -165,6 +173,8 @@ class CommissionSlipController extends Controller
                     'threshold_applied_markup_amount' => round((float) ($row['threshold_applied_markup_amount'] ?? 0), 2),
                     'service_commission' => round((float) $row['service_commission'], 2),
                     'markup_commission' => round((float) $row['markup_commission'], 2),
+                    'service_commission_percent' => round((float) $row['service_commission_percent'], 2),
+                    'markup_commission_percent' => round((float) $row['markup_commission_percent'], 2),
                     'usd_total' => round((float) $row['usd_total'], 2),
                     'php_total' => round((float) $row['php_total'], 2),
                     'card_hold_amount' => round((float) $row['hold_amount'], 2),

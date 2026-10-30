@@ -18,6 +18,9 @@
                 <p class="mt-1 text-slate-500 dark:text-zinc-400">
                     Sales credit, commission, and PHP totals for {{ $from }} through {{ $to }} using the saved bank rate.
                 </p>
+                <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
+                    Commission rates and the threshold use the full {{ $month->format('F Y') }} sales total. Date and search filters only select rows.
+                </p>
             </div>
         </div>
 

@@ -106,29 +106,59 @@ class CommissionSlipDateRangeTest extends TestCase
         $this->assertSummaryMatchesTransactions($full);
     }
 
-    public function test_outside_sales_do_not_inflate_the_range_commission_tier(): void
+    public function test_range_uses_the_full_month_commission_tier_without_paying_outside_sales(): void
     {
         SalesTarget::query()->update(['amount' => 3000]);
         foreach (['2026-10-01', '2026-10-10', '2026-10-14', '2026-10-16'] as $date) $this->sale($date);
         $partial = $this->slip(['from' => '2026-10-01', 'to' => '2026-10-10'])->assertOk()->json();
         $full = $this->slip()->assertOk()->json();
 
-        $this->assertEquals(150, $partial['summary']['service_commission']);
+        $this->assertEquals(250, $partial['summary']['service_commission']);
+        $this->assertEquals(750, $partial['summary']['usd_total']);
+        $this->assertEquals(25, $partial['transactions'][0]['service_commission_percent']);
         $this->assertEquals(500, $full['summary']['service_commission']);
         $this->assertEquals(66.67, $partial['summary']['mtd_percent']);
+        $this->assertEquals(4000, $partial['summary']['monthly_mtd']);
+        $this->assertEquals(133.33, $partial['summary']['monthly_mtd_percent']);
         $this->assertSummaryMatchesTransactions($partial);
     }
 
-    public function test_thresholds_are_calculated_from_the_range_not_consumed_by_outside_sales(): void
+    public function test_threshold_consumed_earlier_in_the_month_is_not_deducted_again(): void
     {
         $this->agent->update(['is_commission_threshold_exempt' => false, 'commission_threshold_amount' => 500]);
         foreach (['2026-10-01', '2026-10-05', '2026-10-10', '2026-10-16'] as $date) $this->sale($date);
         $partial = $this->slip(['from' => '2026-10-05', 'to' => '2026-10-10'])->assertOk()->json();
 
-        $this->assertEquals(500, $partial['summary']['threshold_applied_amount']);
-        $this->assertEquals(75, $partial['summary']['service_commission']);
-        $this->assertEquals(575, $partial['summary']['usd_total']);
+        $this->assertEquals(0, $partial['summary']['threshold_applied_amount']);
+        $this->assertEquals(150, $partial['summary']['service_commission']);
+        $this->assertEquals(650, $partial['summary']['usd_total']);
         $this->assertSummaryMatchesTransactions($partial);
+    }
+
+    public function test_separate_ranges_reconcile_to_the_month_with_a_threshold_spanning_sales(): void
+    {
+        $this->agent->update(['is_commission_threshold_exempt' => false, 'commission_threshold_amount' => 1250]);
+        SalesTarget::query()->update(['amount' => 2000]);
+        foreach (['2026-10-01', '2026-10-10', '2026-10-16'] as $date) $this->sale($date);
+        $full = $this->slip()->assertOk()->json();
+        $first = $this->slip(['from' => '2026-10-01', 'to' => '2026-10-09'])->assertOk()->assertJsonCount(1, 'transactions')->json();
+        $later = $this->slip(['from' => '2026-10-10', 'to' => '2026-10-31'])->assertOk()->assertJsonCount(2, 'transactions')->json();
+
+        $this->assertEquals(1000, $first['summary']['threshold_applied_amount']);
+        $this->assertEquals(250, $later['summary']['threshold_applied_amount']);
+        foreach (['mtd', 'service_commission', 'markup_commission', 'usd_total', 'php_total', 'card_hold_amount', 'net_commission', 'threshold_applied_amount'] as $key) {
+            $this->assertEquals($full['summary'][$key], round($first['summary'][$key] + $later['summary'][$key], 2), $key);
+        }
+        foreach ([$first, $later] as $slip) {
+            $this->assertSummaryMatchesTransactions($slip);
+            foreach ($slip['transactions'] as $transaction) {
+                $monthly = collect($full['transactions'])->firstWhere('sold_date', $transaction['sold_date']);
+                $this->assertSame($monthly, $transaction);
+                $this->assertEquals(25, $transaction['service_commission_percent']);
+            }
+        }
+        // Re-reading a run must not consume a fresh threshold or mutate the allocation.
+        $this->assertSame($later, $this->slip(['from' => '2026-10-10', 'to' => '2026-10-31'])->assertOk()->json());
     }
 
     public function test_empty_and_single_day_ranges_have_matching_totals(): void
@@ -162,6 +192,8 @@ class CommissionSlipDateRangeTest extends TestCase
             [['from' => '2026-10-11', 'to' => '2026-10-10'], 'to'],
             [['from' => '2026-02-30', 'to' => '2026-10-10'], 'from'],
             [['from' => '10/01/2026', 'to' => '2026-10-10'], 'from'],
+            [['from' => '2026-09-30', 'to' => '2026-10-10'], 'from'],
+            [['from' => '2026-10-01', 'to' => '2026-11-01'], 'to'],
         ] as [$query, $field]) {
             $this->slip($query)->assertUnprocessable()->assertJsonValidationErrors($field);
         }
