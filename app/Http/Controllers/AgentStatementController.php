@@ -30,6 +30,12 @@ class AgentStatementController extends Controller
         );
 
         $month = $this->monthFromRequest($request);
+        $validated = $request->validate([
+            'from' => ['nullable', 'required_with:to', 'date_format:Y-m-d'],
+            'to' => ['nullable', 'required_with:from', 'date_format:Y-m-d', 'after_or_equal:from'],
+        ]);
+        $from = $validated['from'] ?? $month->toDateString();
+        $to = $validated['to'] ?? $month->copy()->endOfMonth()->toDateString();
         $brandId = BrandScope::canAccessAllBrands($user)
             ? $request->integer('brand_id') ?: null
             : null;
@@ -39,8 +45,8 @@ class AgentStatementController extends Controller
         $activities = SalesActivity::query()
             ->with(['brand', 'agent', 'frankieAgent', 'service'])
             ->where('payment_status', 'Payment Success')
-            ->whereDate('sold_date', '>=', $month->toDateString())
-            ->whereDate('sold_date', '<=', $month->copy()->endOfMonth()->toDateString())
+            ->whereDate('sold_date', '>=', $from)
+            ->whereDate('sold_date', '<=', $to)
             ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
             ->when(! $brandId && $canViewAll, fn ($query) => BrandScope::apply($query, $user))
             ->when($agentId, function ($query) use ($agentId) {
@@ -85,6 +91,9 @@ class AgentStatementController extends Controller
         $commissionRows = SalesMtdCalculator::withMtdDeductions(SalesMtdCalculator::statementRows($activities, $agentTargetRows), $agentTargetRows, $deductions);
         $rows = CommissionBalances::apply($commissionRows, $month, $canViewAll ? $user : null, $brandId, $agentId)
             ->when($agentId, fn (Collection $rows, int $selectedAgentId) => $rows->where('agent_id', $selectedAgentId)->values())
+            ->filter(fn (array $row) => $row['activity']->sold_date
+                && $row['activity']->sold_date->toDateString() >= $from
+                && $row['activity']->sold_date->toDateString() <= $to)
             ->sortByDesc(fn (array $row) => $row['activity']->sold_date?->timestamp ?? 0)
             ->values();
 
@@ -140,6 +149,8 @@ class AgentStatementController extends Controller
             'brands' => $brands,
             'agents' => $agents,
             'month' => $month,
+            'from' => $from,
+            'to' => $to,
             'brandId' => $brandId,
             'agentId' => $agentId,
             'search' => $search,

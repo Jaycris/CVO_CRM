@@ -16,13 +16,13 @@
             <div>
                 <h1 class="text-2xl font-bold text-slate-900 dark:text-zinc-100">Agent Statements</h1>
                 <p class="mt-1 text-slate-500 dark:text-zinc-400">
-                    Monthly sales credit, commission, and PHP totals using the saved bank rate.
+                    Sales credit, commission, and PHP totals for {{ $from }} through {{ $to }} using the saved bank rate.
                 </p>
             </div>
         </div>
 
         <form method="GET" action="{{ route('reports.agent-statements.index') }}" class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-            <div class="grid gap-4 lg:grid-cols-4">
+            <div class="grid gap-4 lg:grid-cols-3">
                 <div>
                     <label for="month" class="text-sm font-semibold text-slate-700 dark:text-zinc-200">Month</label>
                     <input
@@ -32,6 +32,17 @@
                         placeholder="YYYY-MM"
                         class="mt-2 w-full rounded-lg border-slate-300 bg-white text-sm shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                     >
+                </div>
+
+                <div>
+                    <label for="from" class="text-sm font-semibold text-slate-700 dark:text-zinc-200">From</label>
+                    <input id="from" name="from" type="date" value="{{ request('from') }}"
+                           class="mt-2 w-full rounded-lg border-slate-300 bg-white text-sm shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
+                </div>
+                <div>
+                    <label for="to" class="text-sm font-semibold text-slate-700 dark:text-zinc-200">To</label>
+                    <input id="to" name="to" type="date" value="{{ request('to') }}"
+                           class="mt-2 w-full rounded-lg border-slate-300 bg-white text-sm shadow-sm focus:border-[var(--brand-primary)] focus:ring-[var(--brand-primary)] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
                 </div>
 
                 @if ($brands->isNotEmpty())

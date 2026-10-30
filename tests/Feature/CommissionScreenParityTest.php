@@ -107,5 +107,60 @@ class CommissionScreenParityTest extends TestCase
             'month' => '2026-10', 'agent_id' => $agent->id,
         ]))->assertOk()->assertSee('Threshold exempt')->assertSee('$2,849.20');
         $this->assertEquals($exemptSlip['summary']['usd_total'], $exemptStatement->viewData('totals')['usd_total']);
+
+        // Earlier October sales can reproduce the reported 25%/no-threshold rows exactly.
+        $agent->update(['is_commission_threshold_exempt' => false]);
+        $earlierService = Service::create(['brand_id' => $brand->id, 'name' => 'Earlier sale', 'category' => 'Marketing', 'price' => 500]);
+        SalesActivity::create([
+            'brand_id' => $brand->id, 'agent_id' => $agent->id, 'service_id' => $earlierService->id,
+            'activity_type' => 'payment_success', 'sold_date' => '2026-10-01',
+            'author_name' => 'Earlier author', 'service_name' => $earlierService->name,
+            'amount' => 7000, 'agent_credit_amount' => 7000,
+            'payment_status' => 'Payment Success', 'payment_method' => 'Card',
+        ]);
+        $fullMonth = $this->get(route('reports.agent-statements.index', [
+            'month' => '2026-10', 'agent_id' => $agent->id,
+        ]))->assertOk();
+        $fourLatest = collect($fullMonth->viewData('rows')->items())
+            ->filter(fn ($row) => $row['activity']->sold_date->toDateString() >= '2026-10-10');
+        $this->assertEquals(3124, $fourLatest->sum('usd_total'));
+        $this->assertEquals(0, $fourLatest->sum('threshold_applied_amount'));
+
+        $range = ['month' => '2026-10', 'from' => '2026-10-10', 'to' => '2026-10-24'];
+        $rangeSlip = $this->withToken('screen-parity-token')->getJson(route('api.hris.commission-slip',
+            $range + ['hris_employee_id' => 'EMP-3183']))->assertOk()->json();
+        foreach ([null, $brand->id] as $brandId) {
+            $rangeStatement = $this->actingAs($admin)->get(route('reports.agent-statements.index',
+                $range + ['agent_id' => $agent->id, 'brand_id' => $brandId]))->assertOk()
+                ->assertSee('$2,749.20')->assertSee('$500.00 threshold applied')
+                ->assertSee('2026-10-10 through 2026-10-24')->assertDontSee('Earlier author');
+            $this->assertCount(4, $rangeStatement->viewData('rows')->items());
+            foreach (['service_commission', 'markup_commission', 'usd_total', 'php_total', 'net_commission'] as $field) {
+                $this->assertEquals($rangeSlip['summary'][$field], $rangeStatement->viewData('totals')[$field], "Range statement $field");
+            }
+            $this->assertEquals(142546.01, $rangeStatement->viewData('totals')['net_commission']);
+        }
+
+        $this->get(route('reports.agent-statements.index', [
+            'month' => '2026-10', 'agent_id' => $agent->id, 'from' => '2026-10-10', 'to' => '2026-10-10',
+        ]))->assertOk()->assertViewHas('totals', fn ($totals) => $totals['usd_total'] == 0);
+    }
+
+    public function test_statement_date_range_requires_both_valid_dates_in_order(): void
+    {
+        $role = Role::firstOrCreate(['name' => 'Admin'], ['slug' => 'admin', 'department' => 'Admin']);
+        $admin = User::factory()->create(['role_id' => $role->id, 'department' => 'Admin']);
+        foreach ([
+            [['from' => '2026-10-10'], 'to'],
+            [['to' => '2026-10-24'], 'from'],
+            [['from' => '2026-10-24', 'to' => '2026-10-10'], 'to'],
+            [['from' => '2026-02-30', 'to' => '2026-10-24'], 'from'],
+        ] as [$query, $field]) {
+            $this->actingAs($admin)->getJson(route('reports.agent-statements.index', $query))
+                ->assertUnprocessable()->assertJsonValidationErrors($field);
+        }
+        $this->actingAs($admin)->get(route('reports.agent-statements.index', [
+            'month' => '2026-10', 'from' => '', 'to' => '',
+        ]))->assertOk()->assertViewHas('from', '2026-10-01')->assertViewHas('to', '2026-10-31');
     }
 }
