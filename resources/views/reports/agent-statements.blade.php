@@ -170,6 +170,12 @@
                                 @endif
                                 <td class="px-4 py-3 text-xs font-semibold leading-5 text-slate-900 dark:text-zinc-100">
                                     {{ trim(($agent?->first_name ?? '') . ' ' . ($agent?->last_name ?? '')) ?: '-' }}
+                                    @if ($isAdmin && $activity->activity_type !== 'commission_adjustment')
+                                        <span class="block text-xs font-normal text-slate-500 dark:text-zinc-400">{{ $row['commission_profile_name'] }}</span>
+                                        <span class="block text-xs font-normal text-slate-500 dark:text-zinc-400">
+                                            {{ ($row['is_commission_threshold_exempt'] ?? false) ? 'Threshold exempt' : 'Threshold: ' . $money($row['commission_threshold_amount'] ?? 0) }}
+                                        </span>
+                                    @endif
                                 </td>
                                 <td class="min-w-56 px-4 py-3 text-xs leading-5">
                                     <p class="font-semibold text-slate-900 dark:text-zinc-100">{{ $activity->author_name ?: '-' }}</p>
@@ -182,8 +188,18 @@
                                         <span class="block text-xs text-rose-600 dark:text-rose-300">MTD deduction -{{ $money($row['mtd_deduction']) }}</span>
                                     @endif
                                 </td>
-                                <td class="whitespace-nowrap px-4 py-3 text-xs">{{ $money($row['service_amount']) }}</td>
-                                <td class="whitespace-nowrap px-4 py-3 text-xs">{{ $money($row['markup_amount']) }}</td>
+                                <td class="whitespace-nowrap px-4 py-3 text-xs">
+                                    {{ $money($row['service_amount']) }}
+                                    @if (($row['threshold_applied_service_amount'] ?? 0) > 0)
+                                        <span class="block text-xs text-amber-600 dark:text-amber-300">{{ $money($row['threshold_applied_service_amount']) }} threshold applied</span>
+                                    @endif
+                                </td>
+                                <td class="whitespace-nowrap px-4 py-3 text-xs">
+                                    {{ $money($row['markup_amount']) }}
+                                    @if (($row['threshold_applied_markup_amount'] ?? 0) > 0)
+                                        <span class="block text-xs text-amber-600 dark:text-amber-300">{{ $money($row['threshold_applied_markup_amount']) }} threshold applied</span>
+                                    @endif
+                                </td>
                                 <td class="whitespace-nowrap px-4 py-3 text-xs">
                                     {{ $money($row['service_commission']) }}
                                     @if ($isAdmin)
@@ -204,7 +220,7 @@
                                 </td>
                                 <td class="whitespace-nowrap px-4 py-3 text-sm font-bold text-amber-700 dark:text-amber-300">
                                     {{ $peso($row['hold_amount']) }}
-                                    <span class="block text-xs font-medium text-slate-400">{{ $activity->payment_method === 'Card' ? number_format($row['card_payment_hold_percent'], 2) . '% card hold' : 'No card hold' }}</span>
+                                    <span class="block text-xs font-medium text-slate-400">{{ $row['hold_amount'] > 0 ? number_format($row['card_payment_hold_percent'], 2) . '% card hold' : 'No card hold' }}</span>
                                 </td>
                                 <td class="whitespace-nowrap px-4 py-3 text-sm font-bold text-slate-900 dark:text-zinc-100">{{ $peso($row['net_commission']) }}</td>
                             </tr>
