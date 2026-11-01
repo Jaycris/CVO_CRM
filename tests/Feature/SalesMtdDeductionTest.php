@@ -104,6 +104,35 @@ class SalesMtdDeductionTest extends TestCase
         return SalesMtdCalculator::summary($viewer, Carbon::parse($month . '-01'), $brandId);
     }
 
+    public function test_home_leaderboard_excludes_zero_and_negative_sales_but_keeps_commission_debt_in_reports(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-01 12:00:00'));
+        CommissionAdjustment::create([
+            'brand_id' => $this->agent->brand_id, 'agent_id' => $this->agent->id,
+            'kind' => 'dispute', 'effective_date' => '2026-10-15',
+            'usd_amount' => -419.32, 'original_commission' => [],
+        ]);
+
+        $this->actingAs($this->admin)->get(route('dashboard'))->assertOk()
+            ->assertViewHas('topSalesPerformance', fn ($rows) => $rows->isEmpty())
+            ->assertSee('No successful sales recorded this month yet.');
+        $this->get(route('reports.sales-performance.index', ['month' => '2026-11']))->assertOk()
+            ->assertViewHas('agentRows', function ($rows) {
+                $agent = collect($rows->items())->firstWhere('id', $this->agent->id);
+                return $agent && $agent['mtd'] == 0 && $agent['net_commission'] < 0;
+            });
+
+        // Sales still qualify for ranking when an outstanding debt makes commission negative.
+        $this->sale($this->agent, '2026-11-01');
+        $this->get(route('dashboard'))->assertOk()
+            ->assertViewHas('topSalesPerformance', fn ($rows) => $rows->count() === 1 && $rows->first()['total_amount'] == 1000);
+
+        $this->deduct(['month' => '2026-11', 'amount' => 2000]);
+        $this->get(route('dashboard'))->assertOk()
+            ->assertViewHas('topSalesPerformance', fn ($rows) => $rows->isEmpty());
+        $this->assertDatabaseCount('commission_adjustments', 1);
+    }
+
     public function test_admin_deduction_recalculates_agent_commission_and_keeps_original_records_unchanged(): void
     {
         $sale = $this->sale();

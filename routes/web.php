@@ -329,6 +329,8 @@ Route::get('/dashboard', function () {
         ->keyBy('id');
 
     $topSalesPerformance = $agentCredits
+        // Commission debt can create a summary row even when no sales were made.
+        ->filter(fn (array $credit) => (float) ($credit['mtd'] ?? 0) > 0)
         ->map(function (array $credit, $agentId) use ($agentsById) {
             $agent = $agentsById->get((int) $agentId);
 
