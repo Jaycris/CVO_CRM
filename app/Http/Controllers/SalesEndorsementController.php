@@ -9,11 +9,14 @@ use App\Models\Service;
 use App\Models\User;
 use App\Notifications\SalesEndorsementSubmittedNotification;
 use App\Support\BrandScope;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SalesEndorsementController extends Controller
 {
@@ -23,7 +26,27 @@ class SalesEndorsementController extends Controller
 
         $search = trim((string) $request->query('search', ''));
 
-        $endorsements = SalesEndorsement::with(['agent', 'frankieAgent', 'brand'])
+        $endorsements = $this->endorsementQuery($request)
+            ->latest()
+            ->paginate(\App\Models\AppSetting::leadsSalesRecordsPerPage())
+            ->withQueryString();
+
+        return view('sales-endorsements.index', [
+            'endorsements' => $endorsements,
+            'canSubmitEndorsement' => $this->canSubmitEndorsement($request),
+            'canDeleteEndorsements' => $this->userHasPermission($request, 'delete_sales_endorsements'),
+            'isAdmin' => $request->user()?->role?->name === 'Admin',
+            'canViewSensitiveEndorsementDetails' => $this->canViewSensitiveEndorsementDetails($request),
+            'canExportEndorsements' => $this->canExportEndorsements($request),
+            'search' => $search,
+        ]);
+    }
+
+    private function endorsementQuery(Request $request): Builder
+    {
+        $search = trim((string) $request->query('search', ''));
+
+        return SalesEndorsement::with(['agent', 'frankieAgent', 'brand'])
             ->tap(fn ($query) => $this->applyEndorsementBrandScope($query, $request, ! $this->canViewAllEndorsements($request)))
             ->when(! $this->canViewAllEndorsements($request), fn ($query) => $query->where('agent_id', $request->user()->id))
             ->when($search !== '', function ($query) use ($search) {
@@ -41,19 +64,62 @@ class SalesEndorsementController extends Controller
                                 ->orWhere('last_name', 'like', "%{$search}%");
                         });
                 });
-            })
-            ->latest()
-            ->paginate(\App\Models\AppSetting::leadsSalesRecordsPerPage())
-            ->withQueryString();
+            });
+    }
 
-        return view('sales-endorsements.index', [
-            'endorsements' => $endorsements,
-            'canSubmitEndorsement' => $this->canSubmitEndorsement($request),
-            'canDeleteEndorsements' => $this->userHasPermission($request, 'delete_sales_endorsements'),
-            'isAdmin' => $request->user()?->role?->name === 'Admin',
-            'canViewSensitiveEndorsementDetails' => $this->canViewSensitiveEndorsementDetails($request),
-            'search' => $search,
+    public function export(Request $request): StreamedResponse
+    {
+        abort_unless($this->canExportEndorsements($request), 403);
+
+        $validated = $request->validate([
+            'from' => ['required', 'date_format:Y-m-d'],
+            'to' => ['required', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'search' => ['nullable', 'string', 'max:255'],
         ]);
+        $query = $this->endorsementQuery($request)
+            ->where('created_at', '>=', Carbon::parse($validated['from'])->startOfDay())
+            ->where('created_at', '<', Carbon::parse($validated['to'])->addDay()->startOfDay());
+
+        return response()->streamDownload(function () use ($query) {
+            $file = fopen('php://output', 'w');
+            fwrite($file, "\xEF\xBB\xBF");
+            fputcsv($file, [
+                'SE ID', 'Submitted At', 'Brand', 'Agent', 'Frankie Agent', 'Author', 'Book Title',
+                'Service', 'Contract Amount (USD)', 'Payment Type', 'Contact Number', 'Email',
+                'Street', 'City / State', 'ZIP Code', 'ISBN', 'Remarks',
+            ]);
+            foreach ($query->lazyById(500) as $endorsement) {
+                $cells = [
+                    $endorsement->endorsement_code, $endorsement->created_at?->format('Y-m-d H:i:s'),
+                    $endorsement->brand?->imprint_name,
+                    trim(($endorsement->agent?->first_name ?? '').' '.($endorsement->agent?->last_name ?? '')),
+                    $endorsement->has_frankie ? ($endorsement->frankie_agent_name
+                        ?: trim(($endorsement->frankieAgent?->first_name ?? '').' '.($endorsement->frankieAgent?->last_name ?? ''))) : '',
+                    $endorsement->author_name, $endorsement->book_title, $endorsement->services,
+                    $endorsement->amount, $endorsement->payment, $endorsement->contact_number,
+                    $endorsement->email, $endorsement->street_name, $endorsement->city_state,
+                    $endorsement->zip_code, $endorsement->isbn, $endorsement->remarks,
+                ];
+                // Keep user-entered spreadsheet formulas as literal text in CSV readers.
+                fputcsv($file, array_map(function ($value) {
+                    $text = (string) ($value ?? '');
+                    return preg_match('/^[\s\x00-\x1f]*[=+@-]/u', $text) ? "'".$text : $text;
+                }, $cells));
+            }
+            fclose($file);
+        }, 'sales-endorsements_'.$validated['from'].'_to_'.$validated['to'].'.csv', [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Cache-Control' => 'private, no-store',
+        ]);
+    }
+
+    private function canExportEndorsements(Request $request): bool
+    {
+        return $this->canViewEndorsements($request)
+            && $this->canViewSensitiveEndorsementDetails($request)
+            && ($request->user()?->role?->name === 'Admin'
+                || $request->user()?->role?->name === 'Finance Officer'
+                || $request->user()?->department === 'Finance');
     }
 
     public function create(Request $request): View

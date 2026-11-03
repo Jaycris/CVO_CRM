@@ -499,6 +499,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/sales/sold', [LeadController::class, 'salesSold'])->name('sales.sold');
     Route::get('/sales/refunds', [LeadController::class, 'salesRefunds'])->name('sales.refunds');
     Route::get('/sales/endorsement', [SalesEndorsementController::class, 'index'])->name('sales.endorsements.index');
+    Route::get('/sales/endorsement/export', [SalesEndorsementController::class, 'export'])->name('sales.endorsements.export');
     Route::get('/sales/endorsement/create', [SalesEndorsementController::class, 'create'])->name('sales.endorsements.create');
     Route::post('/sales/endorsement', [SalesEndorsementController::class, 'store'])->name('sales.endorsements.store');
     Route::delete('/sales/endorsement', [SalesEndorsementController::class, 'bulkDestroy'])->name('sales.endorsements.bulk-destroy');
