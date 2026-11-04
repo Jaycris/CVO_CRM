@@ -42,6 +42,7 @@ class ServiceAvailabilityTest extends TestCase
             'author_name' => 'Event Author', 'contact_number' => '5550100', 'email' => 'event@example.com',
             'street_name' => 'Test Street', 'city_state' => 'Test City', 'zip_code' => '1000',
             'book_title' => 'Event Book', 'isbn' => '123', 'services' => $service->name,
+            'service_id' => $service->id, 'markup_amount' => 0,
             'amount' => 999, 'payment' => 'Full Payment',
         ];
     }
@@ -68,12 +69,12 @@ class ServiceAvailabilityTest extends TestCase
         $service->update(['is_active' => false]);
 
         $this->actingAs($admin)->get(route('sales.endorsements.create'))->assertOk()
-            ->assertViewHas('serviceOptions', fn ($options) => ! in_array($service->name, $options, true));
+            ->assertViewHas('serviceOptions', fn ($options) => ! collect($options)->contains('id', $service->id));
         $this->get(route('services.index'))->assertOk()->assertDontSee($service->name);
 
         $payload = $this->payload($service);
         $payload['services'] = '  BOOK FAIR REGISTRATION  ';
-        $this->post(route('sales.endorsements.store'), $payload)->assertSessionHasErrors('services');
+        $this->post(route('sales.endorsements.store'), $payload)->assertSessionHasErrors('service_id');
         $this->assertDatabaseCount('sales_endorsements', 0);
     }
 

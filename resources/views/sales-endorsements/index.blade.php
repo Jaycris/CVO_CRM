@@ -198,7 +198,13 @@
                                     <span class="line-clamp-2" title="{{ $endorsement->book_title }}">{{ $endorsement->book_title }}</span>
                                 </td>
                                 <td class="break-words px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">{{ $endorsement->services }}</td>
-                                <td class="px-3 py-4 font-semibold leading-snug text-slate-900 dark:text-zinc-100">${{ number_format((float) $endorsement->amount, 2) }}</td>
+                                <td class="px-3 py-4 font-semibold leading-snug text-slate-900 dark:text-zinc-100">
+                                    ${{ number_format((float) $endorsement->amount, 2) }}
+                                    @if ($endorsement->service_price_snapshot !== null)
+                                        <span class="mt-1 block text-[11px] font-normal text-slate-500 dark:text-zinc-400">Service: ${{ number_format((float) $endorsement->service_price_snapshot, 2) }}</span>
+                                        <span class="block text-[11px] font-normal text-slate-500 dark:text-zinc-400">Markup: ${{ number_format((float) $endorsement->markup_amount, 2) }}</span>
+                                    @endif
+                                </td>
                                 <td class="break-words px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">{{ $endorsement->payment }}</td>
                                 @if ($canViewSensitiveEndorsementDetails)
                                     <td class="break-words px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">{{ $endorsement->contact_number }}</td>
@@ -239,6 +245,10 @@
                                                                 'Payment Type' => $endorsement->payment,
                                                                 'Submitted' => $endorsement->created_at?->format('M d, Y h:i A'),
                                                             ];
+                                                            if ($endorsement->service_price_snapshot !== null) {
+                                                                $endorsementDetails['Service Price'] = '$' . number_format((float) $endorsement->service_price_snapshot, 2);
+                                                                $endorsementDetails['Markup'] = '$' . number_format((float) $endorsement->markup_amount, 2);
+                                                            }
                                                             if ($endorsement->has_frankie) {
                                                                 $endorsementDetails['Frankie Agent'] = $endorsement->frankie_agent_name;
                                                                 $endorsementDetails['Frankie Commission'] = number_format((float) $endorsement->frankie_commission_percent, 0) . '%';

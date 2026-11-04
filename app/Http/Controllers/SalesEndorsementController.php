@@ -86,7 +86,7 @@ class SalesEndorsementController extends Controller
             fputcsv($file, [
                 'SE ID', 'Submitted At', 'Brand', 'Agent', 'Frankie Agent', 'Author', 'Book Title',
                 'Service', 'Contract Amount (USD)', 'Payment Type', 'Contact Number', 'Email',
-                'Street', 'City / State', 'ZIP Code', 'ISBN', 'Remarks',
+                'Street', 'City / State', 'ZIP Code', 'ISBN', 'Remarks', 'Service Price (USD)', 'Markup (USD)',
             ]);
             foreach ($query->lazyById(500) as $endorsement) {
                 $cells = [
@@ -99,6 +99,7 @@ class SalesEndorsementController extends Controller
                     $endorsement->amount, $endorsement->payment, $endorsement->contact_number,
                     $endorsement->email, $endorsement->street_name, $endorsement->city_state,
                     $endorsement->zip_code, $endorsement->isbn, $endorsement->remarks,
+                    $endorsement->service_price_snapshot, $endorsement->markup_amount,
                 ];
                 // Keep user-entered spreadsheet formulas as literal text in CSV readers.
                 fputcsv($file, array_map(function ($value) {
@@ -129,6 +130,7 @@ class SalesEndorsementController extends Controller
         return view('sales-endorsements.create', [
             'paymentOptions' => $this->paymentOptions(),
             'serviceOptions' => $this->serviceOptions($request),
+            'endorsementBrandId' => BrandScope::userBrandId($request->user()),
             'leadOptions' => $this->leadOptions($request),
             'frankieAgentOptions' => $this->frankieAgentOptions($request),
             'duplicateInstallmentContracts' => $this->duplicateInstallmentContracts($request),
@@ -151,13 +153,11 @@ class SalesEndorsementController extends Controller
             'zip_code' => ['required', 'string', 'max:50'],
             'book_title' => ['required', 'string', 'max:255'],
             'isbn' => ['required', 'string', 'max:255'],
-            'services' => ['required', 'string', 'max:255'],
-            'amount' => ['required', 'numeric', 'min:0'],
+            'service_id' => ['required', 'integer'],
+            'markup_amount' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:9999999999.99'],
             'payment' => ['required', Rule::in($this->acceptedPaymentOptions())],
             'remarks' => ['nullable', 'string', 'max:2000'],
         ]);
-
-        $validated['amount_to_be_paid'] = $validated['amount'];
 
         $lead = isset($validated['lead_id'])
             ? Lead::find($validated['lead_id'])
@@ -183,14 +183,30 @@ class SalesEndorsementController extends Controller
 
         $service = Service::query()
             ->where('brand_id', $brandId)
-            ->whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower(trim($validated['services']))])
+            ->whereKey($validated['service_id'])
             ->first();
 
-        if ($service && ! $service->is_active) {
+        if (! $service || ! $service->is_active || $service->price === null || (float) $service->price < 0) {
             throw ValidationException::withMessages([
-                'services' => 'This service is disabled and no longer accepts new sales or registrations. Please choose an active service.',
+                'service_id' => 'Choose an active service with a configured price for this author’s brand.',
             ]);
         }
+
+        $serviceCents = (int) round((float) $service->price * 100);
+        $markupCents = (int) round((float) $validated['markup_amount'] * 100);
+        if ($markupCents > $serviceCents) {
+            throw ValidationException::withMessages([
+                'markup_amount' => 'Markup cannot exceed the service price of $'.number_format($serviceCents / 100, 2).'.',
+            ]);
+        }
+        if ($serviceCents + $markupCents > 999999999999) {
+            throw ValidationException::withMessages(['markup_amount' => 'The total contract amount exceeds the supported limit.']);
+        }
+        $validated['services'] = $service->name;
+        $validated['service_price_snapshot'] = number_format($serviceCents / 100, 2, '.', '');
+        $validated['markup_amount'] = number_format($markupCents / 100, 2, '.', '');
+        $validated['amount'] = number_format(($serviceCents + $markupCents) / 100, 2, '.', '');
+        $validated['amount_to_be_paid'] = $validated['amount'];
 
         $endorsement = SalesEndorsement::create([
             ...$validated,
@@ -277,9 +293,20 @@ class SalesEndorsementController extends Controller
     {
         return Service::query()
             ->where('is_active', true)
-            ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
+            ->whereNotNull('price')
+            ->where('price', '>=', 0)
+            ->when(! BrandScope::canAccessAllBrands($request->user()), function ($query) use ($request) {
+                $query->where(function ($query) use ($request) {
+                    $query->where('brand_id', BrandScope::userBrandId($request->user()))
+                        ->orWhereIn('brand_id', Lead::query()->select('brand_id')->where('assigned_to', $request->user()->id));
+                });
+            })
             ->orderBy('name')
-            ->pluck('name')
+            ->get(['id', 'brand_id', 'name', 'price'])
+            ->map(fn (Service $service) => [
+                'id' => $service->id, 'brandId' => $service->brand_id,
+                'name' => $service->name, 'price' => $service->price,
+            ])
             ->all();
     }
 
@@ -308,6 +335,7 @@ class SalesEndorsementController extends Controller
             ->filter(fn (Lead $lead) => $this->leadHasCleanAuthorOption($lead))
             ->map(fn (Lead $lead) => [
                 'id' => $lead->id,
+                'brandId' => $lead->brand_id,
                 'authorName' => $lead->author_name,
                 'bookTitle' => $lead->book_title,
                 'contactNumber' => collect($lead->phone_numbers ?? [])->first() ?? '',

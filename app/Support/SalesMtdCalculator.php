@@ -6,6 +6,7 @@ use App\Models\AppSetting;
 use App\Models\Brand;
 use App\Models\CommissionProfile;
 use App\Models\SalesActivity;
+use App\Models\SalesEndorsement;
 use App\Models\SalesTarget;
 use App\Models\Service;
 use App\Models\User;
@@ -309,11 +310,16 @@ class SalesMtdCalculator
     private static function activityServiceMarkupSplits(Collection $activities): array
     {
         $servicePricesByName = self::servicePricesByName($activities);
+        $savedPrices = SalesEndorsement::withTrashed()
+            ->whereIn('id', $activities->pluck('sales_endorsement_id')->filter()->unique())
+            ->pluck('service_price_snapshot', 'id')
+            ->filter(fn ($price) => $price !== null);
         $splits = [];
 
         $activities
-            ->groupBy(fn (SalesActivity $activity) => self::salePackageKey($activity))
-            ->each(function (Collection $packageActivities) use (&$splits, $servicePricesByName) {
+            ->groupBy(fn (SalesActivity $activity) => $savedPrices->has($activity->sales_endorsement_id)
+                ? 'endorsement:'.$activity->sales_endorsement_id : self::salePackageKey($activity))
+            ->each(function (Collection $packageActivities) use (&$splits, $servicePricesByName, $savedPrices) {
                 $orderedActivities = $packageActivities
                     ->sortBy(fn (SalesActivity $activity) => sprintf(
                         '%s-%010d',
@@ -322,9 +328,14 @@ class SalesMtdCalculator
                     ))
                     ->values();
                 $firstActivity = $orderedActivities->first();
-                $servicePrice = self::servicePriceForActivity($firstActivity, $servicePricesByName);
-                $priorPaidAmount = self::priorPackagePaidAmount($firstActivity, $servicePricesByName);
-                $remainingService = $servicePrice > 0 ? max($servicePrice - $priorPaidAmount, 0) : null;
+                $usesSavedPrice = $savedPrices->has($firstActivity->sales_endorsement_id);
+                $servicePrice = $usesSavedPrice ? (float) $savedPrices->get($firstActivity->sales_endorsement_id)
+                    : self::servicePriceForActivity($firstActivity, $servicePricesByName);
+                $priorPaidAmount = $usesSavedPrice
+                    ? (float) SalesActivity::query()->where('sales_endorsement_id', $firstActivity->sales_endorsement_id)
+                        ->where('payment_status', 'Payment Success')->whereDate('sold_date', '<', $firstActivity->sold_date->toDateString())->sum('amount')
+                    : self::priorPackagePaidAmount($firstActivity, $servicePricesByName);
+                $remainingService = $usesSavedPrice || $servicePrice > 0 ? max($servicePrice - $priorPaidAmount, 0) : null;
 
                 $orderedActivities->each(function (SalesActivity $activity) use (&$splits, &$remainingService) {
                     $saleAmount = max((float) $activity->amount, 0);

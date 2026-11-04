@@ -35,10 +35,12 @@
                     email: @js(old('email', '')),
                     leadOptions: @js($leadOptions),
                     serviceName: @js(old('services', '')),
+                    serviceId: @js(old('service_id', '')),
+                    markupAmount: @js(old('markup_amount', '0')),
+                    defaultBrandId: @js($endorsementBrandId),
                     serviceOptions: @js($serviceOptions),
                     duplicateInstallmentContracts: @js($duplicateInstallmentContracts),
                     paymentType: @js(old('payment', '')),
-                    totalContractAmountDisplay: '',
                     frankieAgentId: @js(old('frankie_agent_id', '')),
                     frankieAgentName: @js(collect($frankieAgentOptions)->firstWhere('id', (int) old('frankie_agent_id'))['name'] ?? ''),
                     frankieAgentOptions: @js($frankieAgentOptions),
@@ -51,7 +53,27 @@
                     formElement: null,
                     init() {
                         this.formElement = this.$el;
-                        this.totalContractAmountDisplay = this.formatMoney(@js(old('amount', '')));
+                        this.$watch('leadId', () => {
+                            if (!this.selectedService) {
+                                this.serviceId = ''; this.serviceName = ''; this.markupAmount = '0';
+                            }
+                        });
+                    },
+                    get selectedBrandId() {
+                        return this.leadOptions.find((lead) => String(lead.id) === String(this.leadId))?.brandId ?? this.defaultBrandId;
+                    },
+                    get selectedService() {
+                        return this.serviceOptions.find((service) => String(service.id) === String(this.serviceId)
+                            && String(service.brandId) === String(this.selectedBrandId)) || null;
+                    },
+                    get servicePriceDisplay() {
+                        return this.selectedService ? this.formatMoney(this.selectedService.price) : '';
+                    },
+                    get totalContractAmountDisplay() {
+                        if (!this.selectedService) return '';
+                        const base = Math.round(Number(this.selectedService.price) * 100);
+                        const markup = Number(this.markupAmount);
+                        return Number.isFinite(markup) ? this.formatMoney(((base + Math.round(markup * 100)) / 100).toFixed(2)) : '';
                     },
                     parseMoney(value) {
                         const raw = String(value ?? '').replace(/,/g, '').replace(/[^\d.]/g, '');
@@ -79,9 +101,6 @@
                         const formattedWhole = Number.parseInt(whole || '0', 10).toLocaleString('en-US');
 
                         return decimal === undefined ? formattedWhole : `${formattedWhole}.${decimal}`;
-                    },
-                    updateTotalContractAmount() {
-                        this.totalContractAmountDisplay = this.formatMoney(this.totalContractAmountDisplay);
                     },
                     syncPaymentType() {
                         return;
@@ -139,13 +158,9 @@
                     },
                     filteredServiceOptions() {
                         const search = this.serviceName.trim().toLowerCase();
-
-                        if (!search) {
-                            return this.serviceOptions.slice(0, 8);
-                        }
-
                         return this.serviceOptions
-                            .filter((service) => service.toLowerCase().includes(search))
+                            .filter((service) => String(service.brandId) === String(this.selectedBrandId)
+                                && service.name.toLowerCase().includes(search))
                             .slice(0, 8);
                     },
                     filteredFrankieAgentOptions() {
@@ -186,7 +201,9 @@
                         this.authorDropdownOpen = false;
                     },
                     selectService(service) {
-                        this.serviceName = service;
+                        this.serviceName = service.name;
+                        this.serviceId = service.id;
+                        this.markupAmount = '0';
                         this.serviceDropdownOpen = false;
                     },
                     selectFrankieAgent(agent) {
@@ -391,12 +408,13 @@
                             Services <span class="text-rose-600">*</span>
                         </label>
                         <div class="relative">
+                            <input type="hidden" name="service_id" x-bind:value="serviceId">
                             <input id="services"
                                    name="services"
                                    type="text"
                                    x-model="serviceName"
                                    x-on:focus="serviceDropdownOpen = true"
-                                   x-on:input="serviceDropdownOpen = true"
+                                   x-on:input="serviceId = ''; serviceDropdownOpen = true"
                                    x-on:keydown.escape.prevent="serviceDropdownOpen = false"
                                    autocomplete="off"
                                    required
@@ -415,28 +433,43 @@
                              x-cloak
                              x-transition
                              class="absolute z-30 mt-2 max-h-72 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
-                            <template x-for="service in filteredServiceOptions()" :key="service">
+                            <template x-for="service in filteredServiceOptions()" :key="service.id">
                                 <button type="button"
                                         x-on:click="selectService(service)"
                                         class="block w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-900 hover:bg-amber-50 dark:text-zinc-100 dark:hover:bg-amber-400/10"
-                                        x-text="service">
+                                        x-text="service.name + ' — $' + formatMoney(service.price)">
                                 </button>
                             </template>
 
                             <div x-show="filteredServiceOptions().length === 0" class="px-3 py-4 text-sm text-slate-500 dark:text-zinc-400">
-                                No matching service found. You can still type a custom service.
+                                No matching priced service found for this author’s brand. Contact Admin to add or update a service.
                             </div>
                         </div>
 
-                        <x-input-error :messages="$errors->get('services')" class="mt-2" />
+                        <x-input-error :messages="$errors->get('service_id')" class="mt-2" />
                     </div>
 
+                    <div>
+                        <label for="service-price" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">Service Price (USD)</label>
+                        <input id="service-price" type="text" readonly x-bind:value="servicePriceDisplay"
+                               class="w-full rounded-xl border-slate-300 bg-slate-50 px-4 py-3 text-sm shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                    </div>
+                    <div>
+                        <label for="markup_amount" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">Markup (USD) <span class="text-rose-600">*</span></label>
+                        <input id="markup_amount" name="markup_amount" type="number" min="0" step="0.01" required
+                               x-model="markupAmount" x-bind:max="selectedService?.price ?? 0" x-bind:disabled="!selectedService"
+                               class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+                        <p class="mt-2 text-xs text-slate-500 dark:text-zinc-400" x-text="selectedService ? 'Maximum markup: $' + servicePriceDisplay : 'Select a service to enter markup.'"></p>
+                        <x-input-error :messages="$errors->get('markup_amount')" class="mt-2" />
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
                     <div>
                         <label for="amount" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">
                             Total Contract Amount <span class="text-rose-600">*</span>
                         </label>
                         <input type="hidden" name="amount" x-bind:value="hiddenMoneyValue(totalContractAmountDisplay)">
-                        <input id="amount" type="text" inputmode="decimal" x-model="totalContractAmountDisplay" x-on:input="updateTotalContractAmount()" required
+                        <input id="amount" type="text" x-bind:value="totalContractAmountDisplay" readonly
                                class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
                         <x-input-error :messages="$errors->get('amount')" class="mt-2" />
                     </div>
