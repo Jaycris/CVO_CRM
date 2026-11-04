@@ -69,6 +69,13 @@
                     get servicePriceDisplay() {
                         return this.selectedService ? this.formatMoney(this.selectedService.price) : '';
                     },
+                    get markupValidationError() {
+                        if (!this.selectedService || this.markupAmount === '') return '';
+                        const markup = Number(this.markupAmount);
+                        if (markup < 0) return 'Markup cannot be negative.';
+                        return markup > Number(this.selectedService.price)
+                            ? 'Markup cannot exceed the service price of $' + this.servicePriceDisplay + '.' : '';
+                    },
                     get totalContractAmountDisplay() {
                         if (!this.selectedService) return '';
                         const base = Math.round(Number(this.selectedService.price) * 100);
@@ -458,8 +465,11 @@
                         <label for="markup_amount" class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-300">Markup (USD) <span class="text-rose-600">*</span></label>
                         <input id="markup_amount" name="markup_amount" type="number" min="0" step="0.01" required
                                x-model="markupAmount" x-bind:max="selectedService?.price ?? 0" x-bind:disabled="!selectedService"
+                               x-bind:aria-invalid="markupValidationError ? 'true' : 'false'" aria-describedby="markup-limit markup-live-error"
                                class="w-full rounded-xl border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
-                        <p class="mt-2 text-xs text-slate-500 dark:text-zinc-400" x-text="selectedService ? 'Maximum markup: $' + servicePriceDisplay : 'Select a service to enter markup.'"></p>
+                        <p id="markup-limit" class="mt-2 text-xs text-slate-500 dark:text-zinc-400" x-text="selectedService ? 'Maximum markup: $' + servicePriceDisplay : 'Select a service to enter markup.'"></p>
+                        <p id="markup-live-error" x-cloak x-show="markupValidationError" x-text="markupValidationError"
+                           aria-live="polite" class="mt-2 text-sm text-rose-600 dark:text-rose-400"></p>
                         <x-input-error :messages="$errors->get('markup_amount')" class="mt-2" />
                     </div>
                 </div>
