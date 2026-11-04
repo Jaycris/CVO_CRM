@@ -9,6 +9,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
     @php
+        $mailboxEnabled = (bool) config('features.mailbox_enabled', false);
         $headBrand = auth()->user()?->brand;
         $headBrandName = $headBrand?->imprint_name ?? 'CreatiVision Outsourcing';
         $headAppName = $headBrandName === 'CreatiVision Outsourcing'
@@ -444,11 +445,11 @@
                     ])
                     ->values();
                 $unreadNotificationCount = auth()->user()->unreadNotifications()->count();
-                $unreadEmailCount = \App\Models\EmailMessage::query()
+                $unreadEmailCount = $mailboxEnabled ? \App\Models\EmailMessage::query()
                     ->where('folder', 'INBOX')
                     ->where('is_seen', false)
                     ->whereHas('account', fn ($query) => $query->where('user_id', auth()->id()))
-                    ->count();
+                    ->count() : 0;
                 $salesWorkflowActive = request()->routeIs(
                     'sales.team-leads',
                     'sales.pipeline',
@@ -517,6 +518,7 @@
                         Notes
                     </a>
 
+                    @if ($mailboxEnabled)
                     <a href="{{ route('email.index') }}"
                        data-feature-tour="email-menu"
                        class="{{ $sidebarLink(request()->routeIs('email.*')) }}">
@@ -530,6 +532,7 @@
                               x-text="emailUnreadCount > 99 ? '99+' : emailUnreadCount"
                               class="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-rose-600 px-1.5 py-0.5 text-[11px] font-bold leading-none text-white"></span>
                     </a>
+                    @endif
 
                     <a href="{{ route('calendar.index') }}" class="{{ $sidebarLink(request()->routeIs('calendar.*')) }}">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ $sidebarIcon(request()->routeIs('calendar.*')) }}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -1522,11 +1525,11 @@
 
     @php
         $emailTourKey = 'email-menu-v1';
-        $emailTourSeen = \Illuminate\Support\Facades\Schema::hasTable('feature_tour_views')
+        $emailTourSeen = ! $mailboxEnabled || (\Illuminate\Support\Facades\Schema::hasTable('feature_tour_views')
             && \Illuminate\Support\Facades\DB::table('feature_tour_views')
                 ->where('user_id', auth()->id())
                 ->where('feature_key', $emailTourKey)
-                ->exists();
+                ->exists());
     @endphp
 
     @if (! $emailTourSeen)

@@ -14,4 +14,5 @@ Schedule::command('leads:auto-return-untouched')
 
 Schedule::command('email:sync-inboxes')
     ->everyMinute()
+    ->when(fn () => (bool) config('features.mailbox_enabled', false))
     ->withoutOverlapping();

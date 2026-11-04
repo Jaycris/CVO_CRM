@@ -14,6 +14,11 @@ class SyncEmailInboxesCommand extends Command
 
     public function handle(EmailInboxSyncService $syncService): int
     {
+        if (! config('features.mailbox_enabled', false)) {
+            $this->info('CRM mailbox is disabled. Inbox sync skipped.');
+            return self::SUCCESS;
+        }
+
         $limit = max(1, min(200, (int) $this->option('limit')));
         $accountId = $this->option('account');
         $query = EmailAccount::query()

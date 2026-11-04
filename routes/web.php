@@ -445,14 +445,16 @@ Route::middleware('auth')->group(function () {
     Route::patch('/calendar/todos/{todo}/toggle', [CalendarTodoController::class, 'toggle'])->name('calendar.todos.toggle');
     Route::delete('/calendar/todos/{todo}', [CalendarTodoController::class, 'destroy'])->name('calendar.todos.destroy');
 
-    Route::get('/email', [EmailMailboxController::class, 'index'])->name('email.index');
-    Route::post('/email/accounts', [EmailMailboxController::class, 'storeAccount'])->name('email.accounts.store');
-    Route::put('/email/accounts/{account}', [EmailMailboxController::class, 'updateAccount'])->name('email.accounts.update');
-    Route::post('/email/accounts/{account}/sync', [EmailMailboxController::class, 'sync'])->name('email.accounts.sync');
-    Route::delete('/email/accounts/{account}/messages', [EmailMailboxController::class, 'destroyMessages'])->name('email.messages.destroy');
-    Route::patch('/email/accounts/{account}/messages/{message}/read', [EmailMailboxController::class, 'markMessageRead'])->name('email.messages.read');
-    Route::patch('/email/signature', [EmailMailboxController::class, 'updateSignature'])->name('email.signature.update');
-    Route::post('/email/send', [EmailMailboxController::class, 'send'])->name('email.send');
+    Route::middleware(\App\Http\Middleware\EnsureMailboxEnabled::class)->group(function () {
+        Route::get('/email', [EmailMailboxController::class, 'index'])->name('email.index');
+        Route::post('/email/accounts', [EmailMailboxController::class, 'storeAccount'])->name('email.accounts.store');
+        Route::put('/email/accounts/{account}', [EmailMailboxController::class, 'updateAccount'])->name('email.accounts.update');
+        Route::post('/email/accounts/{account}/sync', [EmailMailboxController::class, 'sync'])->name('email.accounts.sync');
+        Route::delete('/email/accounts/{account}/messages', [EmailMailboxController::class, 'destroyMessages'])->name('email.messages.destroy');
+        Route::patch('/email/accounts/{account}/messages/{message}/read', [EmailMailboxController::class, 'markMessageRead'])->name('email.messages.read');
+        Route::patch('/email/signature', [EmailMailboxController::class, 'updateSignature'])->name('email.signature.update');
+        Route::post('/email/send', [EmailMailboxController::class, 'send'])->name('email.send');
+    });
 
     Route::get('/leads', [LeadController::class, 'index'])->name('leads.index');
     Route::get('/leads/sidebar-counts', [LeadController::class, 'sidebarCounts'])->name('leads.sidebar-counts');

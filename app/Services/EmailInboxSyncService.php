@@ -11,6 +11,10 @@ class EmailInboxSyncService
 {
     public function sync(EmailAccount $account, int $limit = 50): int
     {
+        if (! config('features.mailbox_enabled', false)) {
+            return 0;
+        }
+
         $client = new SimpleImapClient(
             $account->imap_host,
             $account->imap_port,
@@ -65,6 +69,10 @@ class EmailInboxSyncService
 
     public function markSeen(EmailAccount $account, EmailMessage $message): void
     {
+        if (! config('features.mailbox_enabled', false)) {
+            return;
+        }
+
         if ($message->folder !== 'INBOX' || ! $message->uid) {
             return;
         }
