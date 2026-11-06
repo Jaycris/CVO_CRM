@@ -45,6 +45,10 @@ class CommissionReleaseTest extends TestCase
             'is_commission_threshold_exempt' => true, 'markup_commission_percent' => 50, 'hris_employee_id' => 'EMP-RELEASE']);
         $this->actingAs($this->admin);
         $this->mock(\App\Support\PhremsCommissionReleases::class, fn ($mock) => $mock->shouldReceive('syncForActivity')->andReturnNull());
+        $this->mock(\App\Support\CommissionUnreleasedOffsets::class, function ($mock) {
+            $mock->shouldReceive('afterDispute')->andReturnNull();
+            $mock->shouldReceive('settleForAgent')->andReturnNull();
+        });
     }
 
     private function sale(string $date = '2026-10-10', ?User $agent = null): SalesPayment

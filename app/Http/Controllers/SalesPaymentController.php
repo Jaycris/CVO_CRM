@@ -148,17 +148,22 @@ class SalesPaymentController extends Controller
         }
 
         $payment = DB::transaction(function () use ($payment, $validated) {
+            // Reserve agents before payment rows, matching offset allocation's lock order.
+            $activity = SalesActivity::where('sales_payment_id', $payment->id)->first();
+            $agentIds = array_filter([$activity?->agent_id, $activity?->frankie_agent_id]);
+            \App\Models\User::withTrashed()->whereIn('id', $agentIds)->orderBy('id')->lockForUpdate()->get();
             $locked = SalesPayment::whereKey($payment->id)->lockForUpdate()->firstOrFail();
             $frozenActivity = SalesActivity::where('sales_payment_id', $locked->id)->whereNotNull('commission_snapshot')->exists();
             $hasReleasedCommission = \App\Models\CommissionRelease::where('sales_payment_id', $locked->id)->where('status', 'released')->exists();
+            $hasReservedCommission = \App\Models\CommissionDisputeOffset::where('sales_payment_id', $locked->id)->whereNull('voided_at')->exists();
 
-            if (($frozenActivity || $hasReleasedCommission || ($validated['status'] === 'Dispute' && $locked->status === 'Payment Success')) && (
+            if (($frozenActivity || $hasReleasedCommission || $hasReservedCommission || ($validated['status'] === 'Dispute' && $locked->status === 'Payment Success')) && (
                 round((float) $validated['amount'], 2) !== round((float) $locked->amount, 2)
                 || Carbon::parse($validated['sold_date'])->toDateString() !== $locked->sold_date->toDateString()
                 || $validated['payment_method'] !== $locked->payment_method
             )) {
                 throw ValidationException::withMessages([
-                    'status' => 'This payment has commission release or dispute history. Keep its original amount, sold date, and payment method when updating the status.',
+                    'status' => 'This payment has commission release, dispute, or offset history. Keep its original amount, sold date, and payment method when updating the status.',
                 ]);
             }
 

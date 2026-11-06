@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\AppSetting;
 use App\Models\CommissionRelease;
+use App\Models\CommissionAdjustment;
+use App\Models\CommissionAdjustmentReconciliation;
+use App\Models\CommissionDisputeOffset;
 use App\Models\SalesActivity;
 use App\Models\SalesPayment;
 use App\Models\SalesTarget;
@@ -20,13 +23,28 @@ use Illuminate\Validation\ValidationException;
 
 class CommissionReleaseController extends Controller
 {
+    public function reconcile(Request $request, int $adjustment)
+    {
+        abort_unless(self::canManage($request->user()), 403);
+        $validated = $request->validate([
+            'disputed_at' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
+            'reason' => ['required', 'string', 'max:1000'],
+        ]);
+        $changed = app(\App\Support\CommissionDisputeReconciliation::class)->reconcile(
+            $adjustment, $validated['disputed_at'], $validated['reason'], $request->user()
+        );
+        return back()->with('success', $changed
+            ? 'Dispute deduction reconciled to the PHREMS released USD amount. The original entry is saved in audit history; no second deduction was added.'
+            : 'This dispute deduction was already reconciled. No additional deduction was made.');
+    }
+
     public function sync(Request $request)
     {
         abort_unless(self::canManage($request->user()), 403);
         $validated = $request->validate(['month' => ['required', 'date_format:Y-m'], 'agent_id' => ['nullable', 'integer', 'exists:users,id']]);
         $month = Carbon::createFromFormat('!Y-m', $validated['month']);
         $count = app(\App\Support\PhremsCommissionReleases::class)->syncMonth($month, $validated['agent_id'] ?? null);
-        return back()->with('success', "Fetched PHREMS release status for {$count} commission share(s). Any unknown matches require review before a new dispute.");
+        return back()->with('success', "Fetched PHREMS release status for {$count} commission share(s). Verified older unpaid commissions are automatically applied to matching dispute debt. Unknown matches require review.");
     }
 
     public static function canManage(?User $user): bool
@@ -54,9 +72,19 @@ class CommissionReleaseController extends Controller
         $rows = new LengthAwarePaginator($rows->forPage($page, $perPage)->values(), $rows->count(), $perPage, $page, ['path' => $request->url(), 'query' => $request->query()]);
         $history = CommissionRelease::with('creator')->whereIn('sales_payment_id', collect($rows->items())->pluck('activity.sales_payment_id'))
             ->latest('id')->get()->groupBy(fn ($entry) => $entry->sales_payment_id.':'.$entry->agent_id);
+        $adjustments = CommissionAdjustment::whereIn('sales_payment_id', collect($rows->items())->pluck('activity.sales_payment_id'))
+            ->latest('id')->get()->groupBy(fn ($entry) => $entry->sales_payment_id.':'.$entry->agent_id)->map->first();
+        $reconciliations = CommissionAdjustmentReconciliation::with('creator')->whereIn('commission_adjustment_id', $adjustments->pluck('id'))
+            ->get()->keyBy('commission_adjustment_id');
+        $covered = CommissionDisputeOffset::whereNull('voided_at')->whereIn('commission_adjustment_id', $adjustments->pluck('id'))
+            ->get()->groupBy('commission_adjustment_id');
+        $reserved = CommissionDisputeOffset::whereNull('voided_at')->whereIn('sales_payment_id', collect($rows->items())->pluck('activity.sales_payment_id'))
+            ->get()->groupBy(fn ($offset) => $offset->sales_payment_id.':'.$offset->agent_id);
 
         return view('reports.commission-releases', [
             'month' => $month, 'agentId' => $agentId, 'rows' => $rows, 'history' => $history,
+            'adjustments' => $adjustments, 'reconciliations' => $reconciliations,
+            'covered' => $covered, 'reserved' => $reserved,
             'agents' => User::where('department', 'Sales')->tap(fn ($query) => BrandScope::apply($query, $request->user()))->orderBy('first_name')->orderBy('last_name')->get(),
         ]);
     }

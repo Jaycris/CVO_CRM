@@ -26,6 +26,7 @@ class CommissionDisputes
 
         $snapshots = $activity->commission_snapshot;
         $paidRows = collect();
+        $createdAdjustmentIds = [];
 
         // A payment can have separate main-agent and Frankie commission releases.
         if ($status === 'Dispute') {
@@ -101,7 +102,7 @@ class CommissionDisputes
                 $date = $basis === 'unreleased' ? $snapshot['original_sold_date'] : now()->toDateString();
             }
 
-            CommissionAdjustment::create([
+            $entry = CommissionAdjustment::create([
                 'sales_payment_id' => $payment->id,
                 'brand_id' => $activity->brand_id,
                 'agent_id' => $agentId,
@@ -111,6 +112,8 @@ class CommissionDisputes
                 'usd_amount' => round($amount * ($kind === 'dispute' ? -1 : 1), 2),
                 'original_commission' => $original,
             ]);
+            $createdAdjustmentIds[] = $entry->id;
         }
+        if ($status === 'Dispute') app(CommissionUnreleasedOffsets::class)->afterDispute($payment, $createdAdjustmentIds);
     }
 }

@@ -48,6 +48,7 @@ class SalesMtdDeductionTest extends TestCase
         parent::setUp();
         Notification::fake();
         $this->mock(\App\Support\PhremsCommissionReleases::class, fn ($mock) => $mock->shouldReceive('syncForActivity')->andReturnNull());
+        $this->mock(\App\Support\CommissionUnreleasedOffsets::class, fn ($mock) => $mock->shouldReceive('afterDispute')->andReturnNull());
         $this->travelTo(Carbon::parse('2026-10-29 12:00:00'));
         AppSetting::set('commission_exchange_rate', 56);
         AppSetting::set('card_payment_hold_percent', 15);

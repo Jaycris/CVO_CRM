@@ -41,6 +41,7 @@ class CommissionDisputesTest extends TestCase
         AppSetting::set('card_payment_hold_percent', 0);
         $this->travelTo(Carbon::parse('2026-10-15 12:00:00'));
         $this->mock(\App\Support\PhremsCommissionReleases::class, fn ($mock) => $mock->shouldReceive('syncForActivity')->andReturnNull());
+        $this->mock(\App\Support\CommissionUnreleasedOffsets::class, fn ($mock) => $mock->shouldReceive('afterDispute')->andReturnNull());
     }
 
     public function test_dispute_preserves_original_sale_and_reverses_only_its_commission_once(): void

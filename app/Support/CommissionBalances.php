@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\AppSetting;
 use App\Models\CommissionAdjustment;
+use App\Models\CommissionDisputeOffset;
 use App\Models\SalesActivity;
 use App\Models\SalesTarget;
 use App\Models\User;
@@ -29,6 +30,33 @@ class CommissionBalances
                 });
             })
             ->orderBy('effective_date')->orderBy('id')->get();
+
+        $offsetEvents = CommissionDisputeOffset::with('adjustment')->whereNull('voided_at')
+            ->whereDate('commission_date', '<=', $start->copy()->endOfMonth()->toDateString())
+            ->when($agentId, fn ($query) => $query->where('agent_id', $agentId))->get()->flatMap(function ($offset) {
+                $original = $offset->adjustment;
+                if (! $original) return [];
+                return [
+                    new CommissionAdjustment(['brand_id' => $offset->commission_snapshot['brand_id'], 'agent_id' => $offset->agent_id,
+                        'effective_date' => $offset->commission_date, 'usd_amount' => -(float) $offset->usd_amount,
+                        'kind' => 'offset', 'original_commission' => $offset->commission_snapshot,
+                        'display_label' => 'Commission applied to prior dispute']),
+                    new CommissionAdjustment(['brand_id' => $original->brand_id, 'agent_id' => $offset->agent_id,
+                        'effective_date' => $offset->dispute_date, 'usd_amount' => (float) $offset->usd_amount,
+                        'kind' => 'offset', 'original_commission' => $original->original_commission,
+                        'display_label' => 'Dispute covered by prior commission']),
+                ];
+            });
+        (new \Illuminate\Database\Eloquent\Collection($offsetEvents->all()))->load(['agent', 'brand']);
+        $offsetEvents = $offsetEvents->filter(function ($entry) use ($start, $brandId, $agentId, $viewer, $salesBrandsOnly, $includeOwnAcrossBrands) {
+            if ($entry->effective_date->gt($start->copy()->endOfMonth())) return false;
+            if ($brandId && (int) $entry->brand_id !== $brandId) return false;
+            if ($agentId && (int) $entry->agent_id !== $agentId) return false;
+            if ($salesBrandsOnly && ! $brandId && ! $entry->brand?->is_sales_brand) return false;
+            return ! $viewer || $brandId || BrandScope::canAccessAllBrands($viewer)
+                || (int) $entry->brand_id === (int) $viewer->brand_id || ($includeOwnAcrossBrands && (int) $entry->agent_id === $viewer->id);
+        });
+        $adjustments = collect($adjustments->all())->concat($offsetEvents)->sortBy(fn ($entry) => $entry->effective_date->toDateString())->values();
 
         if ($adjustments->isEmpty()) {
             return $rows;
@@ -81,13 +109,13 @@ class CommissionBalances
 
         foreach ($adjustments->groupBy('agent_id') as $id => $entries) {
             if (($balances[$id] ?? 0) < 0) {
-                $rows->push(self::adjustmentRow($entries->first(), $start, $balances[$id], 'Negative balance brought forward'));
+                $rows->push(self::adjustmentRow($entries->first(), $start, $balances[$id], 'Negative balance brought forward', false));
             }
         }
 
         foreach ($eventsByMonth->get($start->format('Y-m'), collect()) as $entry) {
             $rows->push(self::adjustmentRow($entry, $entry->effective_date, (float) $entry->usd_amount,
-                $entry->kind === 'dispute' ? 'Dispute commission deduction' : 'Dispute commission restored'));
+                $entry->display_label ?? ($entry->kind === 'dispute' ? 'Dispute commission deduction' : 'Dispute commission restored')));
         }
 
         return $rows->values();
@@ -99,7 +127,7 @@ class CommissionBalances
         return min(0, round($opening + $earned + $adjustments, 2));
     }
 
-    private static function adjustmentRow(CommissionAdjustment $entry, CarbonInterface $date, float $amount, string $label): array
+    private static function adjustmentRow(CommissionAdjustment $entry, CarbonInterface $date, float $amount, string $label, bool $useSettlementBreakdown = true): array
     {
         $rate = AppSetting::commissionExchangeRate();
         $activity = new SalesActivity([
@@ -138,7 +166,7 @@ class CommissionBalances
         ];
 
         // Cancel the unpaid commission and its hold using the original calculation, not today's FX rate.
-        if ($entry->settlement_basis === 'unreleased' && ($breakdown = $entry->original_commission['settlement_breakdown'] ?? null)) {
+        if ($useSettlementBreakdown && $entry->settlement_basis === 'unreleased' && ($breakdown = $entry->original_commission['settlement_breakdown'] ?? null)) {
             $sign = $entry->kind === 'dispute' ? -1 : 1;
             foreach (['service_commission', 'markup_commission', 'usd_total', 'php_total', 'hold_amount', 'net_commission'] as $field) {
                 $row[$field] = round((float) ($breakdown[$field] ?? 0) * $sign, 2);

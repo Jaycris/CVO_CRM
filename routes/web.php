@@ -557,6 +557,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/agent-statements', [AgentStatementController::class, 'index'])->name('agent-statements.index');
         Route::get('/commission-releases', [\App\Http\Controllers\CommissionReleaseController::class, 'index'])->name('commission-releases.index');
         Route::post('/commission-releases/sync', [\App\Http\Controllers\CommissionReleaseController::class, 'sync'])->name('commission-releases.sync');
+        Route::post('/commission-releases/disputes/{adjustment}/reconcile', [\App\Http\Controllers\CommissionReleaseController::class, 'reconcile'])->whereNumber('adjustment')->name('commission-releases.reconcile');
         Route::post('/commission-releases', [\App\Http\Controllers\CommissionReleaseController::class, 'store'])->name('commission-releases.store');
         Route::get('/production', [ProductionReportController::class, 'index'])->name('production.index');
     });

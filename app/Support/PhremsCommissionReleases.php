@@ -31,7 +31,10 @@ class PhremsCommissionReleases
         $ids = $activities->flatMap(fn ($activity) => [$activity->agent_id, (float) $activity->frankie_credit_amount > 0 ? $activity->frankie_agent_id : null])
             ->filter()->unique()->when($agentId, fn ($ids) => $ids->filter(fn ($id) => $id == $agentId));
         $count = 0;
-        foreach (User::withTrashed()->whereIn('id', $ids)->get() as $agent) $count += count($this->syncAgentMonth($agent, $month));
+        foreach (User::withTrashed()->whereIn('id', $ids)->get() as $agent) {
+            $count += count($this->syncAgentMonth($agent, $month));
+            app(CommissionUnreleasedOffsets::class)->settleForAgent($agent);
+        }
         return $count;
     }
 
@@ -42,7 +45,7 @@ class PhremsCommissionReleases
             ->whereDate('sold_date', '<=', $month->copy()->endOfMonth()->toDateString());
     }
 
-    private function syncAgentMonth(User $agent, CarbonInterface $month): array
+    public function syncAgentMonth(User $agent, CarbonInterface $month): array
     {
         $baseUrl = rtrim(AppSetting::hrisBaseUrl(), '/');
         $token = (string) config('services.hris.commission_release_token');
@@ -69,10 +72,42 @@ class PhremsCommissionReleases
             $this->fail('PHREMS is unavailable. Release status has not been assumed; retry before recording the dispute.');
         }
         $payload = $response->json();
-        if (! $response->successful() || ! is_array($payload) || ($payload['complete'] ?? false) !== true
-            || ($payload['hris_employee_id'] ?? null) !== $agent->hris_employee_id || ($payload['month'] ?? null) !== $month->format('Y-m')
-            || ($payload['release_basis'] ?? null) !== 'sent' || ! is_array($payload['data'] ?? null)) {
-            $this->fail('PHREMS did not return a complete, verified commission-release response. Check its endpoint and token before continuing.');
+        // Report only status codes and known field names, never upstream bodies or credentials.
+        if (! $response->successful()) {
+            $status = $response->status();
+            if (in_array($status, [401, 403], true)) {
+                $this->fail("PHREMS rejected commission-release authentication (HTTP {$status}). Verify the dedicated release tokens match in both apps and clear their configuration caches.");
+            }
+            if ($status === 404) {
+                $this->fail('PHREMS returned HTTP 404. Verify the commission-release endpoint is deployed at the configured base URL and that the linked HRIS employee exists there.');
+            }
+            if ($status === 422) {
+                $errors = is_array($payload) && is_array($payload['errors'] ?? null) ? $payload['errors'] : [];
+                $fields = array_filter(array_keys($errors), fn ($key) => is_string($key) && preg_match(
+                    '/\A(?:hris_employee_id|month|items(?:\.\d+(?:\.(?:key|crm_payment_id|crm_agent_id|sold_date|brand|author|book_title|service|payment_method|sale_amount))?)?)\z/', $key
+                ));
+                $detail = $fields ? ' Rejected fields: '.implode(', ', array_slice($fields, 0, 10)).'.' : '';
+                $this->fail('PHREMS rejected the commission-release request data (HTTP 422).'.$detail.' Check those payment fields and the linked employee ID; release status has not been assumed.');
+            }
+            if ($status >= 300 && $status < 400) {
+                $this->fail("PHREMS redirected the commission-release request (HTTP {$status}). Use the final HTTPS base URL; redirects are not followed.");
+            }
+            if ($status === 429) {
+                $this->fail('PHREMS rate-limited commission-release checks (HTTP 429). Wait briefly before retrying.');
+            }
+            $this->fail("PHREMS commission-release request failed (HTTP {$status}). Check PHREMS server logs; no release status was inferred.");
+        }
+        if (! is_array($payload)) {
+            $this->fail('PHREMS returned a non-JSON commission-release response (HTTP '.$response->status().'). Check the configured endpoint and hosting access rules.');
+        }
+        $invalid = [];
+        if (($payload['complete'] ?? false) !== true) $invalid[] = 'complete';
+        if (($payload['hris_employee_id'] ?? null) !== $agent->hris_employee_id) $invalid[] = 'hris_employee_id';
+        if (($payload['month'] ?? null) !== $month->format('Y-m')) $invalid[] = 'month';
+        if (($payload['release_basis'] ?? null) !== 'sent') $invalid[] = 'release_basis';
+        if (! is_array($payload['data'] ?? null)) $invalid[] = 'data';
+        if ($invalid !== []) {
+            $this->fail('PHREMS returned an unverified commission-release response (HTTP '.$response->status().'). Missing or mismatched fields: '.implode(', ', $invalid).'. No release status was inferred.');
         }
         $results = collect($payload['data']);
         if ($results->contains(fn ($result) => ! is_array($result) || ! is_string($result['key'] ?? null))) {
