@@ -66,7 +66,13 @@ class CommissionBalances
             $earned = SalesMtdCalculator::withMtdDeductions($historyRows, $targetRows, $deductions)
                 ->groupBy('agent_id')->map(fn ($items) => $items->sum(fn ($row) => (float) $row['exchange_rate'] > 0
                     ? (float) $row['net_commission'] / (float) $row['exchange_rate'] : (float) $row['usd_total']));
-            $events = $eventsByMonth->get($key, collect())->groupBy('agent_id')->map->sum('usd_amount');
+            $events = $eventsByMonth->get($key, collect())->groupBy('agent_id')->map(fn ($entries) => $entries->sum(function ($entry) {
+                $breakdown = $entry->original_commission['settlement_breakdown'] ?? null;
+                if ($entry->settlement_basis === 'unreleased' && $breakdown && (float) ($breakdown['exchange_rate'] ?? 0) > 0) {
+                    return ((float) $breakdown['net_commission'] / (float) $breakdown['exchange_rate']) * ($entry->kind === 'dispute' ? -1 : 1);
+                }
+                return (float) $entry->usd_amount;
+            }));
 
             foreach ($agentIds as $id) {
                 $balances[$id] = self::closingBalance($balances[$id] ?? 0, (float) $earned->get($id, 0), (float) $events->get($id, 0));
@@ -117,7 +123,7 @@ class CommissionBalances
             'hold_amount', 'card_payment_hold_percent',
         ], 0);
 
-        return $row + [
+        $row = $row + [
             'activity' => $activity,
             'agent' => $entry->agent,
             'agent_id' => $entry->agent_id,
@@ -130,5 +136,17 @@ class CommissionBalances
             'php_total' => round($amount * $rate, 2),
             'net_commission' => round($amount * $rate, 2),
         ];
+
+        // Cancel the unpaid commission and its hold using the original calculation, not today's FX rate.
+        if ($entry->settlement_basis === 'unreleased' && ($breakdown = $entry->original_commission['settlement_breakdown'] ?? null)) {
+            $sign = $entry->kind === 'dispute' ? -1 : 1;
+            foreach (['service_commission', 'markup_commission', 'usd_total', 'php_total', 'hold_amount', 'net_commission'] as $field) {
+                $row[$field] = round((float) ($breakdown[$field] ?? 0) * $sign, 2);
+            }
+            $row['exchange_rate'] = (float) ($breakdown['exchange_rate'] ?? $rate);
+            $row['card_payment_hold_percent'] = (float) ($breakdown['card_payment_hold_percent'] ?? 0);
+        }
+
+        return $row;
     }
 }

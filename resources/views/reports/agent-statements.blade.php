@@ -22,6 +22,10 @@
                     Commission rates and the threshold use the full {{ $month->format('F Y') }} sales total. Date and search filters only select rows.
                 </p>
             </div>
+            @if ($canManageCommissionReleases)
+                <a href="{{ route('reports.commission-releases.index', ['month' => $month->format('Y-m'), 'agent_id' => $agentId]) }}"
+                   class="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">Commission Releases</a>
+            @endif
         </div>
 
         <form method="GET" action="{{ route('reports.agent-statements.index') }}" class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">

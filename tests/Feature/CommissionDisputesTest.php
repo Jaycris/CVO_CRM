@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\AppSetting;
 use App\Models\Brand;
 use App\Models\CommissionAdjustment;
+use App\Models\CommissionRelease;
 use App\Models\CommissionProfile;
 use App\Models\SalesActivity;
 use App\Models\SalesEndorsement;
@@ -39,6 +40,7 @@ class CommissionDisputesTest extends TestCase
         AppSetting::set('commission_exchange_rate', 56);
         AppSetting::set('card_payment_hold_percent', 0);
         $this->travelTo(Carbon::parse('2026-10-15 12:00:00'));
+        $this->mock(\App\Support\PhremsCommissionReleases::class, fn ($mock) => $mock->shouldReceive('syncForActivity')->andReturnNull());
     }
 
     public function test_dispute_preserves_original_sale_and_reverses_only_its_commission_once(): void
@@ -130,6 +132,7 @@ class CommissionDisputesTest extends TestCase
         $shared->endorsement->update(['has_frankie' => true, 'frankie_agent_id' => $frankie->id, 'frankie_commission_percent' => 50]);
         $shared->unsetRelation('endorsement');
         SalesActivitySync::sync($shared);
+        CommissionRelease::create(['sales_payment_id' => $shared->id, 'agent_id' => $frankie->id, 'brand_id' => $main->brand_id, 'status' => 'released', 'reason' => 'Existing released commission fixture']);
         $this->transition($shared, 'Dispute');
         $this->assertEquals(-150, $this->rows('2026-10', $main)->sum('usd_total'));
         $this->assertEquals(-150, $this->rows('2026-10', $frankie)->sum('usd_total'));
@@ -217,6 +220,8 @@ class CommissionDisputesTest extends TestCase
             'amount' => $amount, 'payment_method' => 'Wire Payment', 'sold_date' => $date, 'status' => 'Payment Success',
         ]);
         SalesActivitySync::sync($payment);
+
+        CommissionRelease::create(['sales_payment_id' => $payment->id, 'agent_id' => $agent->id, 'brand_id' => $agent->brand_id, 'status' => 'released', 'reason' => 'Existing released commission fixture']);
 
         return [$payment, $agent];
     }

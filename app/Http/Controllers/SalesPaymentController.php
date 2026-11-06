@@ -150,14 +150,15 @@ class SalesPaymentController extends Controller
         $payment = DB::transaction(function () use ($payment, $validated) {
             $locked = SalesPayment::whereKey($payment->id)->lockForUpdate()->firstOrFail();
             $frozenActivity = SalesActivity::where('sales_payment_id', $locked->id)->whereNotNull('commission_snapshot')->exists();
+            $hasReleasedCommission = \App\Models\CommissionRelease::where('sales_payment_id', $locked->id)->where('status', 'released')->exists();
 
-            if (($frozenActivity || ($validated['status'] === 'Dispute' && $locked->status === 'Payment Success')) && (
+            if (($frozenActivity || $hasReleasedCommission || ($validated['status'] === 'Dispute' && $locked->status === 'Payment Success')) && (
                 round((float) $validated['amount'], 2) !== round((float) $locked->amount, 2)
                 || Carbon::parse($validated['sold_date'])->toDateString() !== $locked->sold_date->toDateString()
                 || $validated['payment_method'] !== $locked->payment_method
             )) {
                 throw ValidationException::withMessages([
-                    'status' => 'This payment has dispute commission history. Keep its original amount, sold date, and payment method when updating the status.',
+                    'status' => 'This payment has commission release or dispute history. Keep its original amount, sold date, and payment method when updating the status.',
                 ]);
             }
 

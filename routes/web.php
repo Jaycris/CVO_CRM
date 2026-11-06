@@ -555,6 +555,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/sales-performance', [SalesPerformanceController::class, 'index'])->name('sales-performance.index');
         Route::put('/sales-performance/targets', [SalesPerformanceController::class, 'updateTargets'])->name('sales-performance.targets');
         Route::get('/agent-statements', [AgentStatementController::class, 'index'])->name('agent-statements.index');
+        Route::get('/commission-releases', [\App\Http\Controllers\CommissionReleaseController::class, 'index'])->name('commission-releases.index');
+        Route::post('/commission-releases/sync', [\App\Http\Controllers\CommissionReleaseController::class, 'sync'])->name('commission-releases.sync');
+        Route::post('/commission-releases', [\App\Http\Controllers\CommissionReleaseController::class, 'store'])->name('commission-releases.store');
         Route::get('/production', [ProductionReportController::class, 'index'])->name('production.index');
     });
 });

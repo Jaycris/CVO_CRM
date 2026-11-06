@@ -166,6 +166,7 @@ class AgentStatementController extends Controller
             'agentId' => $agentId,
             'search' => $search,
             'canViewAll' => $canViewAll,
+            'canManageCommissionReleases' => CommissionReleaseController::canManage($user),
         ]);
     }
 

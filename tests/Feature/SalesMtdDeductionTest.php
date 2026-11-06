@@ -47,6 +47,7 @@ class SalesMtdDeductionTest extends TestCase
     {
         parent::setUp();
         Notification::fake();
+        $this->mock(\App\Support\PhremsCommissionReleases::class, fn ($mock) => $mock->shouldReceive('syncForActivity')->andReturnNull());
         $this->travelTo(Carbon::parse('2026-10-29 12:00:00'));
         AppSetting::set('commission_exchange_rate', 56);
         AppSetting::set('card_payment_hold_percent', 15);
@@ -394,6 +395,7 @@ class SalesMtdDeductionTest extends TestCase
         $sale = $this->sale(null, '2026-09-10');
         $entry = $this->deduct(['month' => '2026-09']);
         $payment = $sale->payment;
+        \App\Models\CommissionRelease::create(['sales_payment_id' => $payment->id, 'agent_id' => $this->agent->id, 'brand_id' => $this->agent->brand_id, 'status' => 'released', 'reason' => 'Previously released commission fixture']);
         CommissionDisputes::transition($payment, 'Dispute');
 
         $this->assertEquals(-162.5, CommissionAdjustment::firstOrFail()->usd_amount);

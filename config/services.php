@@ -39,6 +39,7 @@ return [
         'token' => env('HRIS_API_TOKEN'),
         'base_url' => env('HRIS_API_BASE_URL'),
         'crm_lookup_token' => env('HRIS_CRM_LOOKUP_TOKEN'),
+        'commission_release_token' => env('HRIS_COMMISSION_RELEASE_TOKEN'),
     ],
 
 ];

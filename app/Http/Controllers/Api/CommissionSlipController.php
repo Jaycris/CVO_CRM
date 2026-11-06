@@ -156,6 +156,8 @@ class CommissionSlipController extends Controller
 
                 return [
                     'transaction_type' => $activity->activity_type,
+                    'crm_payment_id' => $activity->sales_payment_id,
+                    'crm_agent_id' => $row['agent_id'],
                     'reference' => $activity->endorsement_code,
                     'sold_date' => $activity->sold_date?->format('Y-m-d'),
                     'brand' => $activity->brand?->imprint_name,
