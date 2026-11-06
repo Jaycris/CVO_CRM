@@ -67,8 +67,8 @@ class SalesPerformanceController extends Controller
                     });
                 })
                 ->when(! $brandId && ! $canUseSalesBrandFilter, fn ($query) => BrandScope::apply($query, $user))
-                ->get()
-                ->keyBy('team_id');
+                ->get();
+            $teamTargets = SalesMtdCalculator::dashboardTeamTargets($teamTargets);
             $targetTeams = Team::query()
                 ->with(['brand', 'members' => fn ($query) => $query
                     ->where('department', 'Sales')
@@ -217,15 +217,6 @@ class SalesPerformanceController extends Controller
             })
             ->sortByDesc('mtd')
             ->values();
-
-        $teamGlobalTarget = (float) $teamRows->sum('target');
-        $globalMtd = (float) ($summary['global']['mtd'] ?? 0);
-        $summary['global'] = [
-            'mtd' => $globalMtd,
-            'target' => $teamGlobalTarget,
-            'remaining' => max($teamGlobalTarget - $globalMtd, 0),
-            'percent' => $teamGlobalTarget > 0 ? round(($globalMtd / $teamGlobalTarget) * 100, 2) : 0,
-        ];
 
         $agentRows = $this->paginateCollection($agentRows, $request);
         $brands = $salesBrands;

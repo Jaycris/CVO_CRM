@@ -196,7 +196,8 @@
                         @php
                             $brand = $snapshot['brand'];
                             $brandSummary = $snapshot['summary'] ?? ['mtd' => 0, 'target' => 0, 'remaining' => 0, 'percent' => 0];
-                            $brandQuotaHit = (float) ($brandSummary['target'] ?? 0) > 0
+                            $brandHasTarget = (float) ($brandSummary['target'] ?? 0) > 0;
+                            $brandQuotaHit = $brandHasTarget
                                 && (float) ($brandSummary['remaining'] ?? 0) <= 0;
                         @endphp
 
@@ -217,7 +218,7 @@
                                         </span>
                                     @endif
                                     <span class="mt-1 block text-sm font-bold text-slate-900 dark:text-zinc-100">
-                                        {{ number_format((float) $brandSummary['percent'], 2) }}%
+                                        {{ $brandHasTarget ? number_format((float) $brandSummary['percent'], 2).'%' : 'Target not set' }}
                                     </span>
                                 </div>
                             </div>
@@ -226,9 +227,14 @@
                                 ${{ number_format((float) $brandSummary['mtd'], 2) }}
                             </h3>
                             <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
-                                of ${{ number_format((float) $brandSummary['target'], 2) }} target
+                                @if ($brandHasTarget)
+                                    of ${{ number_format((float) $brandSummary['target'], 2) }} target
+                                @else
+                                    Set monthly team targets in Sales Dashboard MTD.
+                                @endif
                             </p>
 
+                            @if ($brandHasTarget)
                             <div class="mt-4 h-3 overflow-hidden rounded-full bg-white dark:bg-zinc-800">
                                 <div @class([
                                     'h-3 rounded-full transition-all',
@@ -245,6 +251,7 @@
                                     <span class="font-bold text-rose-600 dark:text-rose-300">${{ number_format((float) $brandSummary['remaining'], 2) }}</span>
                                 @endif
                             </p>
+                            @endif
                         </div>
                     @empty
                         <div class="rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">

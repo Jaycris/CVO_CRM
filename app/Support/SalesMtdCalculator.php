@@ -8,6 +8,7 @@ use App\Models\CommissionProfile;
 use App\Models\SalesActivity;
 use App\Models\SalesEndorsement;
 use App\Models\SalesTarget;
+use App\Models\Team;
 use App\Models\Service;
 use App\Models\User;
 use Carbon\CarbonInterface;
@@ -149,7 +150,7 @@ class SalesMtdCalculator
 
         $dashboardTargets = self::dashboardTargetRows($targets, $brandId, $user);
         $globalMtd = $grossRows->sum('amount');
-        $globalTarget = (float) $dashboardTargets->where('target_type', 'global')->sum('amount');
+        $globalTarget = (float) self::dashboardTeamTargets($targets)->sum('amount');
         $remoteTarget = (float) $dashboardTargets->where('target_type', 'remote')->sum('amount');
         $siteTarget = (float) $dashboardTargets->where('target_type', 'site')->sum('amount');
 
@@ -545,6 +546,18 @@ class SalesMtdCalculator
             ->values();
 
         return $allBrandTargets->isNotEmpty() ? $allBrandTargets : $dashboardTargets;
+    }
+
+    public static function dashboardTeamTargets(Collection $targets): Collection
+    {
+        $teamTargets = $targets->where('target_type', 'team')->whereNull('user_id')->whereNotNull('team_id');
+        $teamBrands = Team::query()->whereIn('id', $teamTargets->pluck('team_id')->unique())
+            ->where('department', 'Sales')->where('show_on_sales_dashboard', true)
+            ->whereHas('brand', fn ($query) => $query->where('is_sales_brand', true))->pluck('brand_id', 'id');
+
+        return $teamTargets->filter(fn ($target) => $teamBrands->has($target->team_id)
+            && ($target->brand_id === null || (int) $target->brand_id === (int) $teamBrands->get($target->team_id)))
+            ->sortBy('id')->keyBy('team_id');
     }
 
     private static function serviceRateFor(float $serviceMtd, float $targetAmount, ?CommissionProfile $profile = null): float
