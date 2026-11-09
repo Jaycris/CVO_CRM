@@ -329,6 +329,25 @@ class UserController extends Controller
             ->with('success', "User suspended successfully. {$releasedLeadCount} assigned lead(s) moved to Unassigned Leads.");
     }
 
+    public function bulkUnsuspend(Request $request)
+    {
+        $this->ensureAdmin();
+
+        $validated = $request->validate([
+            'user_ids' => ['required', 'array', 'min:1', 'max:500'],
+            'user_ids.*' => ['required', 'integer', 'distinct', Rule::exists('users', 'id')->whereNull('deleted_at')],
+        ]);
+
+        $count = User::whereIn('id', $validated['user_ids'])->whereNotNull('suspended_at')->update([
+            'suspended_at' => null,
+            'suspended_by' => null,
+            'suspension_reason' => null,
+        ]);
+
+        return back()->with('success', $count === 1 ? '1 user reactivated successfully.'
+            : "{$count} users reactivated. Already active users were skipped.");
+    }
+
     public function unsuspend(User $user)
     {
         $this->ensureAdmin();

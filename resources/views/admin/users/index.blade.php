@@ -30,19 +30,34 @@
             </div>
         @endif
 
+        @if ($errors->any())
+            <div role="alert" class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+                {{ $errors->first() }}
+            </div>
+        @endif
+
         <div class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800"
              x-data="{
                 selectedIds: [],
+                selectedUsers: {},
                 selectedUser: {},
                 toggleUser(user) {
                     if (this.selectedIds.includes(user.id)) {
                         this.selectedIds = this.selectedIds.filter((id) => id !== user.id);
-                        this.selectedUser = {};
+                        delete this.selectedUsers[user.id];
+                        this.syncSelectedUser();
                         return;
                     }
 
-                    this.selectedIds = [user.id];
-                    this.selectedUser = user;
+                    this.selectedIds.push(user.id);
+                    this.selectedUsers[user.id] = user;
+                    this.syncSelectedUser();
+                },
+                syncSelectedUser() {
+                    this.selectedUser = this.selectedIds.length === 1 ? this.selectedUsers[this.selectedIds[0]] || {} : {};
+                },
+                suspendedSelectionCount() {
+                    return this.selectedIds.filter((id) => this.selectedUsers[id]?.isSuspended).length;
                 },
                 hasSingleSelection() {
                     return this.selectedIds.length === 1;
@@ -53,12 +68,14 @@
 
                     if (allVisibleSelected) {
                         this.selectedIds = this.selectedIds.filter((id) => !visibleIds.includes(id));
-                        this.selectedUser = {};
+                        visibleIds.forEach((id) => delete this.selectedUsers[id]);
+                        this.syncSelectedUser();
                         return;
                     }
 
                     this.selectedIds = Array.from(new Set([...this.selectedIds, ...visibleIds]));
-                    this.selectedUser = this.selectedIds.length === 1 ? users.find((user) => user.id === this.selectedIds[0]) || {} : {};
+                    users.forEach((user) => this.selectedUsers[user.id] = user);
+                    this.syncSelectedUser();
                 },
                 allVisibleUsersSelected(users) {
                     const visibleIds = users.map((user) => user.id);
@@ -145,14 +162,18 @@
                         </form>
 
                         <form method="POST"
-                              x-bind:action="selectedUser.unsuspendUrl"
-                              x-on:submit="if (!hasSingleSelection() || !selectedUser.isSuspended || !confirm('Reactivate this user?')) { $event.preventDefault(); }">
+                              action="{{ route('admin.users.bulk-unsuspend') }}"
+                              x-on:submit="if (!suspendedSelectionCount() || !confirm('Reactivate ' + suspendedSelectionCount() + ' selected suspended user(s)? Already active users will be skipped.')) { $event.preventDefault(); }">
                             @csrf
                             @method('PATCH')
+                            <template x-for="id in selectedIds" :key="id">
+                                <input type="hidden" name="user_ids[]" :value="id">
+                            </template>
                             <button type="submit"
-                                    x-bind:disabled="!hasSingleSelection() || !selectedUser.isSuspended"
-                                    x-bind:class="hasSingleSelection() && selectedUser.isSuspended ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200 dark:hover:bg-emerald-400/20' : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-500'"
-                                    title="Reactivate selected user"
+                                    x-bind:disabled="!suspendedSelectionCount()"
+                                    x-bind:class="suspendedSelectionCount() ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200 dark:hover:bg-emerald-400/20' : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-500'"
+                                    title="Reactivate selected suspended users"
+                                    aria-label="Reactivate selected suspended users"
                                     class="inline-flex h-11 w-11 items-center justify-center rounded-xl border shadow-sm">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />

@@ -617,6 +617,7 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::get('/users', [UserController::class, 'index'])->name('users.index');
     Route::get('/users/create', [UserController::class, 'create'])->name('users.create');
     Route::post('/users', [UserController::class, 'store'])->name('users.store');
+    Route::patch('/users/reactivate', [UserController::class, 'bulkUnsuspend'])->name('users.bulk-unsuspend');
     Route::get('/users/{user}/commission-profile', [CommissionProfileController::class, 'showEmployee'])->name('users.commission-profile.show');
     Route::put('/users/{user}/commission-profile', [CommissionProfileController::class, 'updateEmployee'])->name('users.commission-profile.update');
     Route::get('/users/{user}', [UserController::class, 'show'])->name('users.show');
