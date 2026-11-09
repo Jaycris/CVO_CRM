@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\CommissionAdjustment;
 use App\Models\CommissionRelease;
+use App\Models\CommissionDisputeOffset;
 use App\Models\SalesActivity;
 use App\Models\SalesPayment;
 use App\Models\User;
@@ -14,6 +15,9 @@ use Illuminate\Validation\ValidationException;
 
 class CommissionRefunds
 {
+    private const FINANCIAL_FIELDS = ['usd_total', 'service_commission', 'markup_commission', 'php_total',
+        'hold_amount', 'net_commission', 'exchange_rate', 'card_payment_hold_percent'];
+
     public static function pending(CarbonInterface $through, ?int $agentId = null, ?User $viewer = null, ?int $brandId = null): Collection
     {
         $activities = SalesActivity::with(['payment' => fn ($query) => $query->withTrashed()])
@@ -44,9 +48,18 @@ class CommissionRefunds
         }
         $last = CommissionAdjustment::whereIn('sales_payment_id', $activities->pluck('sales_payment_id'))->orderBy('id')->get()
             ->groupBy(fn ($entry) => $entry->sales_payment_id.':'.$entry->agent_id)->map->last();
-        return $activities->filter(function ($activity) use ($last, $agentId) {
+        $releases = CommissionRelease::whereIn('sales_payment_id', $activities->pluck('sales_payment_id'))->orderBy('id')->get()
+            ->groupBy(fn ($entry) => $entry->sales_payment_id.':'.$entry->agent_id)->map->last();
+        $funding = CommissionDisputeOffset::whereNull('voided_at')->whereIn('sales_payment_id', $activities->pluck('sales_payment_id'))->get()
+            ->groupBy(fn ($offset) => $offset->sales_payment_id.':'.$offset->agent_id);
+        return $activities->filter(function ($activity) use ($last, $releases, $funding, $agentId) {
             foreach (self::shares($activity) as $id) {
-                if ((! $agentId || (int) $id === $agentId) && ! $last->get($activity->sales_payment_id.':'.$id)?->isDeduction()) return true;
+                if ($agentId && (int) $id !== $agentId) continue;
+                $key = $activity->sales_payment_id.':'.$id;
+                $entry = $last->get($key);
+                if (! $entry?->isDeduction()) return true;
+                if ($releases->get($key)?->status === 'unreleased'
+                    && (! self::completeUnreleased($activity, $id, $entry) || $funding->has($key))) return true;
             }
             return false;
         });
@@ -77,7 +90,36 @@ class CommissionRefunds
                 throw ValidationException::withMessages(['refunded_on' => 'The refund date must be between the sale date and today.']);
             }
             $before = CommissionAdjustment::where('sales_payment_id', $paymentId)->pluck('id');
-            CommissionDisputes::transition($payment, 'Refund', $refundedOn);
+            $activeBefore = CommissionDisputeOffset::where('sales_payment_id', $paymentId)->whereNull('voided_at')->count();
+            // Always verify the source, including when a stale ledger currently says "recorded".
+            app(PhremsCommissionReleases::class)->syncForActivity($activity);
+            foreach (self::shares($activity) as $id) {
+                $entry = CommissionAdjustment::where('sales_payment_id', $paymentId)->where('agent_id', $id)->latest('id')->first();
+                if (CommissionRelease::latestFor($paymentId, $id)?->status !== 'unreleased'
+                    || ! $entry?->isDeduction() || self::completeUnreleased($activity, $id, $entry)) continue;
+                $expected = self::expectedBreakdown($activity, $id);
+                if (! self::validBreakdown($expected)) {
+                    throw ValidationException::withMessages(['refund' => 'The original unpaid refund calculation is incomplete. Admin must review its commission history before correcting it.']);
+                }
+                if (CommissionDisputeOffset::where('commission_adjustment_id', $entry->id)->whereNull('voided_at')->exists()) {
+                    throw ValidationException::withMessages(['refund' => 'This older deduction has its own allocated offsets. Review those allocations before replacing it with the unpaid refund reversal.']);
+                }
+                if ($entry->effective_date->toDateString() !== $activity->sold_date->toDateString()
+                    && SalesActivity::where('payment_status', 'Payment Success')->where('sales_payment_id', '!=', $paymentId)
+                        ->whereHas('payment', fn ($query) => $query->where('status', 'Payment Success'))
+                        ->whereDate('sold_date', '>=', $entry->effective_date->copy()->startOfMonth()->toDateString())
+                        ->where(fn ($query) => $query->where('agent_id', $id)->orWhere('frankie_agent_id', $id))->exists()) {
+                    throw ValidationException::withMessages(['refund' => 'Other earnings may already have covered this older deduction. Admin must review the prior payroll before moving its refund reversal to the original period.']);
+                }
+                // Preserve the old entry, cancel it in the same period, then let the normal
+                // refund path record the complete original-period reversal exactly once.
+                $original = $entry->original_commission;
+                $original['refund_correction_reverses'] = $entry->id;
+                CommissionAdjustment::create(['sales_payment_id' => $paymentId, 'agent_id' => $id, 'brand_id' => $entry->brand_id,
+                    'kind' => 'reinstatement', 'effective_date' => $entry->effective_date, 'settlement_basis' => $entry->settlement_basis,
+                    'usd_amount' => abs((float) $entry->usd_amount), 'original_commission' => $original]);
+            }
+            CommissionDisputes::transition($payment, 'Refund', $refundedOn, true);
             $new = CommissionAdjustment::where('sales_payment_id', $paymentId)->whereNotIn('id', $before)->get();
             foreach ($new as $entry) {
                 $original = $entry->original_commission;
@@ -85,8 +127,36 @@ class CommissionRefunds
                     'refunded_on' => $refundedOn?->toDateString(), 'recorded_at' => now()->toIso8601String()];
                 $entry->update(['original_commission' => $original]);
             }
-            return $new->isNotEmpty();
+            return $new->isNotEmpty() || CommissionDisputeOffset::where('sales_payment_id', $paymentId)->whereNull('voided_at')->count() < $activeBefore;
         });
+    }
+
+    private static function expectedBreakdown(SalesActivity $activity, int $agentId): array
+    {
+        $snapshot = $activity->commission_snapshot[$agentId] ?? [];
+        return $snapshot['paid_breakdown'] ?? $snapshot;
+    }
+
+    private static function validBreakdown(array $breakdown): bool
+    {
+        foreach (self::FINANCIAL_FIELDS as $field) {
+            if (! is_numeric($breakdown[$field] ?? null) || ! is_finite((float) $breakdown[$field]) || (float) $breakdown[$field] < 0) return false;
+        }
+        return (float) $breakdown['exchange_rate'] > 0
+            && abs((float) $breakdown['service_commission'] + (float) $breakdown['markup_commission'] - (float) $breakdown['usd_total']) <= .02
+            && abs((float) $breakdown['php_total'] - (float) $breakdown['usd_total'] * (float) $breakdown['exchange_rate']) <= .02
+            && abs((float) $breakdown['net_commission'] + (float) $breakdown['hold_amount'] - (float) $breakdown['php_total']) <= .02;
+    }
+
+    private static function completeUnreleased(SalesActivity $activity, int $agentId, CommissionAdjustment $entry): bool
+    {
+        $expected = self::expectedBreakdown($activity, $agentId);
+        $recorded = $entry->original_commission['settlement_breakdown'] ?? [];
+        return $entry->settlement_basis === 'unreleased' && isset($expected['usd_total'])
+            && $entry->effective_date->toDateString() === $activity->sold_date->toDateString()
+            && (int) round((float) $entry->usd_amount * 100) === -(int) round((float) $expected['usd_total'] * 100)
+            && self::validBreakdown($recorded)
+            && (int) round((float) $recorded['usd_total'] * 100) === (int) round((float) $expected['usd_total'] * 100);
     }
 
     private static function shares(SalesActivity $activity): array

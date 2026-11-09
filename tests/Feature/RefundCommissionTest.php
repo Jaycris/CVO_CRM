@@ -297,4 +297,117 @@ class RefundCommissionTest extends TestCase
             ->assertOk()->assertSee('Original commission history is missing')->assertSee('#'.$payment->id);
         $this->assertDatabaseCount('commission_adjustments', 0);
     }
+
+    public function test_recorded_full_refund_with_a_stale_funding_offset_is_still_pending_and_fetch_clears_only_the_offset(): void
+    {
+        SalesTarget::create(['brand_id' => $this->agent->brand_id, 'user_id' => $this->agent->id, 'target_type' => 'agent', 'target_month' => '2026-10-01', 'amount' => 1000]);
+        $source = $this->payment('2026-10-16', 1500, 999);
+        $funding = $this->payment('2026-10-28', 2280, 1680);
+        $this->respond([$source->id => ['released', 500.25], $funding->id => ['unreleased', 0]]);
+        $this->updateStatus($source, 'Dispute')->assertSessionHasNoErrors();
+        $this->updateStatus($funding, 'Refund')->assertSessionHasNoErrors();
+        $refund = CommissionAdjustment::where('sales_payment_id', $funding->id)->firstOrFail();
+        $this->assertEquals(-720, $refund->usd_amount);
+        // Reproduce an old recorded refund whose offset was never cleared.
+        CommissionDisputeOffset::first()->update(['voided_at' => null, 'void_reason' => null]);
+        $this->slip('2026-10')->assertStatus(422);
+        $this->get(route('reports.commission-releases.index', ['month' => '2026-10', 'agent_id' => $this->agent->id]))
+            ->assertOk()->assertSee('Reconcile existing refund');
+        $this->post(route('reports.commission-releases.sync'), ['month' => '2026-10', 'agent_id' => $this->agent->id])->assertSessionHasNoErrors();
+        $this->post(route('reports.commission-releases.sync'), ['month' => '2026-10', 'agent_id' => $this->agent->id])->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('commission_adjustments', 2);
+        $this->assertNotNull(CommissionDisputeOffset::first()->voided_at);
+        $this->assertEquals(0, $this->slip('2026-10', ['from' => '2026-10-28', 'to' => '2026-10-28'])->assertOk()->json('summary.net_commission'));
+        $this->assertEquals(-500.25, $this->slip('2026-11')->assertOk()->json('summary.usd_total'));
+    }
+
+    public function test_partial_current_period_refund_is_corrected_to_full_original_period_with_a_preserved_audit_trail(): void
+    {
+        SalesTarget::create(['brand_id' => $this->agent->brand_id, 'user_id' => $this->agent->id, 'target_type' => 'agent', 'target_month' => '2026-10-01', 'amount' => 1000]);
+        $source = $this->payment('2026-10-16', 1500, 999);
+        $funding = $this->payment('2026-10-28', 2280, 1680);
+        $this->respond([$source->id => ['released', 500.25], $funding->id => ['unreleased', 0]]);
+        $this->updateStatus($source, 'Dispute')->assertSessionHasNoErrors();
+        $funding->fresh()->update(['status' => 'Refund']);
+        $funding->fresh()->delete();
+        $old = CommissionAdjustment::create(['sales_payment_id' => $funding->id, 'agent_id' => $this->agent->id,
+            'brand_id' => $this->agent->brand_id, 'kind' => 'refund', 'effective_date' => '2026-11-09', 'usd_amount' => -500.25,
+            'settlement_basis' => null, 'original_commission' => ['author_name' => 'Pat Mann', 'book_title' => 'Older refund']]);
+        $before = $old->fresh()->getAttributes();
+        $this->slip('2026-10')->assertStatus(422);
+        $this->post(route('reports.commission-releases.sync'), ['month' => '2026-10', 'agent_id' => $this->agent->id])->assertSessionHasNoErrors();
+        $this->post(route('reports.commission-releases.sync'), ['month' => '2026-10', 'agent_id' => $this->agent->id])->assertSessionHasNoErrors();
+        $this->assertSame($before, $old->fresh()->getAttributes());
+        $this->assertDatabaseCount('commission_adjustments', 4);
+        $corrected = CommissionAdjustment::where('sales_payment_id', $funding->id)->latest('id')->firstOrFail();
+        $this->assertEquals(-720, $corrected->usd_amount);
+        $this->assertSame('unreleased', $corrected->settlement_basis);
+        $this->assertSame('2026-10-28', $corrected->effective_date->toDateString());
+        $counter = CommissionAdjustment::where('sales_payment_id', $funding->id)->where('kind', 'reinstatement')->firstOrFail();
+        $this->assertEquals(500.25, $counter->usd_amount);
+        $this->assertEquals($old->id, $counter->original_commission['refund_correction_reverses']);
+        $this->assertSame('2026-11-09', $counter->effective_date->toDateString());
+        $this->assertNotNull(CommissionDisputeOffset::first()->voided_at);
+        $this->assertEquals(0, $this->slip('2026-10', ['from' => '2026-10-28', 'to' => '2026-10-28'])->assertOk()->json('summary.net_commission'));
+        $this->assertEquals(-500.25, $this->slip('2026-11')->assertOk()->json('summary.usd_total'));
+        $this->get(route('reports.agent-statements.index', ['month' => '2026-11', 'agent_id' => $this->agent->id]))
+            ->assertOk()->assertSee('Prior refund deduction correction');
+        $this->assertSoftDeleted($funding);
+    }
+
+    public function test_a_recorded_refund_missing_the_hold_reversal_is_reconciled_without_duplicate_net_deductions(): void
+    {
+        $payment = $this->payment();
+        $this->freeze($payment);
+        $payment->fresh()->update(['status' => 'Refund']);
+        $old = CommissionAdjustment::create(['sales_payment_id' => $payment->id, 'agent_id' => $this->agent->id,
+            'brand_id' => $this->agent->brand_id, 'kind' => 'refund', 'effective_date' => '2026-10-28', 'usd_amount' => -650,
+            'settlement_basis' => 'unreleased', 'original_commission' => []]);
+        $this->respond([$payment->id => ['unreleased', 0]]);
+        $this->post(route('reports.commission-releases.sync'), ['month' => '2026-10', 'agent_id' => $this->agent->id])->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('commission_adjustments', 3);
+        $this->assertEquals(-650, $old->fresh()->usd_amount);
+        $summary = $this->slip('2026-10')->assertOk()->json('summary');
+        $this->assertEquals(0, $summary['mtd']);
+        $this->assertEquals(0, $summary['usd_total']);
+        $this->assertEquals(0, $summary['card_hold_amount']);
+        $this->assertEquals(0, $summary['net_commission']);
+    }
+
+    public function test_correction_does_not_move_an_old_deduction_when_later_earnings_may_already_have_covered_it(): void
+    {
+        $payment = $this->payment();
+        $this->freeze($payment);
+        $payment->fresh()->update(['status' => 'Refund']);
+        $old = CommissionAdjustment::create(['sales_payment_id' => $payment->id, 'agent_id' => $this->agent->id,
+            'brand_id' => $this->agent->brand_id, 'kind' => 'refund', 'effective_date' => '2026-11-09', 'usd_amount' => -500,
+            'settlement_basis' => null, 'original_commission' => []]);
+        $before = $old->fresh()->getAttributes();
+        $earnings = $this->payment('2026-11-05');
+        $this->respond([$payment->id => ['unreleased', 0], $earnings->id => ['unreleased', 0]]);
+        $this->post(route('reports.commission-releases.sync'), ['month' => '2026-10', 'agent_id' => $this->agent->id])
+            ->assertSessionHasErrors('refund');
+        $this->assertSame($before, $old->fresh()->getAttributes());
+        $this->assertDatabaseCount('commission_adjustments', 1);
+        $this->slip('2026-11')->assertStatus(422);
+    }
+
+    public function test_a_cached_unreleased_status_cannot_authorize_a_correction_when_the_fresh_lookup_is_unknown(): void
+    {
+        $payment = $this->payment();
+        $this->freeze($payment);
+        $payment->fresh()->update(['status' => 'Refund']);
+        CommissionRelease::create(['sales_payment_id' => $payment->id, 'agent_id' => $this->agent->id, 'brand_id' => $this->agent->brand_id,
+            'status' => 'unreleased', 'source' => 'phrems', 'reason' => 'Earlier lookup']);
+        $old = CommissionAdjustment::create(['sales_payment_id' => $payment->id, 'agent_id' => $this->agent->id,
+            'brand_id' => $this->agent->brand_id, 'kind' => 'refund', 'effective_date' => '2026-10-28', 'usd_amount' => -500,
+            'settlement_basis' => 'unreleased', 'original_commission' => []]);
+        $before = $old->fresh()->getAttributes();
+        $this->respond([$payment->id => ['unknown', 0]]);
+        $this->post(route('reports.commission-releases.refunds.reconcile', $payment->id),
+            ['refunded_on' => '2026-11-09', 'reason' => 'Verify original calculation'])->assertSessionHasErrors('status');
+        $this->assertSame($before, $old->fresh()->getAttributes());
+        $this->assertDatabaseCount('commission_adjustments', 1);
+        $this->assertDatabaseCount('commission_releases', 1);
+    }
 }

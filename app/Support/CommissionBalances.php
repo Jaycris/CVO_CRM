@@ -37,14 +37,14 @@ class CommissionBalances
                 $original = $offset->adjustment;
                 if (! $original) return [];
                 return [
-                    new CommissionAdjustment(['brand_id' => $offset->commission_snapshot['brand_id'], 'agent_id' => $offset->agent_id,
+                    (new CommissionAdjustment(['brand_id' => $offset->commission_snapshot['brand_id'], 'agent_id' => $offset->agent_id,
                         'effective_date' => $offset->commission_date, 'usd_amount' => -(float) $offset->usd_amount,
-                        'kind' => 'offset', 'original_commission' => $offset->commission_snapshot,
-                        'display_label' => 'Commission applied to prior dispute']),
-                    new CommissionAdjustment(['brand_id' => $original->brand_id, 'agent_id' => $offset->agent_id,
+                        'kind' => 'offset', 'original_commission' => $offset->commission_snapshot]))
+                        ->setAttribute('display_label', 'Commission applied to prior dispute'),
+                    (new CommissionAdjustment(['brand_id' => $original->brand_id, 'agent_id' => $offset->agent_id,
                         'effective_date' => $offset->dispute_date, 'usd_amount' => (float) $offset->usd_amount,
-                        'kind' => 'offset', 'original_commission' => $original->original_commission,
-                        'display_label' => 'Dispute covered by prior commission']),
+                        'kind' => 'offset', 'original_commission' => $original->original_commission]))
+                        ->setAttribute('display_label', 'Dispute covered by prior commission'),
                 ];
             });
         (new \Illuminate\Database\Eloquent\Collection($offsetEvents->all()))->load(['agent', 'brand']);
@@ -118,7 +118,8 @@ class CommissionBalances
                 $entry->display_label ?? match ($entry->kind) {
                     'dispute' => 'Dispute commission deduction',
                     'refund' => 'Refund commission reversal',
-                    'reinstatement' => ($entry->original_commission['cancellation_status'] ?? null) === 'Refund' ? 'Refund commission restored' : 'Dispute commission restored',
+                    'reinstatement' => isset($entry->original_commission['refund_correction_reverses']) ? 'Prior refund deduction correction'
+                        : (($entry->original_commission['cancellation_status'] ?? null) === 'Refund' ? 'Refund commission restored' : 'Dispute commission restored'),
                     default => (float) $entry->usd_amount < 0 ? 'Commission adjustment deduction' : 'Commission adjustment credit',
                 }));
         }

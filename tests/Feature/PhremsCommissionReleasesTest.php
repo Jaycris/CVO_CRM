@@ -148,6 +148,17 @@ class PhremsCommissionReleasesTest extends TestCase
         $run = $this->summary('2026-10', ['from' => '2026-10-25', 'to' => '2026-10-31']);
         $this->assertEquals(149.75, $run['usd_total']);
         $this->assertEquals(3187.25, $run['net_commission']);
+        // Production guards discard non-column constructor attributes. Labels must still survive.
+        $wasUnguarded = \Illuminate\Database\Eloquent\Model::isUnguarded();
+        \Illuminate\Database\Eloquent\Model::reguard();
+        try {
+            $this->get(route('reports.agent-statements.index', ['month' => '2026-10', 'agent_id' => $this->agent->id]))
+                ->assertOk()->assertSee('Commission applied to prior dispute')->assertDontSee('Commission adjustment deduction');
+            $this->get(route('reports.agent-statements.index', ['month' => '2026-11', 'agent_id' => $this->agent->id]))
+                ->assertOk()->assertSee('Dispute covered by prior commission');
+        } finally {
+            \Illuminate\Database\Eloquent\Model::unguard($wasUnguarded);
+        }
         $releasedRun = $this->summary('2026-10', ['from' => '2026-10-01', 'to' => '2026-10-24']);
         $this->assertEquals(650, $releasedRun['usd_total']);
         $this->assertEquals(799.75, $this->summary('2026-10')['usd_total']);

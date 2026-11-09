@@ -12,7 +12,7 @@ use Illuminate\Validation\ValidationException;
 class CommissionDisputes
 {
     // Called while the payment row is locked, before its status is changed.
-    public static function transition(SalesPayment $payment, string $status, ?\Carbon\CarbonInterface $occurredAt = null): void
+    public static function transition(SalesPayment $payment, string $status, ?\Carbon\CarbonInterface $occurredAt = null, bool $releaseVerified = false): void
     {
         if (! in_array($status, ['Dispute', 'Refund', 'Payment Success'], true)) {
             return;
@@ -35,7 +35,7 @@ class CommissionDisputes
             $shareIds = array_filter([$activity->agent_id, (float) $activity->frankie_credit_amount > 0 ? $activity->frankie_agent_id : null]);
             $needsLookup = collect(array_unique($shareIds))->contains(fn ($agentId) => CommissionAdjustment::where('sales_payment_id', $payment->id)
                 ->where('agent_id', $agentId)->latest('id')->first()?->isDeduction() !== true);
-            if ($needsLookup) app(PhremsCommissionReleases::class)->syncForActivity($activity);
+            if ($needsLookup && ! $releaseVerified) app(PhremsCommissionReleases::class)->syncForActivity($activity);
             foreach (array_unique($shareIds) as $agentId) {
                 $last = CommissionAdjustment::where('sales_payment_id', $payment->id)->where('agent_id', $agentId)->latest('id')->first();
                 if (! $last?->isDeduction() && ! in_array(CommissionRelease::latestFor($payment->id, $agentId)?->status, ['released', 'unreleased'], true)) {
