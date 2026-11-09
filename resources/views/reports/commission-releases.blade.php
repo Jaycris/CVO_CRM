@@ -11,6 +11,12 @@
         @if ($errors->any())
             <div class="rounded-lg bg-rose-50 p-4 text-sm text-rose-700">@foreach ($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>
         @endif
+        @if ($missingRefundHistory->isNotEmpty())
+            <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                Original commission history is missing for refunded payment(s): {{ $missingRefundHistory->pluck('sales_payment_id')->unique()->map(fn ($id) => '#'.$id)->implode(', ') }}.
+                These require a review of the original sent slip and source records before payroll can be prepared. No amounts or refund dates have been guessed.
+            </div>
+        @endif
         <form method="GET" class="flex flex-wrap items-end gap-3">
             <div><label for="month" class="block text-sm font-semibold">Sales month</label><input id="month" type="month" name="month" value="{{ $month->format('Y-m') }}" class="mt-1 rounded-lg border-slate-300 text-sm dark:bg-zinc-900 dark:text-zinc-100"></div>
             <div><label for="agent" class="block text-sm font-semibold">Agent</label><select id="agent" name="agent_id" class="mt-1 rounded-lg border-slate-300 text-sm dark:bg-zinc-900 dark:text-zinc-100"><option value="">All agents</option>@foreach ($agents as $agent)<option value="{{ $agent->id }}" @selected($agentId == $agent->id)>{{ $agent->first_name }} {{ $agent->last_name }}</option>@endforeach</select></div>
@@ -45,6 +51,24 @@
                                 @if ($latest?->source_reference)<p class="text-xs text-slate-500">{{ $latest->source_reference }}</p>@endif
                                 @if ($latest?->status === 'released')<p class="text-xs">Confirmed released: ${{ number_format((float) ($latest->commission_breakdown['usd_total'] ?? 0), 2) }}</p>@endif
                                 @if ($latest?->released_at)<p class="text-xs">Released {{ $latest->released_at->format('M d, Y') }}</p>@endif
+                                @if ($activity->payment?->status === 'Refund')
+                                    <p class="mt-2 text-xs font-semibold text-rose-700">Refunded payment — sales MTD removed</p>
+                                    @if ($pendingRefundPayments->has($activity->sales_payment_id))
+                                        <details class="mt-2"><summary class="cursor-pointer text-sm font-semibold text-emerald-700">Reconcile existing refund</summary>
+                                            <p class="mt-2 text-xs">Confirm the actual refund date. PHREMS will be checked before recording a reversal.</p>
+                                            <form method="POST" action="{{ route('reports.commission-releases.refunds.reconcile', $activity->sales_payment_id) }}" class="mt-3 space-y-2">
+                                                @csrf
+                                                <label class="block text-xs font-semibold" for="refund-date-{{ $activity->id }}-{{ $row['agent_id'] }}">Actual refund date</label>
+                                                <input id="refund-date-{{ $activity->id }}-{{ $row['agent_id'] }}" name="refunded_on" type="date" required min="{{ $activity->sold_date->toDateString() }}" max="{{ now()->toDateString() }}" class="rounded-lg border-slate-300 text-sm dark:bg-zinc-900">
+                                                <label class="block text-xs font-semibold" for="refund-reason-{{ $activity->id }}-{{ $row['agent_id'] }}">Reason</label>
+                                                <input id="refund-reason-{{ $activity->id }}-{{ $row['agent_id'] }}" name="reason" required maxlength="1000" class="block w-full rounded-lg border-slate-300 text-sm dark:bg-zinc-900">
+                                                <button class="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">Reconcile refund</button>
+                                            </form>
+                                        </details>
+                                    @else
+                                        <p class="text-xs">Commission reversal recorded.</p>
+                                    @endif
+                                @endif
                                 @if ($deduction?->kind === 'dispute' && $activity->payment?->status === 'Dispute')
                                     <p class="mt-2 text-xs">Recorded deduction: ${{ number_format(abs((float) $deduction->usd_amount), 2) }} · {{ $deduction->effective_date->format('M d, Y') }}</p>
                                     @if ($coveredUsd > 0)<p class="text-xs text-emerald-700">Covered by earlier unpaid commissions: ${{ number_format($coveredUsd, 2) }}</p><p class="text-xs">Uncovered deduction: ${{ number_format(max(0, abs((float) $deduction->usd_amount) - $coveredUsd), 2) }}</p>@endif

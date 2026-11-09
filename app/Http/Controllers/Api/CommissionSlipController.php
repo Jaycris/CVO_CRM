@@ -9,6 +9,7 @@ use App\Models\SalesTarget;
 use App\Models\User;
 use App\Support\SalesMtdCalculator;
 use App\Support\CommissionBalances;
+use App\Support\CommissionRefunds;
 use App\Support\SalesMtdDeductions;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -54,6 +55,8 @@ class CommissionSlipController extends Controller
             ->first();
 
         abort_if(! $agent, 404, 'No CRM user is linked to this HRIS employee ID.');
+        abort_if(CommissionRefunds::pending($month->copy()->endOfMonth(), $agent->id)->isNotEmpty(), 422,
+            'Refunded payments have unreconciled commissions. Admin must fetch their PHREMS release status and reconcile the refunds before preparing payroll.');
 
         $activities = SalesActivity::query()
             ->with(['brand', 'agent', 'frankieAgent', 'service'])

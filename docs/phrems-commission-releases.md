@@ -29,6 +29,22 @@ The CRM validates the complete response before recording statuses. Authenticatio
 
 New disputes refresh PHREMS status for every commission share, including Frankie shares. Released commissions deduct the **saved sent USD commission** in the current period, with negative balances carried forward. Unreleased commissions cancel their calculated commission and associated hold in the original sale period, without creating a second current-period charge. Sales MTD remains unchanged. Existing dispute entries keep their original treatment; this migration does not backfill or rewrite them.
 
+## Refund treatment
+
+Refunds reverse commission using the same release verification, but **remove the refunded payment's sales MTD credit from its original sale month**, as requested by the business. Remaining unfrozen sales use the monthly tier and threshold after that credit is removed. Refunded amounts are excluded from MTD-deduction allocation and from prior paid installments when splitting a later payment's service/markup. Shared main-agent/Frankie credit is removed for each share.
+
+The sale's frozen history is retained and labelled `Refunded sale history`, with zero sales/service/markup MTD credit. Its historical financial amounts come from the cancellation's saved settlement breakdown, including PHREMS's actual sent amounts for released commissions. A matching `Refund commission reversal` cancels unpaid commission and its hold in the original period; a released refund deducts saved USD on the actual refund date. Switching between Dispute and Refund does not create another deduction. Restoring Payment Success reverses the existing deduction once and restores the sale's MTD credit.
+
+Refunding an Unreleased payment that funds another dispute voids that funding reservation with an audit reason. The prior dispute's uncovered debt returns, or other verified unpaid commissions can cover it. Refunded records remain protected from permanent deletion; their audit history is not erased.
+
+### Existing refunds, including Trash
+
+After deployment, Admin should fetch the original sale month in Commission Releases. Existing Unreleased refunds with frozen source history are reconciled automatically, including soft-deleted payments. This operation is idempotent and records its reason, actor and timestamp. The actual refund date is left unknown where it was not recorded; it is never inferred from the Trash deletion timestamp. Their commission cancellation belongs to the original unpaid sale period regardless.
+
+For an older Released refund, Admin must use **Reconcile existing refund** and supply its actual refund date and a reason. This prevents backfilling a clawback into today's payroll merely because reconciliation happened today. Missing original history or ambiguous PHREMS matches require review instead of an estimated reversal.
+
+Agent Statements warns when refunds are awaiting reconciliation. The commission-slip API returns HTTP 422 while relevant past refunds with retained history (or evidence of a released commission whose activity was lost) still lack a cancellation. This prevents payroll from paying unreversed frozen commissions. No new migration, build, token or PHREMS endpoint change is required. Recompute affected **unsent PHREMS slips** after reconciliation; previously saved slips do not update automatically and already sent slips must not be resent to repair this.
+
 ### Automatic offsets against earlier unpaid commissions
 
 For all agents, new released disputes first use verified Unreleased commissions from earlier months. The CRM refreshes PHREMS before spending that commission and reserves only payable USD after card holds, MTD deductions, earlier period obligations, and previous reservations. Oldest commissions and disputes are handled first. Released and Unknown commissions cannot fund an offset. Main-agent and Frankie balances are separate.

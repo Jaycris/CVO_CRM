@@ -157,7 +157,7 @@ class SalesPaymentController extends Controller
             $hasReleasedCommission = \App\Models\CommissionRelease::where('sales_payment_id', $locked->id)->where('status', 'released')->exists();
             $hasReservedCommission = \App\Models\CommissionDisputeOffset::where('sales_payment_id', $locked->id)->whereNull('voided_at')->exists();
 
-            if (($frozenActivity || $hasReleasedCommission || $hasReservedCommission || ($validated['status'] === 'Dispute' && $locked->status === 'Payment Success')) && (
+            if (($frozenActivity || $hasReleasedCommission || $hasReservedCommission || (in_array($validated['status'], ['Dispute', 'Refund'], true) && $locked->status === 'Payment Success')) && (
                 round((float) $validated['amount'], 2) !== round((float) $locked->amount, 2)
                 || Carbon::parse($validated['sold_date'])->toDateString() !== $locked->sold_date->toDateString()
                 || $validated['payment_method'] !== $locked->payment_method

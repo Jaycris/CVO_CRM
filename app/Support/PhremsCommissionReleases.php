@@ -31,10 +31,12 @@ class PhremsCommissionReleases
         $ids = $activities->flatMap(fn ($activity) => [$activity->agent_id, (float) $activity->frankie_credit_amount > 0 ? $activity->frankie_agent_id : null])
             ->filter()->unique()->when($agentId, fn ($ids) => $ids->filter(fn ($id) => $id == $agentId));
         $count = 0;
-        foreach (User::withTrashed()->whereIn('id', $ids)->get() as $agent) {
+        $agents = User::withTrashed()->whereIn('id', $ids)->get();
+        foreach ($agents as $agent) {
             $count += count($this->syncAgentMonth($agent, $month));
-            app(CommissionUnreleasedOffsets::class)->settleForAgent($agent);
         }
+        app(CommissionRefunds::class)->reconcileUnreleased($month, $agentId);
+        foreach ($agents as $agent) app(CommissionUnreleasedOffsets::class)->settleForAgent($agent);
         return $count;
     }
 

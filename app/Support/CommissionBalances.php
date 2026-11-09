@@ -97,7 +97,7 @@ class CommissionBalances
             $events = $eventsByMonth->get($key, collect())->groupBy('agent_id')->map(fn ($entries) => $entries->sum(function ($entry) {
                 $breakdown = $entry->original_commission['settlement_breakdown'] ?? null;
                 if ($entry->settlement_basis === 'unreleased' && $breakdown && (float) ($breakdown['exchange_rate'] ?? 0) > 0) {
-                    return ((float) $breakdown['net_commission'] / (float) $breakdown['exchange_rate']) * ($entry->kind === 'dispute' ? -1 : 1);
+                    return ((float) $breakdown['net_commission'] / (float) $breakdown['exchange_rate']) * ($entry->isDeduction() ? -1 : 1);
                 }
                 return (float) $entry->usd_amount;
             }));
@@ -115,7 +115,12 @@ class CommissionBalances
 
         foreach ($eventsByMonth->get($start->format('Y-m'), collect()) as $entry) {
             $rows->push(self::adjustmentRow($entry, $entry->effective_date, (float) $entry->usd_amount,
-                $entry->display_label ?? ($entry->kind === 'dispute' ? 'Dispute commission deduction' : 'Dispute commission restored')));
+                $entry->display_label ?? match ($entry->kind) {
+                    'dispute' => 'Dispute commission deduction',
+                    'refund' => 'Refund commission reversal',
+                    'reinstatement' => ($entry->original_commission['cancellation_status'] ?? null) === 'Refund' ? 'Refund commission restored' : 'Dispute commission restored',
+                    default => (float) $entry->usd_amount < 0 ? 'Commission adjustment deduction' : 'Commission adjustment credit',
+                }));
         }
 
         return $rows->values();
@@ -167,7 +172,7 @@ class CommissionBalances
 
         // Cancel the unpaid commission and its hold using the original calculation, not today's FX rate.
         if ($useSettlementBreakdown && $entry->settlement_basis === 'unreleased' && ($breakdown = $entry->original_commission['settlement_breakdown'] ?? null)) {
-            $sign = $entry->kind === 'dispute' ? -1 : 1;
+            $sign = $entry->isDeduction() ? -1 : 1;
             foreach (['service_commission', 'markup_commission', 'usd_total', 'php_total', 'hold_amount', 'net_commission'] as $field) {
                 $row[$field] = round((float) ($breakdown[$field] ?? 0) * $sign, 2);
             }

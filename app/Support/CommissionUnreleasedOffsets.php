@@ -14,14 +14,14 @@ use Illuminate\Support\Facades\DB;
 
 class CommissionUnreleasedOffsets
 {
-    public function afterDispute(SalesPayment $payment, array $freshAdjustmentIds = []): void
+    public function afterDispute(SalesPayment $payment, array $freshAdjustmentIds = [], string $status = 'Dispute'): void
     {
-        $entries = CommissionAdjustment::where('sales_payment_id', $payment->id)->where('kind', 'dispute')->get()->unique('agent_id');
+        $entries = CommissionAdjustment::where('sales_payment_id', $payment->id)->whereIn('kind', CommissionAdjustment::DEDUCTION_KINDS)->get()->unique('agent_id');
         foreach ($entries as $entry) {
             if (CommissionRelease::latestFor($payment->id, $entry->agent_id)?->status === 'unreleased') {
                 // An unpaid commission that is itself cancelled can no longer fund an older debt.
                 CommissionDisputeOffset::where('sales_payment_id', $payment->id)->where('agent_id', $entry->agent_id)
-                    ->whereNull('voided_at')->update(['voided_at' => now(), 'void_reason' => 'The funding commission was disputed before release.']);
+                    ->whereNull('voided_at')->update(['voided_at' => now(), 'void_reason' => $status === 'Refund' ? 'The funding commission was refunded before release.' : 'The funding commission was disputed before release.']);
             }
             $this->settleForAgent(User::withTrashed()->findOrFail($entry->agent_id), $payment->id, $freshAdjustmentIds);
         }
@@ -34,9 +34,9 @@ class CommissionUnreleasedOffsets
             User::withTrashed()->whereKey($agent->id)->lockForUpdate()->firstOrFail();
             $entries = CommissionAdjustment::where('agent_id', $agent->id)->orderBy('id')->get();
             $debts = $entries->groupBy('sales_payment_id')->map->last()->filter(function ($entry) use ($agent, $freshAdjustmentIds) {
-                if ($entry->kind !== 'dispute' || (float) $entry->usd_amount >= 0) return false;
+                if (! $entry->isDeduction() || (float) $entry->usd_amount >= 0) return false;
                 if (! in_array($entry->id, $freshAdjustmentIds, true)
-                    && ! SalesPayment::whereKey($entry->sales_payment_id)->where('status', 'Dispute')->exists()) return false;
+                    && ! SalesPayment::withTrashed()->whereKey($entry->sales_payment_id)->whereIn('status', ['Dispute', 'Refund'])->exists()) return false;
                 // Historical debt may already have been collected from a later payroll. The release API
                 // verifies sale commissions, not debt repayment. Do not re-collect it on a later fetch.
                 if (! in_array($entry->id, $freshAdjustmentIds, true) && SalesActivity::where('payment_status', 'Payment Success')

@@ -12,6 +12,16 @@
     @endphp
 
     <div class="space-y-6">
+        @if ($hasPendingRefunds)
+            <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                This statement has refunds awaiting commission reconciliation. Its payout is not final.
+                @if ($canManageCommissionReleases)
+                    Fetch their PHREMS status in Commission Releases. For older released refunds, confirm the actual refund date there.
+                @else
+                    Ask Admin to reconcile the refunded payments before payroll is prepared.
+                @endif
+            </div>
+        @endif
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
                 <h1 class="text-2xl font-bold text-slate-900 dark:text-zinc-100">Agent Statements</h1>

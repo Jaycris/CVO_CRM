@@ -9,6 +9,7 @@ use App\Models\SalesTarget;
 use App\Models\User;
 use App\Support\BrandScope;
 use App\Support\CommissionBalances;
+use App\Support\CommissionRefunds;
 use App\Support\SalesMtdCalculator;
 use App\Support\SalesMtdDeductions;
 use Carbon\Carbon;
@@ -167,6 +168,7 @@ class AgentStatementController extends Controller
             'search' => $search,
             'canViewAll' => $canViewAll,
             'canManageCommissionReleases' => CommissionReleaseController::canManage($user),
+            'hasPendingRefunds' => CommissionRefunds::pending($month->copy()->endOfMonth(), $agentId, $canViewAll ? $user : null, $brandId)->isNotEmpty(),
         ]);
     }
 

@@ -45,6 +45,7 @@ class SalesMtdDeductions
 
         $groups = $entries->groupBy(fn ($entry) => self::groupKey($entry->brand_id, $entry->agent_id, $entry->effective_month->format('Y-m')));
         $activities = SalesActivity::query()->where('payment_status', 'Payment Success')
+            ->whereDoesntHave('payment', fn ($query) => $query->withTrashed()->where('status', 'Refund'))
             ->whereDate('sold_date', '>=', $entries->min('effective_month')->copy()->startOfMonth()->toDateString())
             ->whereDate('sold_date', '<=', $entries->max('effective_month')->copy()->endOfMonth()->toDateString())
             ->where(fn ($query) => $query->whereIn('agent_id', $entries->pluck('agent_id'))->orWhereIn('frankie_agent_id', $entries->pluck('agent_id')))

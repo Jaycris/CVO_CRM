@@ -5,8 +5,10 @@ namespace App\Support;
 use App\Models\AppSetting;
 use App\Models\Brand;
 use App\Models\CommissionProfile;
+use App\Models\CommissionAdjustment;
 use App\Models\SalesActivity;
 use App\Models\SalesEndorsement;
+use App\Models\SalesPayment;
 use App\Models\SalesTarget;
 use App\Models\Team;
 use App\Models\Service;
@@ -172,9 +174,13 @@ class SalesMtdCalculator
 
     public static function statementRows(Collection $activities, ?Collection $agentTargetRows = null): Collection
     {
-        $activitySplits = self::activityServiceMarkupSplits($activities);
+        $refundIds = SalesPayment::withTrashed()->whereIn('id', $activities->pluck('sales_payment_id')->filter())
+            ->where('status', 'Refund')->pluck('id')->flip();
+        $refundEntries = CommissionAdjustment::whereIn('sales_payment_id', $refundIds->keys())->orderBy('id')->get()
+            ->groupBy(fn ($entry) => $entry->sales_payment_id.':'.$entry->agent_id)->map->last();
+        $activitySplits = self::activityServiceMarkupSplits($activities->reject(fn ($activity) => $refundIds->has($activity->sales_payment_id)));
 
-        $rows = $activities->flatMap(function (SalesActivity $activity) use ($activitySplits) {
+        $rows = $activities->flatMap(function (SalesActivity $activity) use ($activitySplits, $refundIds) {
             $rows = collect();
             $split = $activitySplits[$activity->id] ?? null;
 
@@ -198,14 +204,32 @@ class SalesMtdCalculator
                 ));
             }
 
-            return $rows;
+            return $rows->map(function ($row) use ($activity, $refundIds) {
+                $row['is_refunded'] = $refundIds->has($activity->sales_payment_id);
+                if ($row['is_refunded']) {
+                    // Exclude refunded credit before selecting monthly tiers or consuming a threshold.
+                    foreach (['amount', 'credit_amount', 'service_amount', 'markup_amount'] as $field) $row[$field] = 0;
+                }
+                return $row;
+            });
         });
 
         return self::applyCommissionProfiles($rows, $agentTargetRows ?? collect(), AppSetting::commissionExchangeRate())
-            ->map(function (array $row) {
+            ->map(function (array $row) use ($refundEntries) {
+                $refunded = $row['is_refunded'];
                 $snapshot = $row['activity']->commission_snapshot[$row['agent_id']] ?? null;
-
-                return $snapshot ? array_replace($row, $snapshot) : $row;
+                $row = $snapshot ? array_replace($row, $snapshot) : $row;
+                $row['is_refunded'] = $refunded;
+                if ($refunded) {
+                    $entry = $refundEntries->get($row['activity']->sales_payment_id.':'.$row['agent_id']);
+                    $row['refund_financials'] = ($entry?->isDeduction() ? ($entry->original_commission['settlement_breakdown'] ?? null) : null)
+                        ?? $snapshot['paid_breakdown'] ?? $snapshot ?? [];
+                    $activity = clone $row['activity'];
+                    $activity->activity_type = 'refund_history';
+                    $activity->service_name = 'Refunded sale history — '.$activity->service_name;
+                    $row['activity'] = $activity;
+                }
+                return self::refundHistoryRow($row);
             });
     }
 
@@ -249,7 +273,24 @@ class SalesMtdCalculator
         }
 
         return $rows->groupBy('agent_id')->flatMap(fn ($agentRows, $agentId) => $affected->contains($agentId)
-            ? self::applyCommissionProfiles($agentRows, $targets, AppSetting::commissionExchangeRate()) : $agentRows)->values();
+            ? self::applyCommissionProfiles($agentRows, $targets, AppSetting::commissionExchangeRate()) : $agentRows)
+            ->map(fn ($row) => self::refundHistoryRow($row))->values();
+    }
+
+    private static function refundHistoryRow(array $row): array
+    {
+        if (! ($row['is_refunded'] ?? false)) return $row;
+        // The positive historical commission and its ledger reversal remain auditable,
+        // but neither the original sale nor its service/markup can count toward MTD again.
+        foreach (['amount', 'credit_amount', 'gross_amount', 'service_amount', 'markup_amount',
+            'commissionable_service_amount', 'commissionable_markup_amount', 'threshold_applied_amount',
+            'threshold_applied_service_amount', 'threshold_applied_markup_amount', 'mtd_deduction'] as $field) $row[$field] = 0;
+        foreach (['service_commission', 'markup_commission', 'usd_total', 'php_total', 'hold_amount', 'net_commission',
+            'exchange_rate', 'card_payment_hold_percent', 'service_commission_percent', 'markup_commission_percent'] as $field) {
+            if (isset($row['refund_financials'][$field])) $row[$field] = $row['refund_financials'][$field];
+        }
+        $row['share_role'] = 'Refunded sale history';
+        return $row;
     }
 
     private static function creditRow(SalesActivity $activity, ?User $agent, float $creditAmount, string $shareRole, ?array $activitySplit = null): array
@@ -383,6 +424,7 @@ class SalesMtdCalculator
 
         return (float) SalesActivity::query()
             ->where('payment_status', 'Payment Success')
+            ->whereDoesntHave('payment', fn ($query) => $query->withTrashed()->where('status', 'Refund'))
             ->whereDate('sold_date', '<', $activity->sold_date->toDateString())
             ->where('agent_id', $activity->agent_id)
             ->when(

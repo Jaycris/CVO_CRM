@@ -23,6 +23,17 @@ use Illuminate\Validation\ValidationException;
 
 class CommissionReleaseController extends Controller
 {
+    public function reconcileRefund(Request $request, int $payment)
+    {
+        abort_unless(self::canManage($request->user()), 403);
+        $validated = $request->validate(['refunded_on' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
+            'reason' => ['required', 'string', 'max:1000']]);
+        $changed = app(\App\Support\CommissionRefunds::class)->reconcile($payment,
+            Carbon::createFromFormat('!Y-m-d', $validated['refunded_on']), $validated['reason']);
+        return back()->with('success', $changed ? 'Refund commission reconciled. Its sales MTD credit is removed and its commission is reversed once.'
+            : 'This refund was already reconciled. No additional deduction was recorded.');
+    }
+
     public function reconcile(Request $request, int $adjustment)
     {
         abort_unless(self::canManage($request->user()), 403);
@@ -44,7 +55,7 @@ class CommissionReleaseController extends Controller
         $validated = $request->validate(['month' => ['required', 'date_format:Y-m'], 'agent_id' => ['nullable', 'integer', 'exists:users,id']]);
         $month = Carbon::createFromFormat('!Y-m', $validated['month']);
         $count = app(\App\Support\PhremsCommissionReleases::class)->syncMonth($month, $validated['agent_id'] ?? null);
-        return back()->with('success', "Fetched PHREMS release status for {$count} commission share(s). Verified older unpaid commissions are automatically applied to matching dispute debt. Unknown matches require review.");
+        return back()->with('success', "Fetched PHREMS release status for {$count} commission share(s). Eligible unpaid refunds have been reconciled automatically. Verified unpaid commissions can cover cancellation debt. Unknown matches and older released refunds require Admin review.");
     }
 
     public static function canManage(?User $user): bool
@@ -59,6 +70,7 @@ class CommissionReleaseController extends Controller
         $month = Carbon::createFromFormat('!Y-m', $validated['month'] ?? now()->format('Y-m'));
         $agentId = $validated['agent_id'] ?? null;
         $activities = SalesActivity::with(['brand', 'agent.commissionProfile.rules', 'frankieAgent.commissionProfile.rules', 'service', 'payment'])
+            ->with(['payment' => fn ($query) => $query->withTrashed()])
             ->where('payment_status', 'Payment Success')->whereNotNull('sales_payment_id')
             ->whereDate('sold_date', '>=', $month->toDateString())->whereDate('sold_date', '<=', $month->copy()->endOfMonth()->toDateString())
             ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
@@ -80,11 +92,14 @@ class CommissionReleaseController extends Controller
             ->get()->groupBy('commission_adjustment_id');
         $reserved = CommissionDisputeOffset::whereNull('voided_at')->whereIn('sales_payment_id', collect($rows->items())->pluck('activity.sales_payment_id'))
             ->get()->groupBy(fn ($offset) => $offset->sales_payment_id.':'.$offset->agent_id);
+        $pendingRefunds = \App\Support\CommissionRefunds::pending($month->copy()->endOfMonth(), $agentId, $request->user());
 
         return view('reports.commission-releases', [
             'month' => $month, 'agentId' => $agentId, 'rows' => $rows, 'history' => $history,
             'adjustments' => $adjustments, 'reconciliations' => $reconciliations,
             'covered' => $covered, 'reserved' => $reserved,
+            'pendingRefundPayments' => $pendingRefunds->pluck('sales_payment_id')->flip(),
+            'missingRefundHistory' => $pendingRefunds->where('refund_history_missing', true),
             'agents' => User::where('department', 'Sales')->tap(fn ($query) => BrandScope::apply($query, $request->user()))->orderBy('first_name')->orderBy('last_name')->get(),
         ]);
     }

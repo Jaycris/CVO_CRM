@@ -6,6 +6,13 @@ use Illuminate\Database\Eloquent\Model;
 
 class CommissionAdjustment extends Model
 {
+    public const DEDUCTION_KINDS = ['dispute', 'refund'];
+
+    public function isDeduction(): bool
+    {
+        return in_array($this->kind, self::DEDUCTION_KINDS, true);
+    }
+
     protected $guarded = ['id'];
 
     protected function casts(): array

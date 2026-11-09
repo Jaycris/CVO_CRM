@@ -12,9 +12,9 @@ use Illuminate\Validation\ValidationException;
 class CommissionDisputes
 {
     // Called while the payment row is locked, before its status is changed.
-    public static function transition(SalesPayment $payment, string $status): void
+    public static function transition(SalesPayment $payment, string $status, ?\Carbon\CarbonInterface $occurredAt = null): void
     {
-        if (! in_array($status, ['Dispute', 'Payment Success'], true)) {
+        if (! in_array($status, ['Dispute', 'Refund', 'Payment Success'], true)) {
             return;
         }
 
@@ -27,24 +27,30 @@ class CommissionDisputes
         $snapshots = $activity->commission_snapshot;
         $paidRows = collect();
         $createdAdjustmentIds = [];
+        $isCancellation = in_array($status, ['Dispute', 'Refund'], true);
+        $needsLookup = false;
 
         // A payment can have separate main-agent and Frankie commission releases.
-        if ($status === 'Dispute') {
+        if ($isCancellation) {
             $shareIds = array_filter([$activity->agent_id, (float) $activity->frankie_credit_amount > 0 ? $activity->frankie_agent_id : null]);
             $needsLookup = collect(array_unique($shareIds))->contains(fn ($agentId) => CommissionAdjustment::where('sales_payment_id', $payment->id)
-                ->where('agent_id', $agentId)->latest('id')->first()?->kind !== 'dispute');
+                ->where('agent_id', $agentId)->latest('id')->first()?->isDeduction() !== true);
             if ($needsLookup) app(PhremsCommissionReleases::class)->syncForActivity($activity);
             foreach (array_unique($shareIds) as $agentId) {
                 $last = CommissionAdjustment::where('sales_payment_id', $payment->id)->where('agent_id', $agentId)->latest('id')->first();
-                if ($last?->kind !== 'dispute' && ! in_array(CommissionRelease::latestFor($payment->id, $agentId)?->status, ['released', 'unreleased'], true)) {
+                if (! $last?->isDeduction() && ! in_array(CommissionRelease::latestFor($payment->id, $agentId)?->status, ['released', 'unreleased'], true)) {
                     throw ValidationException::withMessages([
                         'status' => 'PHREMS release status could not be verified for every agent on this payment. Ask Admin to review Commission Releases.',
                     ]);
                 }
+                if ($status === 'Refund' && $payment->status === 'Refund' && ! $last?->isDeduction() && ! $occurredAt
+                    && CommissionRelease::latestFor($payment->id, $agentId)?->status === 'released') {
+                    throw ValidationException::withMessages(['status' => 'Admin must confirm the actual date of this older refund in Commission Releases before reconciling it.']);
+                }
             }
         }
 
-        if ($status === 'Dispute' && $payment->status === 'Payment Success') {
+        if ($isCancellation && $needsLookup && ($payment->status === 'Payment Success' || $payment->status === 'Refund')) {
             $month = $activity->sold_date->copy()->startOfMonth();
             $agentIds = array_filter([$activity->agent_id, $activity->frankie_agent_id]);
             $activities = SalesActivity::with(['agent.commissionProfile.rules', 'frankieAgent.commissionProfile.rules', 'service'])
@@ -71,16 +77,17 @@ class CommissionDisputes
                     return [$row['agent_id'] => $snapshot];
                 })->all();
             // Retain historical snapshots when a restored payment is disputed again.
-            $snapshots = array_replace($newSnapshots, $snapshots ?: []);
+            $snapshots = $snapshots ?: [];
+            foreach ($newSnapshots as $id => $fresh) $snapshots[$id] = array_replace($fresh, $snapshots[$id] ?? []);
             $activity->update(['commission_snapshot' => $snapshots]);
         }
 
         foreach ($snapshots ?: [] as $agentId => $snapshot) {
             $last = CommissionAdjustment::where('sales_payment_id', $payment->id)
                 ->where('agent_id', $agentId)->latest('id')->first();
-            $kind = $status === 'Dispute' ? 'dispute' : 'reinstatement';
+            $kind = $isCancellation ? strtolower($status) : 'reinstatement';
 
-            if ($last?->kind === $kind || ($kind === 'reinstatement' && ! $last)) {
+            if (($isCancellation && $last?->isDeduction()) || $last?->kind === $kind || ($kind === 'reinstatement' && ! $last)) {
                 continue;
             }
 
@@ -99,7 +106,9 @@ class CommissionDisputes
                     : collect($paidRows->get($agentId) ?? $snapshot['paid_breakdown'] ?? $snapshot)
                         ->except(['activity', 'agent', 'commission_profile', 'paid_breakdown'])->all();
                 $amount = abs((float) ($original['settlement_breakdown']['usd_total'] ?? $snapshot['paid_usd_total'] ?? $snapshot['usd_total']));
-                $date = $basis === 'unreleased' ? $snapshot['original_sold_date'] : now()->toDateString();
+                $date = $basis === 'unreleased' ? ($snapshot['original_sold_date'] ?? $activity->sold_date->toDateString()) : ($occurredAt ?? now())->toDateString();
+                $original['cancellation_status'] = $status;
+                $original['recorded_by'] = auth()->id();
             }
 
             $entry = CommissionAdjustment::create([
@@ -109,11 +118,11 @@ class CommissionDisputes
                 'kind' => $kind,
                 'effective_date' => $date,
                 'settlement_basis' => $basis,
-                'usd_amount' => round($amount * ($kind === 'dispute' ? -1 : 1), 2),
+                'usd_amount' => round($amount * ($isCancellation ? -1 : 1), 2),
                 'original_commission' => $original,
             ]);
             $createdAdjustmentIds[] = $entry->id;
         }
-        if ($status === 'Dispute') app(CommissionUnreleasedOffsets::class)->afterDispute($payment, $createdAdjustmentIds);
+        if ($isCancellation) app(CommissionUnreleasedOffsets::class)->afterDispute($payment, $createdAdjustmentIds, $status);
     }
 }
