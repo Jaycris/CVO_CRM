@@ -43,7 +43,9 @@
 
         @if ($errors->any())
             <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 dark:border-rose-400/30 dark:bg-rose-400/10 dark:text-rose-200">
-                Please select at least one record.
+                @foreach ($errors->all() as $error)
+                    <p>{{ $error }}</p>
+                @endforeach
             </div>
         @endif
 

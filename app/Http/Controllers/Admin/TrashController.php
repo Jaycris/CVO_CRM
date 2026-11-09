@@ -9,9 +9,12 @@ use App\Models\SalesEndorsement;
 use App\Models\SalesPayment;
 use App\Models\User;
 use App\Support\SalesActivitySync;
+use App\Support\TrashDeletionGuard;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class TrashController extends Controller
@@ -75,12 +78,23 @@ class TrashController extends Controller
             'record_ids.*' => ['integer'],
         ]);
 
-        $this->modelClass($validated['type'])::onlyTrashed()
-            ->whereIn('id', $validated['record_ids'])
-            ->get()
-            ->each(function (Model $record) {
-                $record->forceDelete();
+        try {
+            DB::transaction(function () use ($validated) {
+                $records = $this->modelClass($validated['type'])::onlyTrashed()
+                    ->whereIn('id', $validated['record_ids'])->orderBy('id')->lockForUpdate()->get();
+                // Validate the complete batch before removing any record.
+                TrashDeletionGuard::check($records);
+                $records->each(fn (Model $record) => $record->forceDelete());
             });
+        } catch (QueryException $exception) {
+            // Other record types may also have protected dependants. Roll back the whole batch
+            // and explain the restriction without exposing raw SQL or masking unrelated failures.
+            if (($exception->errorInfo[0] ?? null) !== '23000'
+                || ! in_array((int) ($exception->errorInfo[1] ?? 0), [1451, 547, 19], true)) {
+                throw $exception;
+            }
+            return back()->withErrors(['deletion' => 'Cannot permanently delete these records because other records still depend on them. No selected records were deleted. Restore the records to review their links.']);
+        }
 
         return back()->with('success', 'Selected record(s) permanently deleted.');
     }
