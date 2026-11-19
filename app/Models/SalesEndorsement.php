@@ -115,6 +115,12 @@ class SalesEndorsement extends Model
         return $this->hasMany(SalesPayment::class);
     }
 
+    public function latestHistoricalPayment(): HasOne
+    {
+        // Display-only fallback for a project's original sale date, not proof of payment.
+        return $this->hasOne(SalesPayment::class)->withTrashed()->latestOfMany();
+    }
+
     public function documents(): HasMany
     {
         return $this->hasMany(SalesEndorsementDocument::class);

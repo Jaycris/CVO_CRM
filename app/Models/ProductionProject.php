@@ -40,7 +40,9 @@ class ProductionProject extends Model
 
     public function endorsement(): BelongsTo
     {
-        return $this->belongsTo(SalesEndorsement::class, 'sales_endorsement_id');
+        // Production work can outlive a soft-deleted sales record. Keep its source
+        // details readable without restoring the endorsement or its payments.
+        return $this->belongsTo(SalesEndorsement::class, 'sales_endorsement_id')->withTrashed();
     }
 
     public function brand(): BelongsTo

@@ -39,7 +39,7 @@ class ProductionProjectController extends Controller
         $allowedTrackers = $this->allowedTrackers($request);
 
         $tasks = ProductionTask::with([
-            'project.endorsement.agent',
+            'project.endorsement.agent' => fn ($query) => $query->withTrashed(),
             'project.endorsement.successfulPaymentRecord',
             'project.brand',
             'project.fulfillmentOfficer',
@@ -93,7 +93,7 @@ class ProductionProjectController extends Controller
         $search = trim((string) $request->query('search', ''));
         $status = $completed ? 'all' : $request->query('status', 'all');
 
-        $tasks = ProductionTask::with(['project.endorsement.agent', 'project.endorsement.successfulPaymentRecord', 'project.brand', 'project.fulfillmentOfficer', 'assignedUser', 'items'])
+        $tasks = ProductionTask::with(['project.endorsement.agent' => fn ($query) => $query->withTrashed(), 'project.endorsement.successfulPaymentRecord', 'project.brand', 'project.fulfillmentOfficer', 'assignedUser', 'items'])
             ->whereHas('project', fn ($query) => BrandScope::apply($query, $request->user()))
             ->where('assigned_to', $request->user()->id)
             ->when(
@@ -152,8 +152,9 @@ class ProductionProjectController extends Controller
         $allowedTrackers = $this->allowedTrackers($request);
 
         $projectsQuery = ProductionProject::with([
-            'endorsement.agent',
+            'endorsement.agent' => fn ($query) => $query->withTrashed(),
             'endorsement.successfulPaymentRecord',
+            'endorsement.latestHistoricalPayment',
             'endorsement.service.inclusions',
             'fulfillmentOfficer',
             'endorsedBy',
@@ -180,7 +181,7 @@ class ProductionProjectController extends Controller
                                 ->orWhere('street_name', 'like', "%{$search}%")
                                 ->orWhere('city_state', 'like', "%{$search}%")
                                 ->orWhereHas('agent', function ($query) use ($search) {
-                                    $query->where('first_name', 'like', "%{$search}%")
+                                    $query->withTrashed()->where('first_name', 'like', "%{$search}%")
                                         ->orWhere('last_name', 'like', "%{$search}%");
                                 });
                         })

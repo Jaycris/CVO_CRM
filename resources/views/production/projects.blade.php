@@ -279,6 +279,7 @@
                         @forelse ($projects as $project)
                             @php
                                 $endorsement = $project->endorsement;
+                                $salePayment = $endorsement?->successfulPaymentRecord ?? $endorsement?->latestHistoricalPayment;
                                 $brand = $project->brand ?? $endorsement?->brand;
                                 $brandName = $brand?->imprint_name ?? 'CreatiVision';
                                 $brandPrimary = $brand?->primary_color ?: '#065f46';
@@ -309,7 +310,7 @@
                                                 'projectId' => 'PRJ-' . str_pad((string) $project->id, 5, '0', STR_PAD_LEFT),
                                                 'brand' => $brandName,
                                                 'tracker' => $trackerLabels[$project->tracker_type] ?? str($project->tracker_type)->title(),
-                                                'dateSold' => $endorsement?->successfulPaymentRecord?->sold_date?->format('M d, Y') ?: '-',
+                                                'dateSold' => $salePayment?->sold_date?->format('M d, Y') ?: '-',
                                                 'author' => $endorsement?->author_name ?: '-',
                                                 'bookTitle' => $endorsement?->book_title ?: '-',
                                                 'agreement' => $endorsement?->contract_status === 'signed' ? 'Signed' : 'Pending',
@@ -352,11 +353,14 @@
                                     </span>
                                 </td>
                                 <td class="px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">
-                                    {{ $endorsement?->successfulPaymentRecord?->sold_date?->format('M d, Y') ?: '-' }}
+                                    {{ $salePayment?->sold_date?->format('M d, Y') ?: '-' }}
                                 </td>
                                 <td class="px-3 py-4 leading-snug text-slate-700 dark:text-zinc-300">
                                     <p class="font-semibold text-slate-900 dark:text-zinc-100">{{ $endorsement?->author_name ?: '-' }}</p>
                                     <p class="mt-1 line-clamp-2" title="{{ $endorsement?->book_title }}">{{ $endorsement?->book_title ?: '-' }}</p>
+                                    @if ($endorsement?->trashed())
+                                        <p class="mt-1 text-xs text-amber-700 dark:text-amber-300">Sales endorsement in Trash</p>
+                                    @endif
                                 </td>
                                 @unless ($isSalesDepartmentView)
                                     <td class="px-3 py-4">

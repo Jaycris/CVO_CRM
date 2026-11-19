@@ -142,6 +142,53 @@ class InstallmentProductionFlowTest extends TestCase
         Notification::assertSentToTimes($this->officer, ProductionProjectsEndorsedNotification::class, 1);
     }
 
+    public function test_project_details_survive_trashed_endorsement_payments_and_agent_without_restoring_or_resetting_work(): void
+    {
+        $agent = User::factory()->create(['brand_id' => $this->admin->brand_id, 'first_name' => 'Historical', 'last_name' => 'Agent']);
+        $endorsement = $this->endorsement();
+        $endorsement->update(['agent_id' => $agent->id]);
+        $payment = SalesPayment::create(['brand_id' => $endorsement->brand_id, 'sales_endorsement_id' => $endorsement->id,
+            'amount' => 500, 'payment_method' => 'Card', 'sold_date' => '2026-10-28', 'status' => 'Payment Success']);
+        $this->endorse([$endorsement])->assertSessionHasNoErrors();
+        $project = ProductionProject::firstOrFail();
+        $project->update(['status' => 'in_progress', 'assigned_to' => $this->officer->id, 'fulfillment_officer_id' => $this->officer->id]);
+        $task = $project->tasks()->create(['assigned_to' => $this->officer->id, 'title' => 'Existing production work', 'status' => 'in_progress', 'progress' => 90]);
+        $beforeProject = $project->fresh()->getAttributes();
+        $beforeTask = $task->fresh()->getAttributes();
+        $endorsement->delete();
+        $agent->delete();
+
+        $response = $this->get(route('production.projects.index'))->assertOk()
+            ->assertSee('Installment Author')->assertSee('Installment Book')->assertSee('Publishing Package')
+            ->assertSee('Historical Agent')->assertSee('Sales endorsement in Trash')->assertSee('Oct 28, 2026')->assertSee('90%');
+        $row = $response->viewData('projects')->firstWhere('id', $project->id);
+        $this->assertNotNull($row->endorsement);
+        $this->assertTrue($row->endorsement->trashed());
+        $this->assertTrue($row->endorsement->agent->trashed());
+        $this->assertEquals($payment->id, $row->endorsement->latestHistoricalPayment->id);
+        $this->assertSoftDeleted($endorsement);
+        $this->assertSoftDeleted($payment);
+        $this->assertSoftDeleted($agent);
+        $this->assertSame($beforeProject, $project->fresh()->getAttributes());
+        $this->assertSame($beforeTask, $task->fresh()->getAttributes());
+        $this->assertSame(90, $project->fresh()->progress_percentage);
+        $this->get(route('production.projects.index', ['search' => 'Historical']))->assertOk()->assertSee('Installment Author');
+    }
+
+    public function test_historical_payment_date_fallback_does_not_turn_a_refund_into_successful_payment(): void
+    {
+        $endorsement = $this->endorsement();
+        $this->endorse([$endorsement])->assertSessionHasNoErrors();
+        $payment = SalesPayment::create(['brand_id' => $endorsement->brand_id, 'sales_endorsement_id' => $endorsement->id,
+            'amount' => 500, 'payment_method' => 'Card', 'sold_date' => '2026-10-28', 'status' => 'Refund']);
+        $payment->delete();
+        $this->get(route('production.projects.index'))->assertOk()->assertSee('Oct 28, 2026')->assertSee('Installment Author');
+        $this->assertNull($endorsement->fresh()->successfulPaymentRecord);
+        $this->assertEquals($payment->id, $endorsement->fresh()->latestHistoricalPayment->id);
+        $this->assertSame('Refund', $payment->fresh()->status);
+        $this->assertSoftDeleted($payment);
+    }
+
     public function test_users_without_permission_cannot_endorse_projects(): void
     {
         $endorsement = $this->endorsement();
