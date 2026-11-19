@@ -54,7 +54,7 @@ class CommissionBalances
             if ($agentId && (int) $entry->agent_id !== $agentId) return false;
             if ($salesBrandsOnly && ! $brandId && ! $entry->brand?->is_sales_brand) return false;
             return ! $viewer || $brandId || BrandScope::canAccessAllBrands($viewer)
-                || (int) $entry->brand_id === (int) $viewer->brand_id || ($includeOwnAcrossBrands && (int) $entry->agent_id === $viewer->id);
+                || BrandScope::canAccessBrand($viewer, $entry->brand_id) || ($includeOwnAcrossBrands && (int) $entry->agent_id === $viewer->id);
         });
         $adjustments = collect($adjustments->all())->concat($offsetEvents)->sortBy(fn ($entry) => $entry->effective_date->toDateString())->values();
 

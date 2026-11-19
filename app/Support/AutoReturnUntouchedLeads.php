@@ -120,7 +120,7 @@ class AutoReturnUntouchedLeads
                     return true;
                 }
 
-                return $brandIds->contains((int) $user->brand_id);
+                return $brandIds->intersect(BrandScope::allowedBrandIds($user))->isNotEmpty();
             })
             ->values();
     }

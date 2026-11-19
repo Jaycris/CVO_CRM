@@ -213,8 +213,7 @@ class ServiceController extends Controller
 
     private function userCanAccessBrand(Request $request, ?int $brandId): bool
     {
-        return BrandScope::canAccessAllBrands($request->user())
-            || (int) $request->user()?->brand_id === (int) $brandId;
+        return BrandScope::canAccessBrand($request->user(), $brandId);
     }
 
     private function nullableTrim(?string $value): ?string

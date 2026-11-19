@@ -13,7 +13,6 @@ use App\Support\BrandScope;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Mail\Mailable;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
@@ -32,7 +31,7 @@ class ContractSignatureController extends Controller
 
         return view('finance.contract-esign', [
             'endorsement' => $endorsement,
-            'packet' => $this->packet($endorsement),
+            'packet' => $this->withContractMailAccount($this->packet($endorsement), $this->contractMailAccount($endorsement)),
             'signUrl' => URL::temporarySignedRoute('contracts.sign.show', now()->addDays(30), ['endorsement' => $endorsement]),
             'downloadUrl' => route('finance.contracts.esign.download', ['endorsement' => $endorsement, 'v' => $this->contractAssetVersion($endorsement)]),
             'previewUrl' => route('finance.contracts.esign.preview', ['endorsement' => $endorsement, 'v' => $this->contractAssetVersion($endorsement)]),
@@ -80,11 +79,16 @@ class ContractSignatureController extends Controller
         $packet = $this->withContractMailAccount($packet, $mailAccount);
         $signUrl = URL::temporarySignedRoute('contracts.sign.show', now()->addDays(30), ['endorsement' => $endorsement]);
 
-        $this->sendContractMail(
-            $mailAccount,
-            $validated['recipient_email'],
-            new ContractSignatureRequestMail($endorsement, $signUrl, $packet)
-        );
+        try {
+            $this->sendContractMail(
+                $mailAccount,
+                $validated['recipient_email'],
+                new ContractSignatureRequestMail($endorsement, $signUrl, $packet)
+            );
+        } catch (\Symfony\Component\Mailer\Exception\TransportExceptionInterface $exception) {
+            report($exception);
+            return back()->withErrors(['recipient_email' => 'The contract email could not be sent. Ask Admin to check this brand’s sender settings and try again.']);
+        }
 
         $endorsement->forceFill([
             'contract_status' => $endorsement->contract_status === 'signed' ? 'signed' : 'sent',
@@ -94,14 +98,20 @@ class ContractSignatureController extends Controller
             'contract_sent_by' => $request->user()?->id,
         ])->save();
 
-        $this->sendContractCcMail(
-            $mailAccount,
-            $endorsement,
-            $ccEmails,
-            $packet,
-            $request->user()
-        );
-        $this->notifyCcUsers($endorsement->fresh(['agent.team.manager', 'agent.team.teamLeader']), $ccEmails);
+        try {
+            $this->sendContractCcMail(
+                $mailAccount,
+                $endorsement,
+                $ccEmails,
+                $packet,
+                $request->user()
+            );
+            $this->notifyCcUsers($endorsement->fresh(['agent.team.manager', 'agent.team.teamLeader']), $ccEmails);
+        } catch (\Symfony\Component\Mailer\Exception\TransportExceptionInterface $exception) {
+            report($exception);
+            return redirect()->route('finance.contracts.esign', $endorsement)
+                ->with('warning', 'The contract was sent to the client, but some CC emails could not be delivered. Ask Admin to check the brand sender before resending CC notifications.');
+        }
 
         return redirect()
             ->route('finance.contracts.esign', $endorsement)
@@ -262,10 +272,11 @@ class ContractSignatureController extends Controller
                 'Inkspire Media House' => asset('images/inkspire-logo-navsite.png') . '?v=' . @filemtime(public_path('images/inkspire-logo-navsite.png')),
                 default => asset('images/CreativeVision LOGO-navsite.png') . '?v=' . @filemtime(public_path('images/CreativeVision LOGO-navsite.png')),
             };
-        $senderEmail = $currentSender?->email ?: $endorsement->contractSender?->email;
+        $senderEmail = ($currentSender?->emailForBrand($endorsement->brand_id) ?? $currentSender?->email)
+            ?: ($endorsement->contractSender?->emailForBrand($endorsement->brand_id) ?? $endorsement->contractSender?->email);
         $authorEmail = $endorsement->email ?: null;
         $agentName = trim(($endorsement->agent?->first_name ?? '') . ' ' . ($endorsement->agent?->last_name ?? ''));
-        $agentEmail = $endorsement->agent?->email;
+        $agentEmail = $endorsement->agent?->emailForBrand($endorsement->brand_id) ?? $endorsement->agent?->email;
         $signedAt = $endorsement->contract_signed_at;
         $sentAt = $endorsement->contract_sent_at;
 
@@ -312,16 +323,12 @@ class ContractSignatureController extends Controller
         };
     }
 
-    private function contractMailAccount(SalesEndorsement $endorsement): ?EmailAccount
+    private function contractMailAccount(SalesEndorsement $endorsement): EmailAccount|\App\Models\BrandMailSetting|null
     {
-        return EmailAccount::query()
-            ->where('brand_id', $endorsement->brand_id)
-            ->where('is_shared', true)
-            ->orderBy('id')
-            ->first();
+        return \App\Support\BrandMailer::account($endorsement->brand_id);
     }
 
-    private function withContractMailAccount(array $packet, ?EmailAccount $account): array
+    private function withContractMailAccount(array $packet, EmailAccount|\App\Models\BrandMailSetting|null $account): array
     {
         if (! $account) {
             return $packet;
@@ -332,39 +339,17 @@ class ContractSignatureController extends Controller
         return array_merge($packet, [
             'senderName' => $displayName !== '' ? $displayName : $packet['senderName'],
             'senderEmail' => $account->email_address,
-            'brandName' => $displayName !== '' ? $displayName : $packet['brandName'],
+            'replyToEmail' => $account->reply_to_address ?: $account->email_address,
         ]);
     }
 
-    private function sendContractMail(?EmailAccount $account, string $to, Mailable $mailable): void
+    private function sendContractMail(EmailAccount|\App\Models\BrandMailSetting|null $account, string $to, Mailable $mailable): void
     {
-        if (! $account) {
-            Mail::to($to)->send($mailable);
-
-            return;
-        }
-
-        $mailer = 'contract_brand_' . $account->id;
-
-        config([
-            'mail.mailers.' . $mailer => [
-                'transport' => 'smtp',
-                'scheme' => $account->smtp_encryption === 'ssl' ? 'smtps' : 'smtp',
-                'host' => $account->smtp_host,
-                'port' => $account->smtp_port,
-                'username' => $account->username,
-                'password' => $account->plainPassword() ?? '',
-                'timeout' => null,
-                'local_domain' => env('MAIL_EHLO_DOMAIN'),
-            ],
-        ]);
-
-        Mail::purge($mailer);
-        Mail::mailer($mailer)->to($to)->send($mailable);
+        \App\Support\BrandMailer::send($account, $to, $mailable);
     }
 
     private function sendContractCcMail(
-        ?EmailAccount $account,
+        EmailAccount|\App\Models\BrandMailSetting|null $account,
         SalesEndorsement $endorsement,
         array $ccEmails,
         array $packet,
@@ -374,10 +359,9 @@ class ContractSignatureController extends Controller
             return;
         }
 
-        $users = User::query()
-            ->whereIn('email', collect($ccEmails)->map(fn ($email) => strtolower($email))->all())
-            ->get()
-            ->keyBy(fn (User $user) => strtolower($user->email));
+        $users = $this->usersForBrandEmails($ccEmails, $endorsement->brand_id)
+            ->flatMap(fn (User $user) => [strtolower($user->email) => $user,
+                strtolower($user->emailForBrand($endorsement->brand_id) ?? $user->email) => $user]);
 
         $senderName = $this->userDisplayName($sender) ?: ($packet['senderName'] ?? 'The sender');
         $recipientName = $packet['signerName'] ?? $endorsement->author_name ?? $packet['recipientEmail'];
@@ -421,10 +405,10 @@ class ContractSignatureController extends Controller
     private function defaultCcEmails(SalesEndorsement $endorsement)
     {
         return collect([
-            $endorsement->agent?->email,
-            $endorsement->agent?->team?->manager?->email,
-            $endorsement->agent?->team?->teamLeader?->email,
-            $endorsement->agent?->reportsToUser?->email,
+            $endorsement->agent?->emailForBrand($endorsement->brand_id) ?? $endorsement->agent?->email,
+            $endorsement->agent?->team?->manager?->emailForBrand($endorsement->brand_id) ?? $endorsement->agent?->team?->manager?->email,
+            $endorsement->agent?->team?->teamLeader?->emailForBrand($endorsement->brand_id) ?? $endorsement->agent?->team?->teamLeader?->email,
+            $endorsement->agent?->reportsToUser?->emailForBrand($endorsement->brand_id) ?? $endorsement->agent?->reportsToUser?->email,
         ])
             ->merge(User::query()
                 ->whereHas('role', fn ($query) => $query->where('name', 'Admin'))
@@ -448,10 +432,7 @@ class ContractSignatureController extends Controller
             ->filter()
             ->all();
 
-        User::query()
-            ->whereNull('suspended_at')
-            ->whereIn('email', $normalizedEmails)
-            ->get()
+        $this->usersForBrandEmails($normalizedEmails, $endorsement->brand_id)
             ->each(fn (User $user) => $user->notify(new ContractSignatureRequestSentNotification($endorsement)));
     }
 
@@ -459,7 +440,7 @@ class ContractSignatureController extends Controller
     {
         $emails = $this->defaultCcEmails($endorsement)
             ->merge($endorsement->contract_cc_emails ?: [])
-            ->push($endorsement->contractSender?->email)
+            ->push($endorsement->contractSender?->emailForBrand($endorsement->brand_id) ?? $endorsement->contractSender?->email)
             ->filter()
             ->map(fn ($email) => strtolower(trim((string) $email)))
             ->filter(fn ($email) => filter_var($email, FILTER_VALIDATE_EMAIL))
@@ -471,11 +452,18 @@ class ContractSignatureController extends Controller
             return;
         }
 
-        User::query()
-            ->whereNull('suspended_at')
-            ->whereIn('email', $emails)
-            ->get()
+        $this->usersForBrandEmails($emails, $endorsement->brand_id)
             ->each(fn (User $user) => $user->notify(new ContractSignedNotification($endorsement)));
+    }
+
+    private function usersForBrandEmails(array $emails, ?int $brandId)
+    {
+        $emails = array_map(fn ($email) => mb_strtolower(trim($email)), $emails);
+        return User::with('accessibleBrands')->whereNull('suspended_at')
+            ->where(function ($query) use ($emails, $brandId) {
+                $query->whereIn('email', $emails)->orWhere(fn ($query) => $query->where('multiple_brands_enabled', true)
+                    ->whereHas('accessibleBrands', fn ($query) => $query->where('brands.id', $brandId)->whereIn('brand_user.email', $emails)));
+            })->get();
     }
 
     private function parseEmailList(string $value)
@@ -1620,7 +1608,6 @@ class ContractSignatureController extends Controller
 
     private function userCanAccessBrand(Request $request, ?int $brandId): bool
     {
-        return BrandScope::canAccessAllBrands($request->user())
-            || (int) $request->user()?->brand_id === (int) $brandId;
+        return BrandScope::canAccessBrand($request->user(), $brandId);
     }
 }

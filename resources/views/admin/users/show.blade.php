@@ -45,6 +45,19 @@
                 </div>
 
                 <div>
+                    <dt class="text-sm font-medium text-slate-500">Eligible Brands</dt>
+                    <dd class="mt-1 space-y-1 font-semibold text-slate-900">
+                        @if ($user->multiple_brands_enabled)
+                            @foreach ($user->accessibleBrands as $eligibleBrand)
+                                <div>{{ $eligibleBrand->imprint_name }} @if ($user->emailForBrand($eligibleBrand->id)) — {{ $user->emailForBrand($eligibleBrand->id) }} @endif</div>
+                            @endforeach
+                        @else
+                            {{ $user->brand?->imprint_name }}
+                        @endif
+                    </dd>
+                </div>
+
+                <div>
                     <dt class="text-sm font-medium text-slate-500">Work Arrangement</dt>
                     <dd class="mt-1 font-semibold text-slate-900">
                         {{ match($user->work_type) {

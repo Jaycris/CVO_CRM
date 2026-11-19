@@ -37,7 +37,7 @@
                     serviceName: @js(old('services', '')),
                     serviceId: @js(old('service_id', '')),
                     markupAmount: @js(old('markup_amount', '0')),
-                    defaultBrandId: @js($endorsementBrandId),
+                    defaultBrandId: @js(old('brand_id', $brandOptions->contains('id', $endorsementBrandId) ? $endorsementBrandId : $brandOptions->first()?->id)),
                     serviceOptions: @js($serviceOptions),
                     duplicateInstallmentContracts: @js($duplicateInstallmentContracts),
                     paymentType: @js(old('payment', '')),
@@ -200,6 +200,7 @@
                         this.email = lead.email || this.email;
                     },
                     selectLead(lead) {
+                        this.defaultBrandId = lead.brandId;
                         this.authorName = lead.authorName;
                         this.leadId = lead.id;
                         this.bookTitle = lead.bookTitle || this.bookTitle;
@@ -222,6 +223,20 @@
                   x-on:submit="confirmDuplicateSubmission($event)"
                   class="space-y-6">
                 @csrf
+
+                <input type="hidden" name="brand_id" :value="selectedBrandId">
+                <div>
+                    <label for="endorsement_brand" class="mb-2 block text-sm font-medium">Sales Brand</label>
+                    <select id="endorsement_brand" x-model="defaultBrandId"
+                            x-on:change="leadId = ''; authorName = ''; serviceId = ''; serviceName = ''; markupAmount = '0';"
+                            class="w-full rounded-xl border-slate-300 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-950">
+                        @foreach ($brandOptions as $option)
+                            <option value="{{ $option->id }}">{{ $option->imprint_name }}</option>
+                        @endforeach
+                    </select>
+                    <p class="mt-2 text-xs text-slate-500">Services follow this brand. Selecting an existing lead uses that lead’s brand.</p>
+                    <x-input-error :messages="$errors->get('brand_id')" class="mt-2" />
+                </div>
 
                 <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
                     <div>

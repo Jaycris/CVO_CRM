@@ -34,11 +34,11 @@ class SalesPerformanceController extends Controller
 
         $month = $this->monthFromRequest($request);
         $isAdmin = $user?->role?->name === 'Admin';
-        $canUseSalesBrandFilter = $isAdmin
+        $canUseSalesBrandFilter = $isAdmin || $user->multiple_brands_enabled
             || (BrandScope::canAccessAllBrands($user)
                 && ($user?->hasPermission('view_all_agent_mtd_directory') || $canManageTargets));
         $salesBrands = $canUseSalesBrandFilter
-            ? Brand::query()->where('is_sales_brand', true)->orderBy('imprint_name')->get()
+            ? Brand::query()->where('is_sales_brand', true)->tap(fn ($query) => BrandScope::apply($query, $user, 'id'))->orderBy('imprint_name')->get()
             : collect();
         $requestedBrandId = $request->integer('brand_id') ?: null;
         $brandId = $canUseSalesBrandFilter
@@ -48,7 +48,7 @@ class SalesPerformanceController extends Controller
         $includeOwnCreditsAcrossBrands = ! BrandScope::canAccessAllBrands($user)
             && $user?->department === 'Sales'
             && ! $brandId;
-        $summaryUser = $canUseSalesBrandFilter ? null : $user;
+        $summaryUser = BrandScope::canAccessAllBrands($user) ? null : $user;
         $summary = SalesMtdCalculator::summary($summaryUser, $month, $brandId, $includeOwnCreditsAcrossBrands, $canUseSalesBrandFilter && ! $brandId);
         $hasTeamTargets = Schema::hasColumn('sales_targets', 'team_id');
         $teamTargets = collect();
@@ -66,7 +66,7 @@ class SalesPerformanceController extends Controller
                             ->orWhereHas('brand', fn ($query) => $query->where('is_sales_brand', true));
                     });
                 })
-                ->when(! $brandId && ! $canUseSalesBrandFilter, fn ($query) => BrandScope::apply($query, $user))
+                ->when(! $brandId, fn ($query) => BrandScope::apply($query, $user))
                 ->get();
             $teamTargets = SalesMtdCalculator::dashboardTeamTargets($teamTargets);
             $targetTeams = Team::query()
@@ -79,7 +79,7 @@ class SalesPerformanceController extends Controller
                 ->whereHas('brand', fn ($query) => $query->where('is_sales_brand', true))
                 ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
                 ->when($canUseSalesBrandFilter && ! $brandId, fn ($query) => $query->whereHas('brand', fn ($query) => $query->where('is_sales_brand', true)))
-                ->when(! $brandId && ! $canUseSalesBrandFilter, fn ($query) => BrandScope::apply($query, $user))
+                ->when(! $brandId, fn ($query) => BrandScope::apply($query, $user))
                 ->orderBy('name')
                 ->get();
         }
@@ -98,9 +98,9 @@ class SalesPerformanceController extends Controller
                     $query->orWhereIn('id', $visibleAgentIds);
                 }
             })
-            ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
+            ->when($brandId, fn ($query) => BrandScope::applyToUsers($query, [$brandId]))
             ->when($canUseSalesBrandFilter && ! $brandId, fn ($query) => $query->whereHas('brand', fn ($query) => $query->where('is_sales_brand', true)))
-            ->when(! $brandId && ! $canUseSalesBrandFilter, fn ($query) => BrandScope::apply($query, $user))
+            ->when(! $brandId, fn ($query) => BrandScope::apply($query, $user))
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($query) use ($search) {
                     $query->where('first_name', 'like', "%{$search}%")

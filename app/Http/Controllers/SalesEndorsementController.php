@@ -131,6 +131,7 @@ class SalesEndorsementController extends Controller
             'paymentOptions' => $this->paymentOptions(),
             'serviceOptions' => $this->serviceOptions($request),
             'endorsementBrandId' => BrandScope::userBrandId($request->user()),
+            'brandOptions' => \App\Models\Brand::where('is_sales_brand', true)->tap(fn ($query) => BrandScope::apply($query, $request->user(), 'id'))->orderBy('imprint_name')->get(),
             'leadOptions' => $this->leadOptions($request),
             'frankieAgentOptions' => $this->frankieAgentOptions($request),
             'duplicateInstallmentContracts' => $this->duplicateInstallmentContracts($request),
@@ -145,6 +146,7 @@ class SalesEndorsementController extends Controller
             'has_frankie' => ['nullable', 'boolean'],
             'frankie_agent_id' => ['required_if:has_frankie,1', 'nullable', 'integer', 'exists:users,id'],
             'lead_id' => ['nullable', 'exists:leads,id'],
+            'brand_id' => ['nullable', 'integer', Rule::exists('brands', 'id')->whereNull('deleted_at')->where('is_sales_brand', true)],
             'author_name' => ['required', 'string', 'max:255'],
             'contact_number' => ['required', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255'],
@@ -165,7 +167,11 @@ class SalesEndorsementController extends Controller
 
         abort_if($lead && ! $this->userCanEndorseLead($request, $lead), 403);
 
-        $brandId = $lead?->brand_id ?? BrandScope::userBrandId($request->user());
+        $brandId = $lead?->brand_id ?? ($validated['brand_id'] ?? BrandScope::userBrandId($request->user()));
+        abort_unless(BrandScope::canAccessBrand($request->user(), $brandId) || ($lead && (int) $lead->assigned_to === (int) $request->user()->id), 403);
+        if ($lead && isset($validated['brand_id']) && (int) $validated['brand_id'] !== (int) $lead->brand_id) {
+            throw ValidationException::withMessages(['brand_id' => 'The endorsement brand must match the selected lead.']);
+        }
         $frankieAgent = $request->boolean('has_frankie')
             ? User::query()->whereKey($validated['frankie_agent_id'])->first()
             : null;
@@ -176,7 +182,7 @@ class SalesEndorsementController extends Controller
                 (int) $frankieAgent->id === (int) $request->user()->id
                 || $frankieAgent->department !== 'Sales'
                 || ! $frankieAgent->is_commission_eligible
-                || ! $this->userCanAccessBrand($request, $frankieAgent->brand_id)
+                || ! BrandScope::canAccessBrand($frankieAgent, $brandId)
             ),
             403
         );
@@ -297,8 +303,8 @@ class SalesEndorsementController extends Controller
             ->where('price', '>=', 0)
             ->when(! BrandScope::canAccessAllBrands($request->user()), function ($query) use ($request) {
                 $query->where(function ($query) use ($request) {
-                    $query->where('brand_id', BrandScope::userBrandId($request->user()))
-                        ->orWhereIn('brand_id', Lead::query()->select('brand_id')->where('assigned_to', $request->user()->id));
+                    BrandScope::apply($query, $request->user());
+                    $query->orWhereIn('brand_id', Lead::query()->select('brand_id')->where('assigned_to', $request->user()->id));
                 });
             })
             ->orderBy('name')
@@ -353,7 +359,7 @@ class SalesEndorsementController extends Controller
             ->where('department', 'Sales')
             ->where('is_commission_eligible', true)
             ->whereKeyNot($request->user()->id)
-            ->tap(fn ($query) => BrandScope::apply($query, $request->user()))
+            ->when(! BrandScope::canAccessAllBrands($request->user()), fn ($query) => BrandScope::applyToUsers($query, BrandScope::allowedBrandIds($request->user())))
             ->orderBy('first_name')
             ->orderBy('last_name')
             ->get()
@@ -410,8 +416,8 @@ class SalesEndorsementController extends Controller
     {
         if ($includeOwnEndorsements && ! BrandScope::canAccessAllBrands($request->user())) {
             $query->where(function ($query) use ($request) {
-                $query->where('brand_id', $request->user()?->brand_id)
-                    ->orWhere('agent_id', $request->user()?->id);
+                BrandScope::apply($query, $request->user());
+                $query->orWhere('agent_id', $request->user()?->id);
             });
 
             return;
@@ -427,15 +433,14 @@ class SalesEndorsementController extends Controller
         }
 
         $query->where(function ($query) use ($request) {
-            $query->where('brand_id', $request->user()?->brand_id)
-                ->orWhere('assigned_to', $request->user()?->id);
+            BrandScope::apply($query, $request->user());
+            $query->orWhere('assigned_to', $request->user()?->id);
         });
     }
 
     private function userCanAccessBrand(Request $request, ?int $brandId): bool
     {
-        return BrandScope::canAccessAllBrands($request->user())
-            || (int) $request->user()?->brand_id === (int) $brandId;
+        return BrandScope::canAccessBrand($request->user(), $brandId);
     }
 
     private function userCanEndorseLead(Request $request, Lead $lead): bool
@@ -510,7 +515,7 @@ class SalesEndorsementController extends Controller
 
     private function canReceiveFinanceEndorsementNotification(User $user, SalesEndorsement $endorsement): bool
     {
-        if (! BrandScope::canAccessAllBrands($user) && (int) $user->brand_id !== (int) $endorsement->brand_id) {
+        if (! BrandScope::canAccessBrand($user, $endorsement->brand_id)) {
             return false;
         }
 

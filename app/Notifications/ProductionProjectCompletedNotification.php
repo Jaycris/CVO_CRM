@@ -20,6 +20,11 @@ class ProductionProjectCompletedNotification extends Notification
         return ['database', 'mail'];
     }
 
+    public function brandId(): ?int
+    {
+        return $this->project->brand_id;
+    }
+
     public function toArray(object $notifiable): array
     {
         $this->project->loadMissing('endorsement');
@@ -38,12 +43,12 @@ class ProductionProjectCompletedNotification extends Notification
     {
         $this->project->loadMissing('endorsement', 'fulfillmentOfficer', 'tasks.assignedUser');
 
-        return (new MailMessage)
+        return \App\Support\BrandMailer::notification($this->project->brand_id, (new MailMessage)
             ->subject("Your author's/client's project is now complete")
             ->view('email.production-project-completed', [
                 'project' => $this->project,
                 'endorsement' => $this->project->endorsement,
                 'trackerUrl' => route('production.projects.index'),
-            ]);
+            ]));
     }
 }

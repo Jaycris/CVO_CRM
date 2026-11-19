@@ -155,7 +155,6 @@ class DashboardBannerController extends Controller
 
     private function userCanAccessBrand(Request $request, ?int $brandId): bool
     {
-        return BrandScope::canAccessAllBrands($request->user())
-            || (int) $request->user()?->brand_id === (int) $brandId;
+        return BrandScope::canAccessBrand($request->user(), $brandId);
     }
 }

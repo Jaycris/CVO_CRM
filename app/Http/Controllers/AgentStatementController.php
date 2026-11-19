@@ -41,9 +41,10 @@ class AgentStatementController extends Controller
             'from' => ['nullable', 'after_or_equal:'.$month->toDateString(), 'before_or_equal:'.$month->copy()->endOfMonth()->toDateString()],
             'to' => ['nullable', 'after_or_equal:'.$month->toDateString(), 'before_or_equal:'.$month->copy()->endOfMonth()->toDateString()],
         ]);
-        $brandId = BrandScope::canAccessAllBrands($user)
+        $brandId = (BrandScope::canAccessAllBrands($user) || $user->multiple_brands_enabled)
             ? $request->integer('brand_id') ?: null
             : null;
+        abort_if($brandId && ! BrandScope::canAccessBrand($user, $brandId), 403);
         $agentId = $canViewAll ? ($request->integer('agent_id') ?: null) : $user?->id;
         $search = trim((string) $request->query('search', ''));
 
@@ -53,8 +54,7 @@ class AgentStatementController extends Controller
             // Match the API: dates select calculated rows, not a new tier/threshold period.
             ->whereDate('sold_date', '>=', $month->toDateString())
             ->whereDate('sold_date', '<=', $month->copy()->endOfMonth()->toDateString())
-            ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
-            ->when(! $brandId && $canViewAll, fn ($query) => BrandScope::apply($query, $user))
+            ->when($canViewAll, fn ($query) => BrandScope::apply($query, $user))
             ->when($agentId, function ($query) use ($agentId) {
                 $query->where(function ($query) use ($agentId) {
                     $query->where('agent_id', $agentId)
@@ -89,17 +89,26 @@ class AgentStatementController extends Controller
         $targets = SalesTarget::query()
             ->whereDate('target_month', $month->toDateString())
             ->where('target_type', 'agent')
-            ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
-            ->when(! $brandId && $canViewAll, fn ($query) => BrandScope::apply($query, $user))
+            ->when($canViewAll, function ($query) use ($user, $activityAgentIds) {
+                $query->where(function ($query) use ($user, $activityAgentIds) {
+                    BrandScope::apply($query, $user);
+                    $query->orWhereIn('user_id', $activityAgentIds);
+                });
+            })
             ->when($agentId, fn ($query) => $query->where('user_id', $agentId))
             ->when(! $agentId && $activityAgentIds->isNotEmpty(), fn ($query) => $query->whereIn('user_id', $activityAgentIds))
             ->get();
 
         $agentTargetRows = SalesMtdCalculator::agentTargetRows($targets);
         $selectedTargets = $agentTargetRows->values();
-        $deductions = SalesMtdDeductions::entries($month, $canViewAll ? $user : null, $brandId, $agentId);
+        $visibleIds = $activities->pluck('id');
+        $activities = SalesMtdCalculator::monthlyContext($activities, $month);
+        $deductions = SalesMtdDeductions::entries($month, null, null, $agentId);
         $commissionRows = SalesMtdCalculator::withMtdDeductions(SalesMtdCalculator::statementRows($activities, $agentTargetRows), $agentTargetRows, $deductions);
-        $rows = CommissionBalances::apply($commissionRows, $month, $canViewAll ? $user : null, $brandId, $agentId)
+        $commissionRows = $commissionRows->filter(fn ($row) => $row['activity']->id ? $visibleIds->contains($row['activity']->id)
+            : (! $canViewAll || BrandScope::canAccessBrand($user, $row['activity']->brand_id)))->values();
+        $rows = CommissionBalances::apply($commissionRows, $month, $canViewAll ? $user : null, null, $agentId)
+            ->when($brandId, fn ($rows) => $rows->filter(fn ($row) => (int) $row['activity']->brand_id === $brandId))
             ->when($agentId, fn (Collection $rows, int $selectedAgentId) => $rows->where('agent_id', $selectedAgentId)->values())
             ->filter(fn (array $row) => $row['activity']->sold_date
                 && $row['activity']->sold_date->toDateString() >= $from
@@ -129,7 +138,7 @@ class AgentStatementController extends Controller
             'percent' => $targetAmount > 0 ? round(($salesCredit / $targetAmount) * 100, 2) : 0,
         ];
 
-        $brands = BrandScope::canAccessAllBrands($user) ? Brand::orderBy('imprint_name')->get() : collect();
+        $brands = Brand::orderBy('imprint_name')->tap(fn ($query) => BrandScope::apply($query, $user, 'id'))->get();
         $agentIds = $rows->pluck('agent_id')
             ->merge($targets->pluck('user_id'))
             ->filter()
@@ -148,7 +157,7 @@ class AgentStatementController extends Controller
                         $query->orWhereIn('id', $agentIds);
                     }
                 })
-                ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
+                ->when($brandId, fn ($query) => BrandScope::applyToUsers($query, [$brandId]))
                 ->when(! $brandId, fn ($query) => BrandScope::apply($query, $user))
                 ->orderBy('first_name')
                 ->orderBy('last_name')

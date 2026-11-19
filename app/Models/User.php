@@ -25,6 +25,7 @@ class User extends Authenticatable implements MustVerifyEmail
     protected $fillable = [
         'role_id',
         'brand_id',
+        'multiple_brands_enabled',
         'team_id',
         'first_name',
         'last_name',
@@ -63,6 +64,26 @@ class User extends Authenticatable implements MustVerifyEmail
     public function brand()
     {
         return $this->belongsTo(Brand::class);
+    }
+
+    public function accessibleBrands()
+    {
+        return $this->belongsToMany(Brand::class, 'brand_user')->withPivot('email');
+    }
+
+    public function emailForBrand(?int $brandId): ?string
+    {
+        if ($this->multiple_brands_enabled) {
+            $email = $this->accessibleBrands->firstWhere('id', $brandId)?->pivot?->email;
+            if ($email) return $email;
+        }
+        return (int) $this->brand_id === $brandId ? $this->email : null;
+    }
+
+    public function routeNotificationForMail($notification): string
+    {
+        $brandId = method_exists($notification, 'brandId') ? $notification->brandId() : null;
+        return ($brandId ? $this->emailForBrand($brandId) : null) ?? $this->email;
     }
 
     public function emailAccounts()
@@ -217,6 +238,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'is_commission_eligible' => 'boolean',
             'enable_end_of_shift_report' => 'boolean',
             'email_signature_enabled' => 'boolean',
+            'multiple_brands_enabled' => 'boolean',
             'password' => 'hashed',
         ];
     }

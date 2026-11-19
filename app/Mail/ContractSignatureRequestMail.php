@@ -27,9 +27,9 @@ class ContractSignatureRequestMail extends Mailable
         $senderEmail = $this->packet['senderEmail'] ?? config('mail.from.address');
 
         return new Envelope(
-            from: new Address($senderEmail, $brandName),
+            from: new Address($senderEmail, $this->packet['senderName'] ?? $brandName),
             replyTo: [
-                new Address($senderEmail, $brandName),
+                new Address($this->packet['replyToEmail'] ?? $senderEmail, $brandName),
             ],
             subject: $brandName . ' Contract Signature Request: ' . ($this->endorsement->book_title ?: $this->endorsement->endorsement_code),
         );

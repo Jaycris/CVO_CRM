@@ -778,8 +778,7 @@ class ProductionProjectController extends Controller
 
     private function userCanAccessBrand(Request $request, ?int $brandId): bool
     {
-        return BrandScope::canAccessAllBrands($request->user())
-            || (int) $request->user()?->brand_id === (int) $brandId;
+        return BrandScope::canAccessBrand($request->user(), $brandId);
     }
 
     private function markProductionPageSeen(Request $request): void
@@ -934,11 +933,8 @@ class ProductionProjectController extends Controller
 
         return $this->productionAssigneeQuery($request)
             ->whereKey($userId)
-            ->when($allowedBrandIds !== [] && ! BrandScope::canAccessAllBrands($request?->user()), function ($query) use ($allowedBrandIds) {
-                $query->where(function ($query) use ($allowedBrandIds) {
-                    $query->whereIn('brand_id', $allowedBrandIds)
-                        ->orWhere('brand_id', BrandScope::parentBrandId());
-                });
+            ->when($allowedBrandIds !== [], function ($query) use ($allowedBrandIds) {
+                foreach ($allowedBrandIds as $id) BrandScope::applyToUsers($query, [(int) $id]);
             })
             ->exists();
     }
@@ -948,10 +944,7 @@ class ProductionProjectController extends Controller
         return User::with('role')
             ->whereNull('suspended_at')
             ->when(! BrandScope::canAccessAllBrands($request?->user()), function ($query) use ($request) {
-                $query->where(function ($query) use ($request) {
-                    $query->where('brand_id', $request?->user()?->brand_id)
-                        ->orWhere('brand_id', BrandScope::parentBrandId());
-                });
+                BrandScope::applyToUsers($query, BrandScope::allowedBrandIds($request?->user()));
             })
             ->where(function ($query) {
                 $query->where('department', 'Production')

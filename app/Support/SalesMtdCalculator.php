@@ -111,11 +111,23 @@ class SalesMtdCalculator
             })
             ->get();
 
+        $visibleIds = $activities->pluck('id');
+        $context = self::monthlyContext($activities, $monthStart);
+        $contextAgentIds = $context->flatMap(fn ($activity) => [$activity->agent_id, $activity->frankie_agent_id])->filter()->unique();
+        $targets = $targets->merge(SalesTarget::whereDate('target_month', $monthStart->toDateString())
+            ->where('target_type', 'agent')->whereIn('user_id', $contextAgentIds)->get())->unique('id');
         $agentTargetRows = self::agentTargetRows($targets);
 
-        $grossRows = self::statementRows($activities, $agentTargetRows);
+        $grossRows = self::statementRows($context, $agentTargetRows);
         $deductions = SalesMtdDeductions::entries($monthStart, $user, $brandId, null, $salesBrandsOnly, $includeUserCreditsAcrossBrands);
-        $creditRows = CommissionBalances::apply(self::withMtdDeductions($grossRows, $agentTargetRows, $deductions), $monthStart, $user, $brandId, null, $salesBrandsOnly, $includeUserCreditsAcrossBrands);
+        $multiIds = User::whereIn('id', $contextAgentIds)->where('multiple_brands_enabled', true)->pluck('id');
+        $deductions = $deductions->merge(SalesMtdDeductions::entries($monthStart)->whereIn('agent_id', $multiIds))->unique('id');
+        $calculatedRows = self::withMtdDeductions($grossRows, $agentTargetRows, $deductions)
+            ->filter(fn ($row) => $row['activity']->id ? $visibleIds->contains($row['activity']->id)
+                : ((! $brandId || (int) $row['activity']->brand_id === $brandId)
+                    && (! $user || BrandScope::canAccessBrand($user, $row['activity']->brand_id))))->values();
+        $grossRows = $grossRows->filter(fn ($row) => $visibleIds->contains($row['activity']->id))->values();
+        $creditRows = CommissionBalances::apply($calculatedRows, $monthStart, $user, $brandId, null, $salesBrandsOnly, $includeUserCreditsAcrossBrands);
         $exchangeRate = AppSetting::commissionExchangeRate();
         $cardHoldPercent = AppSetting::cardPaymentHoldPercent();
         $groupedCredits = $creditRows->groupBy('agent_id');
@@ -170,6 +182,18 @@ class SalesMtdCalculator
             'exchangeRate' => $exchangeRate,
             'cardPaymentHoldPercent' => $cardHoldPercent,
         ];
+    }
+
+    public static function monthlyContext(Collection $activities, CarbonInterface $month): Collection
+    {
+        $ids = $activities->flatMap(fn ($activity) => [$activity->agent_id, $activity->frankie_agent_id])->filter()->unique();
+        $multiIds = User::whereIn('id', $ids)->where('multiple_brands_enabled', true)->pluck('id');
+        if ($multiIds->isEmpty()) return $activities;
+        $extra = SalesActivity::with(['brand', 'agent.commissionProfile.rules', 'frankieAgent.commissionProfile.rules', 'service'])
+            ->where('payment_status', 'Payment Success')
+            ->whereBetween('sold_date', [$month->copy()->startOfMonth()->toDateString(), $month->copy()->endOfMonth()->endOfDay()->toDateTimeString()])
+            ->where(fn ($query) => $query->whereIn('agent_id', $multiIds)->orWhereIn('frankie_agent_id', $multiIds))->get();
+        return $activities->merge($extra)->unique('id')->values();
     }
 
     public static function statementRows(Collection $activities, ?Collection $agentTargetRows = null): Collection

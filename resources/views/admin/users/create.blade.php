@@ -120,7 +120,7 @@
 
                     <div>
                         <label for="brand_id" class="mb-2 block text-sm font-medium text-slate-700">
-                            Brand / Account <span class="text-rose-600">*</span>
+                            Primary Brand / Account <span class="text-rose-600">*</span>
                         </label>
                         <select id="brand_id"
                                 name="brand_id"
@@ -142,6 +142,7 @@
                         <x-input-error :messages="$errors->get('brand_id')" class="mt-2" />
                     </div>
 
+                    @include('admin.users.partials.brand-access')
                     <div>
                         <label for="work_type" class="mb-2 block text-sm font-medium text-slate-700">
                             Work Arrangement
@@ -188,7 +189,7 @@
 
                     <div>
                         <label for="email" class="mb-2 block text-sm font-medium text-slate-700">
-                            Email Address <span class="text-rose-600">*</span>
+                            Login Email Address <span class="text-rose-600">*</span>
                         </label>
                         <input id="email"
                                name="email"

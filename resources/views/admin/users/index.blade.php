@@ -301,6 +301,9 @@
                                             <p class="text-xs text-slate-500 dark:text-zinc-400">
                                                 {{ $user->department ?? 'No department' }}
                                             </p>
+                                            <p class="text-xs text-slate-500 dark:text-zinc-400">
+                                                {{ $user->multiple_brands_enabled ? $user->accessibleBrands->pluck('imprint_name')->join(' · ') : $user->brand?->imprint_name }}
+                                            </p>
                                             <p class="text-xs text-slate-400 dark:text-zinc-500">
                                                 {{ $user->phone_number ?? 'No phone number' }}
                                             </p>

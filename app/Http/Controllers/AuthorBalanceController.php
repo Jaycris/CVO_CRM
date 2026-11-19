@@ -61,7 +61,7 @@ class AuthorBalanceController extends Controller
                     $query->whereHas('users')
                         ->orWhereIn('id', SalesEndorsement::query()->select('brand_id')->whereNotNull('brand_id'));
                 })
-                ->when(! BrandScope::canAccessAllBrands($user), fn ($query) => $query->whereKey($user?->brand_id))
+                ->tap(fn ($query) => BrandScope::apply($query, $user, 'id'))
                 ->orderBy('imprint_name')
                 ->get()
             : collect();

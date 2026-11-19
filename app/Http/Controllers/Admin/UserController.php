@@ -16,7 +16,6 @@ use App\Support\HrisReportsTo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
@@ -31,7 +30,7 @@ class UserController extends Controller
         $canManageEmployeeCommissionProfiles = $request->user()?->role?->name === 'Admin'
             || $request->user()?->hasPermission('manage_employee_commission_profiles');
 
-        $users = User::with(['role', 'brand', 'team'])->withCount([
+        $users = User::with(['role', 'brand', 'team', 'accessibleBrands'])->withCount([
             'assignedLeads as active_assigned_leads_count' => fn ($query) => $query
                 ->whereNull('returned_at')
                 ->whereNull('archived_at')
@@ -86,6 +85,7 @@ class UserController extends Controller
                 ),
             ],
             'brand_id' => ['required', 'exists:brands,id'],
+            ...$this->brandAccessRules($request),
             'first_name' => ['required', 'string', 'max:255'],
             'last_name' => ['required', 'string', 'max:255'],
             'department' => ['required', 'string', 'max:255', Rule::in($this->departments())],
@@ -104,34 +104,39 @@ class UserController extends Controller
         $this->ensureUserIsNotDuplicate($validated);
         $this->ensureRoleBelongsToDepartment($request, $validated['role_id'], $validated['department'] ?? null);
 
-        $user = User::create([
-            'role_id'   => $validated['role_id'],
-            'brand_id' => $validated['brand_id'],
-            'first_name'    => $validated['first_name'],
-            'last_name'     => $validated['last_name'],
-            'department'    => $validated['department'] ?? null,
-            'work_type'     => $validated['work_type'] ?? null,
-            'email'         =>  $validated['email'],
-            'phone_number' => $validated['phone_number'] ?? null,
-            'hris_employee_id' => $validated['hris_employee_id'] ?? null,
-            'reports_to_hris_employee_id' => $validated['reports_to_hris_employee_id'] ?? null,
-            'enable_end_of_shift_report' => $request->boolean('enable_end_of_shift_report'),
-            'is_commission_eligible' => $request->boolean('is_commission_eligible'),
+        $user = DB::transaction(function () use ($request, $validated) {
+            $user = User::create([
+                'role_id'   => $validated['role_id'],
+                'brand_id' => $validated['brand_id'],
+                'first_name'    => $validated['first_name'],
+                'last_name'     => $validated['last_name'],
+                'department'    => $validated['department'] ?? null,
+                'work_type'     => $validated['work_type'] ?? null,
+                'email'         =>  $validated['email'],
+                'phone_number' => $validated['phone_number'] ?? null,
+                'hris_employee_id' => $validated['hris_employee_id'] ?? null,
+                'reports_to_hris_employee_id' => $validated['reports_to_hris_employee_id'] ?? null,
+                'enable_end_of_shift_report' => $request->boolean('enable_end_of_shift_report'),
+                'is_commission_eligible' => $request->boolean('is_commission_eligible'),
 
-            // Temporary random password
-            'password'      => Hash::make(Str::random(32)),
+                // Temporary random password
+                'password'      => Hash::make(Str::random(32)),
 
 
-            // not verified yet
-            'email_verified_at'     => null,
-            'password_created_at'   => null,
+                // not verified yet
+                'email_verified_at'     => null,
+                'password_created_at'   => null,
 
-            // expires after 7 days
-            'invitation_expires_at' => now()->addDays(7),
-        ]);
+                // expires after 7 days
+                'invitation_expires_at' => now()->addDays(7),
+            ]);
+
+            $this->syncBrandAccess($user, $request, $validated);
+            return $user;
+        });
 
         try {
-            Mail::to($user->email)->send(new UserInvitationMail($user));
+            \App\Support\BrandMailer::send(\App\Support\BrandMailer::account($user->brand_id), $user->email, new UserInvitationMail($user));
         } catch (TransportExceptionInterface $exception) {
             report($exception);
 
@@ -149,7 +154,7 @@ class UserController extends Controller
     {
         $this->ensureAdmin();
 
-        $user->load('role', 'permissionOverrides', 'reportsToUser');
+        $user->load('role', 'permissionOverrides', 'reportsToUser', 'brand', 'accessibleBrands');
         $reportsToName = $this->reportsToName($user, $hrisEmployeeLookupClient);
 
         return view('admin.users.show', compact('user', 'reportsToName'));
@@ -164,7 +169,7 @@ class UserController extends Controller
         $brands = $this->brands();
         $defaultBrandId = $this->defaultBrandId();
         $availablePermissions = $this->availablePermissions();
-        $user->load('role.permissionRecords', 'permissionOverrides');
+        $user->load('role.permissionRecords', 'permissionOverrides', 'accessibleBrands');
 
         return view('admin.users.edit', compact('user', 'roles', 'departments', 'brands', 'defaultBrandId', 'availablePermissions'));
     }
@@ -176,6 +181,7 @@ class UserController extends Controller
         $validated = $request->validate([
             'role_id' => ['required', 'exists:roles,id'],
             'brand_id' => ['required', 'exists:brands,id'],
+            ...$this->brandAccessRules($request),
             'first_name' => ['required', 'string', 'max:255'],
             'last_name' => ['required', 'string', 'max:255'],
             'department' => ['required', 'string', 'max:255', Rule::in($this->departments())],
@@ -194,16 +200,55 @@ class UserController extends Controller
         $this->ensureUserIsNotDuplicate($validated, $user);
         $this->ensureRoleBelongsToDepartment($request, $validated['role_id'], $validated['department'] ?? null);
 
-        $user->update([
-            ...collect($validated)->except(['final_permissions', 'is_commission_eligible', 'enable_end_of_shift_report'])->all(),
-            'enable_end_of_shift_report' => $request->boolean('enable_end_of_shift_report'),
-            'is_commission_eligible' => $request->boolean('is_commission_eligible'),
-        ]);
-        $this->syncUserPermissionOverrides($user, $request);
+        DB::transaction(function () use ($user, $request, $validated) {
+            $user->update([
+                ...collect($validated)->except(['final_permissions', 'is_commission_eligible', 'enable_end_of_shift_report', 'multiple_brands_enabled', 'allowed_brand_ids', 'brand_emails'])->all(),
+                'enable_end_of_shift_report' => $request->boolean('enable_end_of_shift_report'),
+                'is_commission_eligible' => $request->boolean('is_commission_eligible'),
+            ]);
+            $this->syncUserPermissionOverrides($user, $request);
+            $this->syncBrandAccess($user, $request, $validated);
+        });
 
         return redirect()
             ->route('admin.users.index')
             ->with('success', 'User updated successfully.');
+    }
+
+    private function brandAccessRules(Request $request): array
+    {
+        return [
+            'multiple_brands_enabled' => ['nullable', 'boolean'],
+            'allowed_brand_ids' => [Rule::requiredIf($request->boolean('multiple_brands_enabled')), 'nullable', 'array',
+                ...($request->boolean('multiple_brands_enabled') ? ['min:2'] : [])],
+            'allowed_brand_ids.*' => ['integer', 'distinct', Rule::exists('brands', 'id')->whereNull('deleted_at')->where('is_sales_brand', true)],
+            'brand_emails' => ['nullable', 'array'],
+            'brand_emails.*' => ['nullable', 'email', 'max:255'],
+        ];
+    }
+
+    private function syncBrandAccess(User $user, Request $request, array $validated): void
+    {
+        $enabled = $request->boolean('multiple_brands_enabled');
+        $ids = $enabled ? $validated['allowed_brand_ids'] : [];
+        $user->unsetRelation('brand');
+        if ($enabled && $user->brand?->is_sales_brand && ! in_array((int) $user->brand_id, array_map('intval', $ids), true)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'allowed_brand_ids' => 'Include the primary sales brand in the eligible brands.',
+            ]);
+        }
+        $user->update(['multiple_brands_enabled' => $enabled]);
+        $emails = $validated['brand_emails'] ?? [];
+        if ($enabled && array_diff(array_map('intval', array_keys($emails)), array_map('intval', $ids))) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['brand_emails' => 'Only enter email addresses for the selected eligible brands.']);
+        }
+        $assignments = [];
+        foreach ($ids as $id) {
+            $email = trim((string) ($emails[$id] ?? ''));
+            $assignments[$id] = ['email' => $email !== '' ? mb_strtolower($email) : null];
+        }
+        $user->accessibleBrands()->sync($assignments);
+        $user->unsetRelation('accessibleBrands');
     }
 
     public function resetPassword(Request $request, User $user)
@@ -225,7 +270,7 @@ class UserController extends Controller
         ]);
 
         try {
-            Mail::to($user->email)->send(new UserInvitationMail($user));
+            \App\Support\BrandMailer::send(\App\Support\BrandMailer::account($user->brand_id), $user->email, new UserInvitationMail($user));
         } catch (TransportExceptionInterface $exception) {
             report($exception);
 

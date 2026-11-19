@@ -21,7 +21,7 @@ class ServiceCatalogController extends Controller
         $search = trim((string) $request->query('search', ''));
         $category = $request->query('category');
         $brandFilter = $request->query('brand_id');
-        $canFilterBrands = BrandScope::canAccessAllBrands($request->user());
+        $canFilterBrands = BrandScope::canAccessAllBrands($request->user()) || $request->user()->multiple_brands_enabled;
 
         $servicesQuery = Service::query()
             ->where('is_active', true)

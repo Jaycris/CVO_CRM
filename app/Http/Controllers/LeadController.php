@@ -226,7 +226,7 @@ class LeadController extends Controller
             ->whereNull('suspended_at')
             ->where('is_commission_eligible', true)
             ->when(! BrandScope::canAccessAllBrands($request?->user()), function ($query) use ($request) {
-                $query->where('brand_id', $request?->user()?->brand_id);
+                BrandScope::applyToUsers($query, BrandScope::allowedBrandIds($request?->user()));
             })
             ->orderBy('first_name')
             ->orderBy('last_name')
@@ -564,6 +564,11 @@ class LeadController extends Controller
                 ->with('error', 'No verifier users are available for Verification Queue.');
         }
 
+        $queueBrands = Lead::whereIn('id', $queueableLeads)->pluck('brand_id')->unique();
+        if ($queueBrands->contains(fn ($id) => ! $verifiers->contains(fn ($verifier) => BrandScope::canAccessBrand($verifier, $id)))) {
+            return back()->with('error', 'No eligible verifier is available for one or more selected lead brands. No leads were moved.');
+        }
+
         $verificationNotifications = [];
 
         Lead::whereIn('id', $queueableLeads)
@@ -571,7 +576,7 @@ class LeadController extends Controller
             ->orderBy('id')
             ->get()
             ->each(function (Lead $lead) use ($verifiers, &$verificationNotifications) {
-                $verifier = $this->leastLoadedVerifier($verifiers);
+                $verifier = $this->leastLoadedVerifier($verifiers->filter(fn ($user) => BrandScope::canAccessBrand($user, $lead->brand_id)));
 
                 $lead->update([
                     'lead_generation_stage' => 'verification_queue',
@@ -742,7 +747,9 @@ class LeadController extends Controller
         abort_unless($cameFromTeamLeads ? $isTeamReassignment : $this->userCanAssignLeads($request), 403);
 
         $salesAssignee = User::with('role')->findOrFail($validated['assigned_to']);
-        abort_unless($this->userCanAssignToBrand($request, $salesAssignee->brand_id), 403);
+        $leadBrandIds = Lead::whereIn('id', $leadIds)->pluck('brand_id')->unique();
+        abort_unless($leadBrandIds->every(fn ($id) => BrandScope::canAccessBrand($request->user(), $id)
+            && BrandScope::canAccessBrand($salesAssignee, $id)), 403);
 
         if (
             $salesAssignee->suspended_at
@@ -784,7 +791,6 @@ class LeadController extends Controller
 
         $updateData = [
             'assigned_to' => $salesAssignee->id,
-            'brand_id' => $salesAssignee->brand_id ?? BrandScope::userBrandId($request->user()),
             'assigned_date' => now()->toDateString(),
             'returned_at' => null,
             'returned_by' => null,
@@ -1865,7 +1871,8 @@ class LeadController extends Controller
     {
         return $this->notificationRecipients(['view_verification_queue', 'verify_leads'], 'Lead Generation')
             ->when(! BrandScope::canAccessAllBrands($request->user()), function ($users) use ($request) {
-                return $users->filter(fn (User $user) => (int) $user->brand_id === (int) $request->user()->brand_id);
+                return $users->filter(fn (User $user) => BrandScope::canAccessAllBrands($user)
+                    || count(array_intersect(BrandScope::allowedBrandIds($user), BrandScope::allowedBrandIds($request->user()))) > 0);
             })
             ->loadCount([
                 'verificationQueueLeads as active_verification_count' => function ($query) {
@@ -2076,8 +2083,7 @@ class LeadController extends Controller
 
     private function userCanAccessLeadBrand(?Request $request, Lead $lead): bool
     {
-        return BrandScope::canAccessAllBrands($request?->user())
-            || (int) $request?->user()?->brand_id === (int) $lead->brand_id;
+        return BrandScope::canAccessBrand($request?->user(), $lead->brand_id);
     }
 
     private function applyLeadBrandScope($query, ?Request $request, bool $includeAssignedToCurrentUser = false): void
@@ -2090,9 +2096,9 @@ class LeadController extends Controller
         $brandId = $request?->user()?->brand_id;
 
         if ($includeAssignedToCurrentUser && $userId !== null) {
-            $query->where(function ($query) use ($brandId, $userId) {
-                $query->where('brand_id', $brandId)
-                    ->orWhere('assigned_to', $userId);
+            $query->where(function ($query) use ($request, $userId) {
+                BrandScope::apply($query, $request?->user());
+                $query->orWhere('assigned_to', $userId);
             });
 
             return;
@@ -2117,8 +2123,7 @@ class LeadController extends Controller
 
     private function userCanAssignToBrand(?Request $request, ?int $brandId): bool
     {
-        return BrandScope::canAccessAllBrands($request?->user())
-            || (int) $request?->user()?->brand_id === (int) $brandId;
+        return BrandScope::canAccessBrand($request?->user(), $brandId);
     }
 
     private function limitToOwnedOrUnclaimed($query, ?Request $request)

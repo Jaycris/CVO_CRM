@@ -293,6 +293,7 @@
                                     <td class="break-words px-5 py-4 text-slate-600 dark:text-zinc-300">{{ $brand->description ?: '-' }}</td>
                                     <td class="break-words px-5 py-4 text-slate-600 dark:text-zinc-300">{{ $brand->address ?: '-' }}</td>
                                     <td class="px-5 py-4 text-right">
+                                        <a href="{{ route('admin.brands.email.edit', $brand) }}" class="mr-2 inline-flex rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold dark:border-zinc-700">Email Sender</a>
                                         <button type="button"
                                                 x-on:click="editOpen = true"
                                                 class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 text-amber-700 shadow-sm hover:bg-amber-100 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200"

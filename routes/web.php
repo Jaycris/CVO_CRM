@@ -569,6 +569,8 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::post('/sales-mtd-deductions', [SalesMtdDeductionController::class, 'store'])->name('sales-mtd-deductions.store');
     Route::post('/sales-mtd-deductions/{deduction}/void', [SalesMtdDeductionController::class, 'void'])->name('sales-mtd-deductions.void');
     Route::get('/brands', [BrandController::class, 'index'])->name('brands.index');
+    Route::get('/brands/{brand}/email', [\App\Http\Controllers\Admin\BrandMailSettingController::class, 'edit'])->name('brands.email.edit');
+    Route::put('/brands/{brand}/email', [\App\Http\Controllers\Admin\BrandMailSettingController::class, 'update'])->name('brands.email.update');
     Route::post('/brands', [BrandController::class, 'store'])->name('brands.store');
     Route::put('/brands/{brand}', [BrandController::class, 'update'])->name('brands.update');
     Route::get('/dashboard-banners', [DashboardBannerController::class, 'index'])->name('dashboard-banners.index');
