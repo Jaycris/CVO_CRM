@@ -7,6 +7,8 @@ use App\Models\Brand;
 use App\Models\Department;
 use App\Models\Team;
 use App\Models\User;
+use App\Support\BrandScope;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
@@ -17,7 +19,7 @@ class TeamController extends Controller
     {
         $this->authorizeViewAccess();
 
-        $teams = Team::with(['brand', 'manager', 'teamLeader', 'members.role'])
+        $teams = Team::with(['brand', 'accessibleBrands', 'manager', 'teamLeader', 'members.role'])
             ->withCount('members')
             ->latest()
             ->paginate(\App\Models\AppSetting::recordsPerPage())
@@ -29,7 +31,7 @@ class TeamController extends Controller
             'brands' => Brand::orderByRaw("imprint_name = 'CreatiVision Outsourcing' desc")->orderBy('imprint_name')->get(),
             'parentBrandId' => Brand::where('imprint_name', 'CreatiVision Outsourcing')->value('id'),
             'departments' => Department::orderBy('name')->pluck('name')->all(),
-            'users' => User::with(['role', 'brand'])->orderBy('first_name')->orderBy('last_name')->get(),
+            'users' => User::with(['role', 'brand', 'accessibleBrands'])->orderBy('first_name')->orderBy('last_name')->get(),
         ]);
     }
 
@@ -38,8 +40,11 @@ class TeamController extends Controller
         $this->authorizeManageAccess();
 
         $validated = $this->validatedTeamData($request);
-        $team = Team::create(collect($validated)->except('member_ids')->all());
-        $this->syncMembers($team, $validated['member_ids'] ?? []);
+        DB::transaction(function () use ($validated) {
+            $team = Team::create(collect($validated)->except(['member_ids', 'allowed_brand_ids'])->all());
+            $team->accessibleBrands()->sync($validated['multiple_brands_enabled'] ? $validated['allowed_brand_ids'] : []);
+            $this->syncMembers($team, $validated['member_ids'] ?? []);
+        });
 
         return redirect()
             ->route('admin.teams.index')
@@ -51,8 +56,11 @@ class TeamController extends Controller
         $this->authorizeManageAccess();
 
         $validated = $this->validatedTeamData($request, $team);
-        $team->update(collect($validated)->except('member_ids')->all());
-        $this->syncMembers($team, $validated['member_ids'] ?? []);
+        DB::transaction(function () use ($team, $validated) {
+            $team->update(collect($validated)->except(['member_ids', 'allowed_brand_ids'])->all());
+            $team->accessibleBrands()->sync($validated['multiple_brands_enabled'] ? $validated['allowed_brand_ids'] : []);
+            $this->syncMembers($team, $validated['member_ids'] ?? []);
+        });
 
         return redirect()
             ->route('admin.teams.index')
@@ -80,6 +88,10 @@ class TeamController extends Controller
     {
         $validated = $request->validate([
             'brand_id' => ['required', 'exists:brands,id'],
+            'multiple_brands_enabled' => ['nullable', 'boolean'],
+            'allowed_brand_ids' => [Rule::requiredIf($request->boolean('multiple_brands_enabled')), 'nullable', 'array',
+                ...($request->boolean('multiple_brands_enabled') ? ['min:2'] : [])],
+            'allowed_brand_ids.*' => ['integer', 'distinct', Rule::exists('brands', 'id')->whereNull('deleted_at')->where('is_sales_brand', true)],
             'department' => ['required', Rule::in(Department::orderBy('name')->pluck('name')->all())],
             'name' => [
                 'required',
@@ -100,6 +112,11 @@ class TeamController extends Controller
 
         $validated['show_on_sales_dashboard'] = $validated['department'] === 'Sales'
             && $request->boolean('show_on_sales_dashboard');
+        $validated['multiple_brands_enabled'] = $request->boolean('multiple_brands_enabled');
+        if ($validated['multiple_brands_enabled'] && Brand::find($validated['brand_id'])?->is_sales_brand
+            && ! in_array((int) $validated['brand_id'], array_map('intval', $validated['allowed_brand_ids']), true)) {
+            throw ValidationException::withMessages(['allowed_brand_ids' => 'Include the primary sales brand in the eligible brands.']);
+        }
 
         $this->ensureUsersMatchTeamData($validated);
 
@@ -124,19 +141,17 @@ class TeamController extends Controller
         $parentBrandId = Brand::where('imprint_name', 'CreatiVision Outsourcing')->value('id');
         $isParentBrand = (int) $validated['brand_id'] === (int) $parentBrandId;
 
-        $invalidUserExists = User::whereIn('id', $userIds)
-            ->where(function ($query) use ($validated, $isParentBrand) {
-                $query->where('department', '!=', $validated['department']);
-
-                if (! $isParentBrand) {
-                    $query->orWhere('brand_id', '!=', $validated['brand_id']);
-                }
-            })
-            ->exists();
+        $brandIds = $validated['multiple_brands_enabled']
+            ? array_map('intval', $validated['allowed_brand_ids']) : [(int) $validated['brand_id']];
+        $selectedUsers = User::with(['brand', 'accessibleBrands'])->whereIn('id', $userIds)->get();
+        $invalidUserExists = $selectedUsers->count() !== $userIds->count()
+            || $selectedUsers->contains(fn ($user) => $user->department !== $validated['department']
+                || (! ($isParentBrand && ! $validated['multiple_brands_enabled']) && ! BrandScope::canAccessAllBrands($user)
+                    && ! array_intersect($brandIds, BrandScope::allowedBrandIds($user))));
 
         if ($invalidUserExists) {
             throw ValidationException::withMessages([
-                'member_ids' => 'Selected manager, team leader, and members must match the team brand and department.',
+                'member_ids' => 'Selected manager, team leader, and members must match the team department and have access to at least one eligible team brand.',
             ]);
         }
     }

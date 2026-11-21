@@ -338,7 +338,7 @@
                                     <div>
                                         <h3 class="font-bold text-slate-900 dark:text-zinc-100">{{ $snapshot['team']->name }}</h3>
                                         <p class="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">
-                                            {{ $snapshot['team']->brand?->imprint_name ?? 'Sales Brand' }} &middot; {{ $snapshot['members'] }} member{{ $snapshot['members'] === 1 ? '' : 's' }}
+                                            {{ ($snapshot['brand'] ?? $snapshot['team']->brand)?->imprint_name ?? 'Sales Brand' }} &middot; {{ $snapshot['members'] }} member{{ $snapshot['members'] === 1 ? '' : 's' }}
                                         </p>
                                     </div>
                                     <div class="text-right">

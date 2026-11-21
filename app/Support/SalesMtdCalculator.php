@@ -178,6 +178,7 @@ class SalesMtdCalculator
             'hybrid' => self::bucket(0, 0),
             'site' => self::bucket($siteMtd, $siteTarget),
             'agentCredits' => $agentCredits,
+            'agentBrandCredits' => $grossRows->groupBy('activity.brand_id')->map(fn ($rows) => $rows->groupBy('agent_id')->map(fn ($items) => (float) $items->sum('amount'))),
             'agentTargets' => $agentTargetRows,
             'exchangeRate' => $exchangeRate,
             'cardPaymentHoldPercent' => $cardHoldPercent,
@@ -617,13 +618,22 @@ class SalesMtdCalculator
     public static function dashboardTeamTargets(Collection $targets): Collection
     {
         $teamTargets = $targets->where('target_type', 'team')->whereNull('user_id')->whereNotNull('team_id');
-        $teamBrands = Team::query()->whereIn('id', $teamTargets->pluck('team_id')->unique())
-            ->where('department', 'Sales')->where('show_on_sales_dashboard', true)
-            ->whereHas('brand', fn ($query) => $query->where('is_sales_brand', true))->pluck('brand_id', 'id');
+        $teams = Team::with('accessibleBrands')->whereIn('id', $teamTargets->pluck('team_id')->unique())->forSalesDashboard()->get()->keyBy('id');
+        $salesIds = Brand::where('is_sales_brand', true)->pluck('id')->all();
+        return $teamTargets->filter(function ($target) use ($teams, $salesIds) {
+            $team = $teams->get($target->team_id);
+            $id = (int) ($target->brand_id ?? $team?->brand_id);
+            return $team && in_array($id, $salesIds, true) && in_array($id, $team->eligibleBrandIds(), true);
+        })->sortByDesc('id')->sortBy(fn ($target) => $target->brand_id === null ? 1 : 0)
+            ->unique(fn ($target) => $target->team_id.':'.($target->brand_id ?? $teams->get($target->team_id)->brand_id).':'.$target->target_month->format('Y-m'))->values();
+    }
 
-        return $teamTargets->filter(fn ($target) => $teamBrands->has($target->team_id)
-            && ($target->brand_id === null || (int) $target->brand_id === (int) $teamBrands->get($target->team_id)))
-            ->sortBy('id')->keyBy('team_id');
+    public static function teamSalesMtd(Team $team, array $summary, ?int $brandId = null): float
+    {
+        $brandIds = $brandId ? [$brandId] : $team->eligibleBrandIds();
+        $members = $team->members->pluck('id');
+        return (float) collect($brandIds)->sum(fn ($id) => $members->sum(fn ($agentId) =>
+            (float) ($summary['agentBrandCredits']->get($id)?->get($agentId, 0) ?? 0)));
     }
 
     private static function serviceRateFor(float $serviceMtd, float $targetAmount, ?CommissionProfile $profile = null): float

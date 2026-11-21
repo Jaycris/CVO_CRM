@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\Brand;
 use App\Models\User;
+use App\Models\Team;
 use Illuminate\Database\Eloquent\Builder;
 
 class BrandScope
@@ -58,7 +59,17 @@ class BrandScope
         if ($query->getModel() instanceof User && $column === 'brand_id') {
             return self::applyToUsers($query, self::allowedBrandIds($user));
         }
+        if ($query->getModel() instanceof Team && $column === 'brand_id') {
+            return self::applyToTeams($query, self::allowedBrandIds($user));
+        }
         return $query->whereIn($column, self::allowedBrandIds($user));
+    }
+
+    public static function applyToTeams(Builder $query, array $brandIds): Builder
+    {
+        return $query->where(fn ($query) => $query->whereIn('brand_id', $brandIds)
+            ->orWhere(fn ($query) => $query->where('multiple_brands_enabled', true)
+                ->whereHas('accessibleBrands', fn ($query) => $query->whereIn('brands.id', $brandIds))));
     }
 
     public static function parentBrandId(): ?int

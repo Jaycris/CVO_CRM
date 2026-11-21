@@ -307,7 +307,7 @@
                     <div>
                         <h2 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Manage Monthly Targets</h2>
                         <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
-                            Set global and Sales team targets here. Individual agent targets remain managed in each user's commission profile.
+                            Set a separate monthly target for each Sales team and brand. The global target adds these amounts once. Individual agent targets remain managed in each user's commission profile.
                         </p>
                         <p class="mt-2 text-xs font-bold uppercase tracking-wide text-[var(--brand-primary)] dark:text-[var(--brand-accent)]">
                             {{ $brandContextName ?? 'All Brands' }}
@@ -358,7 +358,7 @@
                                             <td class="px-5 py-4">
                                                 <input type="text"
                                                        inputmode="decimal"
-                                                       name="team_targets[{{ $team['id'] }}]"
+                                                       name="team_brand_targets[{{ $team['id'] }}][{{ $team['brand_id'] }}]"
                                                        value="{{ number_format((float) $team['target'], 2) }}"
                                                        autocomplete="off"
                                                        data-money-input

@@ -70,15 +70,12 @@ class SalesPerformanceController extends Controller
                 ->get();
             $teamTargets = SalesMtdCalculator::dashboardTeamTargets($teamTargets);
             $targetTeams = Team::query()
-                ->with(['brand', 'members' => fn ($query) => $query
+                ->with(['brand', 'accessibleBrands', 'members' => fn ($query) => $query
                     ->where('department', 'Sales')
                     ->where('is_commission_eligible', true)
                     ->select(['id', 'team_id', 'first_name', 'last_name'])])
-                ->where('department', 'Sales')
-                ->where('show_on_sales_dashboard', true)
-                ->whereHas('brand', fn ($query) => $query->where('is_sales_brand', true))
-                ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
-                ->when($canUseSalesBrandFilter && ! $brandId, fn ($query) => $query->whereHas('brand', fn ($query) => $query->where('is_sales_brand', true)))
+                ->forSalesDashboard()
+                ->when($brandId, fn ($query) => BrandScope::applyToTeams($query, [$brandId]))
                 ->when(! $brandId, fn ($query) => BrandScope::apply($query, $user))
                 ->orderBy('name')
                 ->get();
@@ -197,40 +194,39 @@ class SalesPerformanceController extends Controller
             return $row;
         })->values();
 
-        $teamRows = $targetTeams
-            ->map(function (Team $team) use ($summary, $teamTargets) {
-                $memberIds = $team->members->pluck('id');
+        $targetTeamRows = $targetTeams->flatMap(function (Team $team) use ($brandId, $user, $teamTargets) {
+            $ids = $team->eligibleBrandIds();
+            return Brand::whereIn('id', $ids)->where('is_sales_brand', true)
+                ->when($brandId, fn ($query) => $query->whereKey($brandId))
+                ->tap(fn ($query) => BrandScope::apply($query, $user, 'id'))->orderBy('imprint_name')->get()
+                ->map(fn ($brand) => [
+                'id' => $team->id,
+                'brand_id' => $brand->id,
+                'name' => $team->name,
+                'brand' => $brand->imprint_name,
+                'target' => (float) $teamTargets->where('team_id', $team->id)->filter(fn ($target) => (int) ($target->brand_id ?? $team->brand_id) === (int) $brand->id)->sum('amount'),
+            ]);
+        });
 
-                return [
-                    'id' => $team->id,
-                    'name' => $team->name,
-                    'mtd' => (float) $memberIds->sum(fn ($agentId) => (float) ($summary['agentCredits']->get($agentId)['gross_mtd'] ?? $summary['agentCredits']->get($agentId)['mtd'] ?? 0)),
-                    'target' => (float) ($teamTargets->get($team->id)?->amount ?? 0),
-                    'members' => $memberIds->count(),
-                ];
-            })
-            ->map(function (array $team) {
-                $team['remaining'] = max($team['target'] - $team['mtd'], 0);
-                $team['percent'] = $team['target'] > 0 ? round(($team['mtd'] / $team['target']) * 100, 2) : 0;
-
-                return $team;
-            })
-            ->sortByDesc('mtd')
-            ->values();
+        $teamsById = $targetTeams->keyBy('id');
+        $teamRows = $targetTeamRows->map(function (array $row) use ($teamsById, $summary) {
+            $team = $teamsById->get($row['id']);
+            $mtd = SalesMtdCalculator::teamSalesMtd($team, $summary, $row['brand_id']);
+            return [
+                'id' => $team->id,
+                'brand_id' => $row['brand_id'],
+                'name' => $team->name.($team->multiple_brands_enabled ? ' — '.$row['brand'] : ''),
+                'mtd' => $mtd, 'target' => $row['target'], 'members' => $team->members->count(),
+                'remaining' => max($row['target'] - $mtd, 0),
+                'percent' => $row['target'] > 0 ? round($mtd / $row['target'] * 100, 2) : 0,
+            ];
+        })->sortByDesc('mtd')->values();
 
         $agentRows = $this->paginateCollection($agentRows, $request);
         $brands = $salesBrands;
         $brandContextName = $brandId
             ? Brand::query()->whereKey($brandId)->value('imprint_name')
             : 'All Brands';
-        $targetTeamRows = $targetTeams
-            ->map(fn (Team $team) => [
-                'id' => $team->id,
-                'name' => $team->name,
-                'brand' => $team->brand?->imprint_name,
-                'target' => (float) ($teamTargets->get($team->id)?->amount ?? 0),
-            ]);
-
         return view('reports.sales-performance', [
             'summary' => $summary,
             'agentRows' => $agentRows,
@@ -258,6 +254,10 @@ class SalesPerformanceController extends Controller
             'team_targets' => collect($request->input('team_targets', []))
                 ->map(fn ($value) => $this->normalizedAmount($value))
                 ->all(),
+            'team_brand_targets' => is_array($request->input('team_brand_targets', []))
+                ? collect($request->input('team_brand_targets', []))->map(fn ($values) => is_array($values)
+                    ? collect($values)->map(fn ($value) => $this->normalizedAmount($value))->all() : $values)->all()
+                : $request->input('team_brand_targets'),
         ]);
 
         $validated = $request->validate([
@@ -265,47 +265,63 @@ class SalesPerformanceController extends Controller
             'brand_id' => ['nullable', 'exists:brands,id'],
             'team_targets' => ['nullable', 'array'],
             'team_targets.*' => ['nullable', 'numeric', 'min:0'],
+            'team_brand_targets' => ['nullable', 'array'],
+            'team_brand_targets.*' => ['array'],
+            'team_brand_targets.*.*' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $month = Carbon::createFromFormat('!Y-m', $validated['month'])->startOfMonth();
-        $brandId = BrandScope::canAccessAllBrands($request->user())
+        abort_if(! empty($validated['brand_id']) && ! BrandScope::canAccessBrand($request->user(), (int) $validated['brand_id']), 403);
+        $brandId = (BrandScope::canAccessAllBrands($request->user()) || $request->user()->multiple_brands_enabled)
             ? ($validated['brand_id'] ?? null)
             : BrandScope::userBrandId($request->user());
 
-        if ($brandId && BrandScope::canAccessAllBrands($request->user())) {
-            abort_unless(Brand::query()->whereKey($brandId)->where('is_sales_brand', true)->exists(), 422);
+        if ($brandId) {
+            abort_unless(BrandScope::canAccessBrand($request->user(), $brandId)
+                && Brand::query()->whereKey($brandId)->where('is_sales_brand', true)->exists(), 403);
         }
 
         $teamTargets = collect($validated['team_targets'] ?? [])
             ->mapWithKeys(fn ($amount, $teamId) => [(int) $teamId => (float) $amount]);
 
-        if ($teamTargets->isNotEmpty()) {
-            $allowedTeamIds = Team::query()
-                ->whereIn('id', $teamTargets->keys())
-                ->where('department', 'Sales')
-                ->where('show_on_sales_dashboard', true)
-                ->whereHas('brand', fn ($query) => $query->where('is_sales_brand', true))
-                ->when($brandId, fn ($query) => $query->where('brand_id', $brandId))
-                ->when(! $brandId && ! BrandScope::canAccessAllBrands($request->user()), fn ($query) => BrandScope::apply($query, $request->user()))
-                ->pluck('id');
-
-            foreach ($teamTargets->only($allowedTeamIds->all()) as $teamId => $amount) {
-                $team = Team::query()->find($teamId);
-
-                SalesTarget::updateOrCreate(
-                    [
-                        'brand_id' => $team?->brand_id,
-                        'target_month' => $month->toDateString(),
-                        'target_type' => 'team',
-                        'user_id' => null,
-                        'team_id' => $teamId,
-                    ],
-                    [
-                        'amount' => $amount,
-                    ]
-                );
+        \Illuminate\Support\Facades\DB::transaction(function () use ($validated, $teamTargets, $month, $brandId, $request) {
+            $nested = $validated['team_brand_targets'] ?? [];
+            $ids = $teamTargets->keys()->merge(array_keys($nested))->unique();
+            $teams = Team::with('accessibleBrands')->whereIn('id', $ids)->forSalesDashboard()->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+            $pairs = [];
+            foreach ($teamTargets as $teamId => $amount) {
+                $id = $brandId ?: $teams->get($teamId)?->brand_id;
+                $pairs[$teamId][$id] = $amount;
             }
-        }
+            foreach ($nested as $teamId => $values) {
+                foreach ($values as $id => $amount) {
+                    if (isset($pairs[$teamId][$id]) && (float) $pairs[$teamId][$id] !== (float) $amount) {
+                        throw \Illuminate\Validation\ValidationException::withMessages(['team_brand_targets' => 'Conflicting targets were submitted for the same team and brand.']);
+                    }
+                    $pairs[$teamId][$id] = (float) $amount;
+                }
+            }
+            $salesIds = Brand::where('is_sales_brand', true)->pluck('id')->all();
+            foreach ($pairs as $teamId => $values) {
+                $team = $teams->get($teamId);
+                foreach ($values as $id => $amount) {
+                    if (! $team || ! in_array((int) $id, $salesIds, true) || ! in_array((int) $id, $team->eligibleBrandIds(), true)
+                        || ! BrandScope::canAccessBrand($request->user(), (int) $id) || ($brandId && (int) $id !== (int) $brandId)) {
+                        throw \Illuminate\Validation\ValidationException::withMessages(['team_brand_targets' => 'Choose an eligible sales team and one of its permitted brands. No targets were changed.']);
+                    }
+                    // Date casts may persist a midnight timestamp in SQLite. Match the
+                    // calendar date explicitly so repeated saves update the same row.
+                    $existing = SalesTarget::where('brand_id', $id)->whereDate('target_month', $month->toDateString())
+                        ->where('target_type', 'team')->whereNull('user_id')->where('team_id', $teamId)->latest('id')->first();
+                    if ($existing) {
+                        $existing->update(['amount' => $amount]);
+                    } else {
+                        SalesTarget::create(['brand_id' => $id, 'target_month' => $month->toDateString(),
+                            'target_type' => 'team', 'user_id' => null, 'team_id' => $teamId, 'amount' => $amount]);
+                    }
+                }
+            }
+        });
 
         return redirect()
             ->route('reports.sales-performance.index', array_filter([

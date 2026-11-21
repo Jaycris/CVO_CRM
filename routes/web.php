@@ -228,7 +228,7 @@ Route::get('/dashboard', function () {
         || $user?->hasPermission('manage_sales_targets');
     $includeOwnCreditsAcrossBrands = ! BrandScope::canAccessAllBrands($user)
         && $departmentName === 'Sales';
-    $dashboardBrandId = $isAdmin ? null : BrandScope::userBrandId($user);
+    $dashboardBrandId = ($isAdmin || $user->multiple_brands_enabled) ? null : BrandScope::userBrandId($user);
     $dashboardBrandName = $dashboardBrandId
         ? Brand::query()->whereKey($dashboardBrandId)->value('imprint_name')
         : ($isAdmin ? 'Sales Brands' : 'All Brands');
@@ -261,51 +261,45 @@ Route::get('/dashboard', function () {
         $homeTeamBrandId = ($isAdmin || BrandScope::canAccessAllBrands($user))
             ? null
             : $dashboardBrandId;
-        $homeAgentCredits = $homeSalesMtdSummary['agentCredits'] ?? collect();
         $homeTeamTargets = SalesTarget::query()
             ->whereDate('target_month', now()->startOfMonth()->toDateString())
             ->where('target_type', 'team')
             ->whereNotNull('team_id')
             ->when($homeTeamBrandId, fn ($query) => $query->where('brand_id', $homeTeamBrandId))
+            ->when(! $homeTeamBrandId, fn ($query) => BrandScope::apply($query, $user))
             ->when(! $homeTeamBrandId && BrandScope::canAccessAllBrands($user), function ($query) {
                 $query->where(function ($query) {
                     $query->whereNull('brand_id')
                         ->orWhereHas('brand', fn ($query) => $query->where('is_sales_brand', true));
                 });
             })
-            ->get()
-            ->keyBy('team_id');
+            ->get();
+        $homeTeamTargets = SalesMtdCalculator::dashboardTeamTargets($homeTeamTargets);
 
         $salesDashboardTeams = Team::query()
-            ->with(['brand', 'members' => fn ($query) => $query
+            ->with(['brand', 'accessibleBrands', 'members' => fn ($query) => $query
                 ->where('department', 'Sales')
                 ->where('is_commission_eligible', true)
                 ->select(['id', 'team_id', 'first_name', 'last_name'])])
-            ->where('department', 'Sales')
-            ->where('show_on_sales_dashboard', true)
-            ->whereHas('brand', fn ($query) => $query->where('is_sales_brand', true))
-            ->when($homeTeamBrandId, fn ($query) => $query->where('brand_id', $homeTeamBrandId))
+            ->forSalesDashboard()
+            ->when($homeTeamBrandId, fn ($query) => BrandScope::applyToTeams($query, [$homeTeamBrandId]))
+            ->tap(fn ($query) => BrandScope::apply($query, $user))
             ->orderBy('name')
             ->get();
 
-        $homeTeamSalesMtdSnapshots = $salesDashboardTeams
-            ->map(function (Team $team) use ($homeAgentCredits, $homeTeamTargets) {
-                $memberIds = $team->members->pluck('id');
-                $mtd = (float) $memberIds->sum(fn ($agentId) => (float) ($homeAgentCredits->get($agentId)['gross_mtd'] ?? $homeAgentCredits->get($agentId)['mtd'] ?? 0));
-                $target = (float) ($homeTeamTargets->get($team->id)?->amount ?? 0);
-                $remaining = max($target - $mtd, 0);
-
-                return [
-                    'team' => $team,
-                    'members' => $memberIds->count(),
-                    'mtd' => $mtd,
-                    'target' => $target,
-                    'remaining' => $remaining,
-                    'percent' => $target > 0 ? round(($mtd / $target) * 100, 2) : 0,
-                ];
-            })
-            ->sortByDesc('mtd')
-            ->values();
+        $homeTeamSalesMtdSnapshots = $salesDashboardTeams->flatMap(function (Team $team) use ($homeSalesMtdSummary, $homeTeamTargets, $homeTeamBrandId, $user) {
+            return Brand::whereIn('id', $team->eligibleBrandIds())->where('is_sales_brand', true)
+                ->when($homeTeamBrandId, fn ($query) => $query->whereKey($homeTeamBrandId))
+                ->tap(fn ($query) => BrandScope::apply($query, $user, 'id'))->orderBy('imprint_name')->get()
+                ->map(function (Brand $brand) use ($team, $homeSalesMtdSummary, $homeTeamTargets) {
+                    $mtd = SalesMtdCalculator::teamSalesMtd($team, $homeSalesMtdSummary, $brand->id);
+                    $target = (float) $homeTeamTargets->where('team_id', $team->id)
+                        ->filter(fn ($target) => (int) ($target->brand_id ?? $team->brand_id) === (int) $brand->id)->sum('amount');
+                    return ['team' => $team, 'brand' => $brand, 'members' => $team->members->count(),
+                        'mtd' => $mtd, 'target' => $target, 'remaining' => max($target - $mtd, 0),
+                        'percent' => $target > 0 ? round($mtd / $target * 100, 2) : 0];
+                });
+        })->sortByDesc('mtd')->values();
 
         $homeTeamGlobalTarget = (float) $homeTeamSalesMtdSnapshots->sum('target');
         $homeGlobalMtd = (float) ($homeSalesMtdSummary['global']['mtd'] ?? 0);

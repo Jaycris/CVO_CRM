@@ -43,10 +43,14 @@
                           'role' => $user->role?->name,
                           'department' => $user->department,
                           'brand_id' => (string) $user->brand_id,
+                          'brand_ids' => array_map('strval', \App\Support\BrandScope::allowedBrandIds($user)),
+                          'all_brands' => \App\Support\BrandScope::canAccessAllBrands($user),
                           'brand' => $user->brand?->imprint_name,
                       ])->values()),
                       parentBrandId: @js((string) $parentBrandId),
                       brandId: @js((string) old('brand_id', $parentBrandId)),
+                      multipleBrandsEnabled: @js((bool) old('multiple_brands_enabled', false)),
+                      allowedBrandIds: @js(array_map('strval', old('allowed_brand_ids', []))),
                       department: @js(old('department', '')),
                       managerId: @js((string) old('manager_id', '')),
                       teamLeaderId: @js((string) old('team_leader_id', '')),
@@ -55,11 +59,11 @@
                 @csrf
                 <div>
                     <h2 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Create Team</h2>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Teams are separated per brand and department.</p>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Teams can support one or more brands within a department.</p>
                 </div>
 
                 <div>
-                    <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-200">Brand / Account <span class="text-rose-600">*</span></label>
+                    <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-200">Primary Brand / Account <span class="text-rose-600">*</span></label>
                     <select name="brand_id"
                             x-model="brandId"
                             x-on:change="cleanSelections()"
@@ -87,6 +91,7 @@
                     <x-input-error :messages="$errors->get('department')" class="mt-2" />
                 </div>
 
+                @include('admin.teams.brand-access')
                 <div>
                     <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-200">Team Name <span class="text-rose-600">*</span></label>
                     <input name="name" value="{{ old('name') }}" required class="w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
@@ -208,7 +213,7 @@
                             @forelse ($teams as $team)
                                 <tr>
                                     <td class="px-6 py-4 font-semibold text-slate-900 dark:text-zinc-100">{{ $team->name }}</td>
-                                    <td class="px-6 py-4 text-slate-600 dark:text-zinc-300">{{ $team->brand?->imprint_name }}</td>
+                                    <td class="px-6 py-4 text-slate-600 dark:text-zinc-300">{{ $team->multiple_brands_enabled ? $team->accessibleBrands->pluck('imprint_name')->join(' · ') : $team->brand?->imprint_name }}</td>
                                     <td class="px-6 py-4 text-slate-600 dark:text-zinc-300">
                                         <div class="space-y-2">
                                             <span>{{ $team->department }}</span>
@@ -259,10 +264,14 @@
                                                               'role' => $user->role?->name,
                                                               'department' => $user->department,
                                                               'brand_id' => (string) $user->brand_id,
+                                                              'brand_ids' => array_map('strval', \App\Support\BrandScope::allowedBrandIds($user)),
+                                                              'all_brands' => \App\Support\BrandScope::canAccessAllBrands($user),
                                                               'brand' => $user->brand?->imprint_name,
                                                           ])->values()),
                                                           parentBrandId: @js((string) $parentBrandId),
                                                           brandId: @js((string) $team->brand_id),
+                                                          multipleBrandsEnabled: @js($team->multiple_brands_enabled),
+                                                          allowedBrandIds: @js($team->accessibleBrands->pluck('id')->map(fn ($id) => (string) $id)->values()),
                                                           department: @js($team->department),
                                                           managerId: @js((string) $team->manager_id),
                                                           teamLeaderId: @js((string) $team->team_leader_id),
@@ -281,7 +290,7 @@
 
                                                     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                                                         <div>
-                                                            <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-200">Brand / Account</label>
+                                                            <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-200">Primary Brand / Account</label>
                                                             <select name="brand_id"
                                                                     x-model="brandId"
                                                                     x-on:change="cleanSelections()"
@@ -307,6 +316,7 @@
                                                         </div>
                                                     </div>
 
+                                                    @include('admin.teams.brand-access')
                                                     <div>
                                                         <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-zinc-200">Team Name</label>
                                                         <input name="name" value="{{ $team->name }}" required class="w-full rounded-xl border-slate-300 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
@@ -426,6 +436,8 @@
                 users: config.users || [],
                 parentBrandId: config.parentBrandId || '',
                 brandId: config.brandId || '',
+                multipleBrandsEnabled: config.multipleBrandsEnabled || false,
+                allowedBrandIds: config.allowedBrandIds || [],
                 department: config.department || '',
                 managerId: config.managerId || '',
                 teamLeaderId: config.teamLeaderId || '',
@@ -433,7 +445,8 @@
                 memberSearch: '',
 
                 canChooseUsers() {
-                    return Boolean(this.brandId && this.department);
+                    return Boolean(this.brandId && this.department)
+                        && (!this.multipleBrandsEnabled || this.allowedBrandIds.length >= 2);
                 },
 
                 isParentBrand() {
@@ -447,7 +460,10 @@
 
                     return this.users.filter((user) => {
                         const sameDepartment = user.department === this.department;
-                        const sameBrand = this.isParentBrand() || String(user.brand_id) === String(this.brandId);
+                        const brandIds = this.multipleBrandsEnabled ? this.allowedBrandIds.map(String) : [String(this.brandId)];
+                        const userBrandIds = (user.brand_ids || [user.brand_id]).map(String);
+                        const sameBrand = (!this.multipleBrandsEnabled && this.isParentBrand()) || user.all_brands
+                            || brandIds.some((id) => userBrandIds.includes(id));
 
                         return sameDepartment && sameBrand;
                     });
@@ -488,6 +504,7 @@
                 },
 
                 cleanSelections() {
+                    if (!this.canChooseUsers()) return;
                     const allowedIds = this.filteredUsers().map((user) => String(user.id));
 
                     if (this.managerId && !allowedIds.includes(String(this.managerId))) {
