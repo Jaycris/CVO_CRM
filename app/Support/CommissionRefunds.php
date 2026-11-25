@@ -104,12 +104,8 @@ class CommissionRefunds
                 if (CommissionDisputeOffset::where('commission_adjustment_id', $entry->id)->whereNull('voided_at')->exists()) {
                     throw ValidationException::withMessages(['refund' => 'This older deduction has its own allocated offsets. Review those allocations before replacing it with the unpaid refund reversal.']);
                 }
-                if ($entry->effective_date->toDateString() !== $activity->sold_date->toDateString()
-                    && SalesActivity::where('payment_status', 'Payment Success')->where('sales_payment_id', '!=', $paymentId)
-                        ->whereHas('payment', fn ($query) => $query->where('status', 'Payment Success'))
-                        ->whereDate('sold_date', '>=', $entry->effective_date->copy()->startOfMonth()->toDateString())
-                        ->where(fn ($query) => $query->where('agent_id', $id)->orWhere('frankie_agent_id', $id))->exists()) {
-                    throw ValidationException::withMessages(['refund' => 'Other earnings may already have covered this older deduction. Admin must review the prior payroll before moving its refund reversal to the original period.']);
+                if ($entry->effective_date->toDateString() !== $activity->sold_date->toDateString()) {
+                    $this->verifyLaterEarningsUnreleased($entry, $activity, $id);
                 }
                 // Preserve the old entry, cancel it in the same period, then let the normal
                 // refund path record the complete original-period reversal exactly once.
@@ -135,6 +131,28 @@ class CommissionRefunds
     {
         $snapshot = $activity->commission_snapshot[$agentId] ?? [];
         return $snapshot['paid_breakdown'] ?? $snapshot;
+    }
+
+    private function verifyLaterEarningsUnreleased(CommissionAdjustment $entry, SalesActivity $original, int $agentId): void
+    {
+        // New sales do not prove that an agent has been paid. Check PHREMS before
+        // deciding that a legacy debit might have been collected by a later payroll.
+        $later = SalesActivity::where('payment_status', 'Payment Success')
+            ->whereNotNull('sales_payment_id')->where('sales_payment_id', '!=', $original->sales_payment_id)
+            ->whereHas('payment', fn ($query) => $query->withTrashed()->where('status', 'Payment Success'))
+            ->whereDate('sold_date', '>=', $entry->effective_date->copy()->startOfMonth()->toDateString())
+            ->where(fn ($query) => $query->where('agent_id', $agentId)
+                ->orWhere(fn ($query) => $query->where('frankie_agent_id', $agentId)->where('frankie_credit_amount', '>', 0)))
+            ->get()->groupBy(fn ($activity) => $activity->sold_date->format('Y-m'));
+        foreach ($later as $month => $activities) {
+            $statuses = app(PhremsCommissionReleases::class)->syncAgentMonth(User::withTrashed()->findOrFail($agentId),
+                \Carbon\Carbon::createFromFormat('!Y-m', $month));
+            foreach ($activities as $activity) {
+                if (($statuses[$activity->sales_payment_id.':'.$agentId] ?? null) !== 'unreleased') {
+                    throw ValidationException::withMessages(['refund' => 'Later earnings are released or could not be verified as unreleased in PHREMS. Admin must review the prior payroll before correcting this older deduction.']);
+                }
+            }
+        }
     }
 
     private static function validBreakdown(array $breakdown): bool
