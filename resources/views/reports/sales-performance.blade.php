@@ -11,19 +11,12 @@
         $isAdmin = auth()->user()?->role?->name === 'Admin';
         $canViewAllCommissionNumbers = $canViewAllCommissionNumbers ?? false;
         $teamRows = $teamRows ?? collect();
+        $teamGroups = $teamRows->groupBy('id');
         $targetTeamRows = $targetTeamRows ?? collect();
         $summaryCards = [
             ['label' => 'Global MTD', 'value' => $summary['global']['mtd'], 'hint' => 'All credited sales this month', 'tone' => 'emerald'],
             ['label' => 'Remaining Target MTD', 'value' => $summary['global']['remaining'], 'hint' => 'Remaining against global target', 'tone' => 'rose'],
         ];
-        $summaryCards = collect($summaryCards)
-            ->concat($teamRows->map(fn ($team) => [
-                'label' => $team['name'].' MTD',
-                'value' => $team['mtd'],
-                'hint' => $team['members'].' member'.($team['members'] === 1 ? '' : 's').' credited sales',
-                'tone' => 'sky',
-            ]))
-            ->values();
         $toneClasses = [
             'emerald' => 'text-emerald-600 dark:text-emerald-300',
             'rose' => 'text-rose-600 dark:text-rose-300',
@@ -61,6 +54,19 @@
                     <p class="mt-2 text-sm {{ $toneClasses[$card['tone']] }}">{{ $card['hint'] }}</p>
                 </section>
             @endforeach
+            @foreach ($teamGroups as $brandRows)
+                <section class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
+                    <h2 class="text-2xl font-bold text-slate-900 dark:text-zinc-100">{{ $brandRows->first()['team_name'] }} MTD</h2>
+                    <div class="mt-3 divide-y divide-slate-200 dark:divide-zinc-800">
+                        @foreach ($brandRows->sortBy('brand') as $team)
+                            <div class="py-3 first:pt-0 last:pb-0">
+                                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-zinc-400">{{ $team['brand'] }} &middot; {{ $team['members'] }} member{{ $team['members'] === 1 ? '' : 's' }}</p>
+                                <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-zinc-100">{{ $money($team['mtd']) }}</p>
+                            </div>
+                        @endforeach
+                    </div>
+                </section>
+            @endforeach
         </div>
 
         <div class="grid grid-cols-1 gap-5 xl:grid-cols-3">
@@ -89,29 +95,34 @@
                 </div>
             </section>
 
-            @foreach ($teamRows as $team)
-                <section class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
-                    <h2 class="text-lg font-bold text-slate-900 dark:text-zinc-100">{{ $team['name'] }} Target</h2>
-                    <div class="mt-5 space-y-4">
-                        <div>
-                            <div class="flex justify-between text-sm">
-                                <span class="font-semibold text-slate-700 dark:text-zinc-200">MTD Progress</span>
-                                <span class="font-bold text-[var(--brand-primary)] dark:text-[var(--brand-accent)]">{{ number_format($team['percent'], 2) }}%</span>
+            @foreach ($teamGroups as $brandRows)
+                <section data-team-target="{{ $brandRows->first()['id'] }}" class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
+                    <h2 class="text-2xl font-bold text-slate-900 dark:text-zinc-100">{{ $brandRows->first()['team_name'] }} Target</h2>
+                    <div class="mt-5 divide-y divide-slate-200 dark:divide-zinc-800">
+                        @foreach ($brandRows->sortBy('brand') as $team)
+                            <div class="space-y-4 py-4 first:pt-0 last:pb-0">
+                                <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-zinc-400">{{ $team['brand'] }} &middot; {{ $team['members'] }} member{{ $team['members'] === 1 ? '' : 's' }}</h3>
+                                <div>
+                                    <div class="flex justify-between text-sm">
+                                        <span class="font-semibold text-slate-700 dark:text-zinc-200">MTD Progress</span>
+                                        <span class="font-bold text-[var(--brand-primary)] dark:text-[var(--brand-accent)]">{{ number_format($team['percent'], 2) }}%</span>
+                                    </div>
+                                    <div class="mt-2 h-3 rounded-full bg-slate-100 dark:bg-zinc-800">
+                                        <div class="h-3 rounded-full bg-[var(--brand-primary)]" style="width: {{ min($team['percent'], 100) }}%;"></div>
+                                    </div>
+                                </div>
+                                <dl class="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                        <dt class="text-slate-500 dark:text-zinc-400">Target</dt>
+                                        <dd class="mt-1 font-bold text-slate-900 dark:text-zinc-100">{{ $money($team['target']) }}</dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-slate-500 dark:text-zinc-400">Remaining</dt>
+                                        <dd class="mt-1 font-bold text-rose-600 dark:text-rose-300">{{ $money($team['remaining']) }}</dd>
+                                    </div>
+                                </dl>
                             </div>
-                            <div class="mt-2 h-3 rounded-full bg-slate-100 dark:bg-zinc-800">
-                                <div class="h-3 rounded-full bg-[var(--brand-primary)]" style="width: {{ min($team['percent'], 100) }}%;"></div>
-                            </div>
-                        </div>
-                        <dl class="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                                <dt class="text-slate-500 dark:text-zinc-400">Target</dt>
-                                <dd class="mt-1 font-bold text-slate-900 dark:text-zinc-100">{{ $money($team['target']) }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-slate-500 dark:text-zinc-400">Remaining</dt>
-                                <dd class="mt-1 font-bold text-rose-600 dark:text-rose-300">{{ $money($team['remaining']) }}</dd>
-                            </div>
-                        </dl>
+                        @endforeach
                     </div>
                 </section>
             @endforeach

@@ -138,6 +138,9 @@ class TeamMultipleBrandTest extends TestCase
         $this->assertEquals(5000, $rows[$this->horizon->id]['mtd']);
         $this->assertEquals(10, $rows[$this->inkspire->id]['percent']);
         $this->assertEquals(25, $rows[$this->horizon->id]['percent']);
+        $this->assertEquals(1, $rows[$this->inkspire->id]['members']);
+        $this->assertEquals(1, $rows[$this->horizon->id]['members']);
+        $this->assertSame(1, substr_count($page->getContent(), 'data-team-target="'.$team->id.'"'));
         foreach ([[$this->inkspire, 1000, 10000], [$this->horizon, 5000, 20000]] as [$brand, $mtd, $target]) {
             $filtered = $this->get(route('reports.sales-performance.index', ['month' => '2026-11', 'brand_id' => $brand->id]))->assertOk();
             $this->assertCount(1, $filtered->viewData('teamRows'));

@@ -73,7 +73,8 @@ class SalesPerformanceController extends Controller
                 ->with(['brand', 'accessibleBrands', 'members' => fn ($query) => $query
                     ->where('department', 'Sales')
                     ->where('is_commission_eligible', true)
-                    ->select(['id', 'team_id', 'first_name', 'last_name'])])
+                    ->select(['id', 'team_id', 'first_name', 'last_name', 'brand_id', 'multiple_brands_enabled'])
+                    ->with('accessibleBrands')])
                 ->forSalesDashboard()
                 ->when($brandId, fn ($query) => BrandScope::applyToTeams($query, [$brandId]))
                 ->when(! $brandId, fn ($query) => BrandScope::apply($query, $user))
@@ -216,7 +217,10 @@ class SalesPerformanceController extends Controller
                 'id' => $team->id,
                 'brand_id' => $row['brand_id'],
                 'name' => $team->name.($team->multiple_brands_enabled ? ' — '.$row['brand'] : ''),
-                'mtd' => $mtd, 'target' => $row['target'], 'members' => $team->members->count(),
+                'team_name' => $team->name,
+                'brand' => $row['brand'],
+                'mtd' => $mtd, 'target' => $row['target'],
+                'members' => $team->members->filter(fn (User $member) => in_array((int) $row['brand_id'], BrandScope::allowedBrandIds($member), true))->count(),
                 'remaining' => max($row['target'] - $mtd, 0),
                 'percent' => $row['target'] > 0 ? round($mtd / $row['target'] * 100, 2) : 0,
             ];
