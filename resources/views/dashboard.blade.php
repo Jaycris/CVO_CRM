@@ -304,86 +304,54 @@
 
             @if (($homeTeamSalesMtdSnapshots ?? collect())->isNotEmpty())
                 @php
-                    $teamSnapshotsByBrand = $homeTeamSalesMtdSnapshots->groupBy(
-                        fn ($snapshot) => ($snapshot['brand'] ?? $snapshot['team']->brand)?->id ?? 'unassigned'
-                    );
+                    $teamSnapshotGroups = $homeTeamSalesMtdSnapshots->groupBy('team.id');
                 @endphp
                 <section class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-zinc-900 dark:ring-zinc-800">
-                    <div class="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                            <p class="text-sm font-semibold uppercase tracking-wide text-[var(--brand-primary)] dark:text-[var(--brand-accent)]">
-                                Team Sales MTD Snapshot
-                            </p>
-                            <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
-                                Team sales and targets are shown separately for each brand.
-                            </p>
-                        </div>
-                    </div>
+                    <p class="text-sm font-semibold uppercase tracking-wide text-[var(--brand-primary)] dark:text-[var(--brand-accent)]">
+                        Team Sales MTD Snapshot
+                    </p>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
+                        Teams marked for Sales Dashboard MTD are shown here.
+                    </p>
 
-                    <div class="mt-5 space-y-6">
-                        @foreach ($teamSnapshotsByBrand as $brandSnapshots)
-                            @php
-                                $snapshotBrand = $brandSnapshots->first()['brand'] ?? $brandSnapshots->first()['team']->brand;
-                            @endphp
-                            <section aria-labelledby="team-snapshot-brand-{{ $loop->index }}">
-                                <div class="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3 dark:border-zinc-800">
-                                    <h3 id="team-snapshot-brand-{{ $loop->index }}" class="font-semibold text-slate-900 dark:text-zinc-100">
-                                        {{ $snapshotBrand?->imprint_name ?? 'Sales Brand' }}
-                                    </h3>
-                                    <span class="text-xs text-slate-500 dark:text-zinc-400">
-                                        {{ $brandSnapshots->count() }} team{{ $brandSnapshots->count() === 1 ? '' : 's' }}
-                                    </span>
-                                </div>
-                                <div @class([
-                                    'grid grid-cols-1 gap-4',
-                                    'md:grid-cols-2' => $brandSnapshots->count() >= 2,
-                                    '2xl:grid-cols-3' => $brandSnapshots->count() >= 3,
-                                ])>
-                                    @foreach ($brandSnapshots as $snapshot)
+                    <div @class([
+                        'mt-5 grid grid-cols-1 gap-4',
+                        'md:grid-cols-2' => $teamSnapshotGroups->count() >= 2,
+                        '2xl:grid-cols-3' => $teamSnapshotGroups->count() >= 3,
+                    ])>
+                        @foreach ($teamSnapshotGroups as $teamSnapshots)
+                            <article data-team-snapshot="{{ $teamSnapshots->first()['team']->id }}" class="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
+                                <h3 class="font-bold text-slate-900 dark:text-zinc-100">{{ $teamSnapshots->first()['team']->name }}</h3>
+                                <div class="mt-3 divide-y divide-slate-200 dark:divide-zinc-800">
+                                    @foreach ($teamSnapshots->sortBy(fn ($snapshot) => ($snapshot['brand'] ?? $snapshot['team']->brand)?->imprint_name) as $snapshot)
                                         @php
                                             $teamQuotaHit = (float) ($snapshot['target'] ?? 0) > 0
                                                 && (float) ($snapshot['remaining'] ?? 0) <= 0;
                                         @endphp
-
-                                        <article @class([
-                                            'rounded-xl border p-4',
-                                            'border-emerald-200 bg-emerald-50/70 dark:border-emerald-400/30 dark:bg-emerald-400/10' => $teamQuotaHit,
-                                            'border-slate-200 bg-slate-50 dark:border-zinc-800 dark:bg-zinc-950' => ! $teamQuotaHit,
-                                        ])>
-                                            <div class="flex items-start justify-between gap-3">
-                                                <div>
-                                                    <h4 class="font-bold text-slate-900 dark:text-zinc-100">{{ $snapshot['team']->name }}</h4>
-                                                    <p class="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">
-                                                        {{ $snapshot['members'] }} member{{ $snapshot['members'] === 1 ? '' : 's' }}
-                                                    </p>
-                                                </div>
-                                                <div class="text-right">
-                                                    @if ($teamQuotaHit)
-                                                        <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-400/20 dark:text-emerald-200">
-                                                            Quota hit
-                                                        </span>
-                                                    @endif
-                                                    <span class="mt-1 block text-sm font-bold text-slate-900 dark:text-zinc-100">
-                                                        {{ number_format((float) $snapshot['percent'], 2) }}%
-                                                    </span>
-                                                </div>
+                                        <div class="py-4 first:pt-0 last:pb-0">
+                                            <div class="flex flex-wrap items-start justify-between gap-2">
+                                                <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-zinc-400">
+                                                    {{ ($snapshot['brand'] ?? $snapshot['team']->brand)?->imprint_name ?? 'Sales Brand' }} &middot; {{ $snapshot['members'] }} member{{ $snapshot['members'] === 1 ? '' : 's' }}
+                                                </h4>
+                                                <span @class([
+                                                    'text-sm font-bold',
+                                                    'text-emerald-700 dark:text-emerald-200' => $teamQuotaHit,
+                                                    'text-slate-900 dark:text-zinc-100' => ! $teamQuotaHit,
+                                                ])>{{ number_format((float) $snapshot['percent'], 2) }}%</span>
                                             </div>
-
-                                            <p class="mt-4 text-2xl font-bold text-slate-900 dark:text-zinc-100">
+                                            <p class="mt-3 text-2xl font-bold text-slate-900 dark:text-zinc-100">
                                                 ${{ number_format((float) $snapshot['mtd'], 2) }}
                                             </p>
                                             <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">
                                                 of ${{ number_format((float) $snapshot['target'], 2) }} target
                                             </p>
-
-                                            <div class="mt-4 h-3 overflow-hidden rounded-full bg-white dark:bg-zinc-800">
+                                            <div class="mt-3 h-3 overflow-hidden rounded-full bg-white dark:bg-zinc-800">
                                                 <div @class([
                                                     'h-3 rounded-full transition-all',
                                                     'bg-gradient-to-r from-emerald-500 to-lime-400' => $teamQuotaHit,
                                                     'bg-[var(--brand-primary)]' => ! $teamQuotaHit,
                                                 ]) style="width: {{ min((float) $snapshot['percent'], 100) }}%;"></div>
                                             </div>
-
                                             <p class="mt-3 text-sm text-slate-500 dark:text-zinc-400">
                                                 @if ($teamQuotaHit)
                                                     <span class="font-bold text-emerald-700 dark:text-emerald-200">Target reached.</span>
@@ -392,10 +360,10 @@
                                                     <span class="font-bold text-rose-600 dark:text-rose-300">${{ number_format((float) $snapshot['remaining'], 2) }}</span>
                                                 @endif
                                             </p>
-                                        </article>
+                                        </div>
                                     @endforeach
                                 </div>
-                            </section>
+                            </article>
                         @endforeach
                     </div>
                 </section>

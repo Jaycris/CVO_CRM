@@ -150,7 +150,17 @@ class TeamMultipleBrandTest extends TestCase
         $this->assertEquals(10000, $cards[$this->inkspire->id]['target']);
         $this->assertEquals(20000, $cards[$this->horizon->id]['target']);
         $this->assertEquals(5000, $cards[$this->horizon->id]['mtd']);
+        $this->assertEquals(1, $cards[$this->inkspire->id]['members']);
+        $this->assertEquals(1, $cards[$this->horizon->id]['members']);
+        $this->assertSame(1, substr_count($home->getContent(), 'data-team-snapshot="'.$team->id.'"'));
+        $home->assertSee('Inkspire Media House')->assertSee('Horizon Maple Media');
         $this->assertEquals(30000, $home->viewData('homeSalesMtdSummary')['global']['target']);
+
+        $this->inkspireUser->update(['multiple_brands_enabled' => true]);
+        $this->inkspireUser->accessibleBrands()->sync([$this->inkspire->id, $this->horizon->id]);
+        $updated = $this->get(route('dashboard'))->assertOk()->viewData('homeTeamSalesMtdSnapshots')->keyBy('brand.id');
+        $this->assertEquals(1, $updated[$this->inkspire->id]['members']);
+        $this->assertEquals(2, $updated[$this->horizon->id]['members']);
     }
 
     public function test_brand_filtered_updates_leave_the_other_target_unchanged_and_reject_invalid_batch_atomically(): void

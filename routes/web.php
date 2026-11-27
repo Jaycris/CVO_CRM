@@ -280,7 +280,8 @@ Route::get('/dashboard', function () {
             ->with(['brand', 'accessibleBrands', 'members' => fn ($query) => $query
                 ->where('department', 'Sales')
                 ->where('is_commission_eligible', true)
-                ->select(['id', 'team_id', 'first_name', 'last_name'])])
+                ->select(['id', 'team_id', 'first_name', 'last_name', 'brand_id', 'multiple_brands_enabled'])
+                ->with('accessibleBrands')])
             ->forSalesDashboard()
             ->when($homeTeamBrandId, fn ($query) => BrandScope::applyToTeams($query, [$homeTeamBrandId]))
             ->tap(fn ($query) => BrandScope::apply($query, $user))
@@ -295,7 +296,8 @@ Route::get('/dashboard', function () {
                     $mtd = SalesMtdCalculator::teamSalesMtd($team, $homeSalesMtdSummary, $brand->id);
                     $target = (float) $homeTeamTargets->where('team_id', $team->id)
                         ->filter(fn ($target) => (int) ($target->brand_id ?? $team->brand_id) === (int) $brand->id)->sum('amount');
-                    return ['team' => $team, 'brand' => $brand, 'members' => $team->members->count(),
+                    $members = $team->members->filter(fn (User $member) => in_array((int) $brand->id, BrandScope::allowedBrandIds($member), true))->count();
+                    return ['team' => $team, 'brand' => $brand, 'members' => $members,
                         'mtd' => $mtd, 'target' => $target, 'remaining' => max($target - $mtd, 0),
                         'percent' => $target > 0 ? round($mtd / $target * 100, 2) : 0];
                 });
