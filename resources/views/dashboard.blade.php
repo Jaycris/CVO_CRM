@@ -321,7 +321,7 @@
                     ])>
                         @foreach ($teamSnapshotGroups as $teamSnapshots)
                             <article data-team-snapshot="{{ $teamSnapshots->first()['team']->id }}" class="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
-                                <h3 class="font-bold text-slate-900 dark:text-zinc-100">{{ $teamSnapshots->first()['team']->name }}</h3>
+                                <h3 class="text-2xl font-bold text-slate-900 dark:text-zinc-100">{{ $teamSnapshots->first()['team']->name }}</h3>
                                 <div class="mt-3 divide-y divide-slate-200 dark:divide-zinc-800">
                                     @foreach ($teamSnapshots->sortBy(fn ($snapshot) => ($snapshot['brand'] ?? $snapshot['team']->brand)?->imprint_name) as $snapshot)
                                         @php
